@@ -6,22 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "test:1-server-boot": "node scripts/test-server-boot.mjs",
+    "test:2-prisma-migrate": "node scripts/test-prisma-migrate.mjs",
+    "test:3-db-scenarios": "node scripts/test-db-scenarios.mjs",
+    "test:unit": "vitest run",
+    "test": "npm run test:1-server-boot && npm run test:2-prisma-migrate && npm run test:3-db-scenarios && npm run test:unit",
+    "db:seed": "prisma db seed"
+  },
+  "prisma": {
+    "seed": "tsx src/lib/seed.ts"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "next": "15.5.23",
+    "prisma": "^6.19.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "next": "15.5.23"
+    "stripe": "^22.5.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.23",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "tsx": "^4.23.12",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

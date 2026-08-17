@@ -1,0 +1,246 @@
+// Hurbad Electronics E-commerce — Prisma schema
+//
+// U2: Full data model (Product, Inventory, ShoppingCart, Order, User,
+// Address, PaymentMethod, OrderEvent, DailySalesMetric) per the project
+// plan (see plans/2026-08-17-0920-feat-electronics-ecommerce-platform-plan.md,
+// "## Database Schema (Prisma)"). Supersedes the U1 SetupCheck stub.
+//
+// Local dev: DATABASE_URL is read from .env.development (or a git-ignored
+// .env.development.local override) — a local Homebrew/Docker Postgres
+// instance. Staging/production: DATABASE_URL is injected by Vercel
+// per-region secrets.
+//
+// Postgres adaptation note: the plan's schema specifies
+// `@@fulltext([name, brand])` for full-text search. Prisma's `@@fulltext`
+// attribute is only implemented for the MySQL and MongoDB connectors — it
+// is not valid syntax against the `postgresql` provider. For Postgres we
+// instead expose the searchVector column below as an
+// `Unsupported("tsvector")` field (kept out of Prisma Client's generated
+// types), backed by a GIN index and kept in sync by a BEFORE INSERT/UPDATE
+// trigger (see prisma/migrations/*_init/migration.sql). A trigger is used
+// rather than `GENERATED ALWAYS AS (...) STORED` because Prisma Migrate's
+// diff engine cannot represent generated columns and will otherwise treat
+// one as drift, emitting a corrective migration that Postgres rejects
+// (error 42601) on every subsequent `prisma migrate dev` — see the
+// migration file for the full explanation. Full-text queries are issued
+// via `prisma.$queryRaw` against this column. Per the global constraint
+// "Full-text search on: product name, brand, SKU", it indexes all three
+// fields (plan text says name/brand; SKU is added to satisfy the broader
+// constraint).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Product Catalog
+model Product {
+  id         String   @id @default(cuid())
+  sku        String   @unique
+  name       String
+  category   String // "smartphones", "laptops", etc
+  brand      String
+  basePrice  Decimal  @db.Decimal(10, 2) // USD
+  images     String[] // Cloudflare Image URLs
+  specs      Json // { "RAM": "8GB", "Storage": "256GB", "Color": "Black" }
+  regionData Json // { "KE": { price: 99999, taxCode: "..." }, "ET": {...}, "SO": {...} }
+
+  // Postgres full-text search column: GENERATED ALWAYS AS tsvector(name,
+  // brand, sku), STORED, backed by a GIN index. Defined here so Prisma is
+  // aware of the column (introspection/migrations) but the type is not
+  // representable in the Prisma type system, so it's excluded from the
+  // generated Client — see migration.sql for the actual DDL.
+  searchVector Unsupported("tsvector")?
+
+  inventory  Inventory[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([category])
+  @@index([brand])
+  @@index([searchVector], type: Gin)
+}
+
+// Inventory (Unified Global with Per-Region Reservations)
+model Inventory {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  onHand       Int      @default(0)
+  reserved     Int      @default(0) // Temporary holds during checkout
+  safetyBuffer Int      @default(0) // Reserved for buffer
+  updatedAt    DateTime @updatedAt
+
+  @@unique([productId])
+  @@index([productId])
+}
+
+// Shopping Cart
+model ShoppingCart {
+  id        String     @id @default(cuid())
+  userId    String?
+  sessionId String     @unique // For guest checkouts
+  items     CartItem[]
+  region    String // "KE", "ET", "SO"
+  currency  String     @default("KES")
+  // NOTE: written as `(now() + '7 days'::interval)` — not the plan's literal
+  // `NOW() + interval '7 days'` — because PostgreSQL normalizes stored raw
+  // SQL defaults to this exact form on introspection. If the dbgenerated()
+  // string here doesn't match that normalized form character-for-character,
+  // `prisma migrate dev` treats it as permanent drift and regenerates a
+  // (harmless but noisy) corrective migration on every single run.
+  expiresAt DateTime   @default(dbgenerated("(now() + '7 days'::interval)"))
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+  @@index([sessionId])
+}
+
+model CartItem {
+  id        String       @id @default(cuid())
+  cartId    String
+  cart      ShoppingCart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product      @relation(fields: [productId], references: [id])
+  quantity  Int
+  addedAt   DateTime     @default(now())
+
+  @@unique([cartId, productId])
+}
+
+// Orders
+model Order {
+  id             String  @id @default(cuid())
+  orderNumber    String  @unique
+  userId         String?
+  guestEmail     String?
+  region         String // "KE", "ET", "SO"
+  currency       String
+  subtotalAmount Decimal @db.Decimal(10, 2)
+  taxAmount      Decimal @db.Decimal(10, 2)
+  shippingAmount Decimal @db.Decimal(10, 2)
+  totalAmount    Decimal @db.Decimal(10, 2)
+
+  billingAddress  String // JSON stringified address
+  shippingAddress String // JSON stringified address
+
+  paymentMethod String // "mpesa", "stripe", "telebirr", "evcarplus"
+  paymentStatus String  @default("PENDING") // PENDING, PROCESSING, CONFIRMED, FAILED
+  paymentId     String? // Stripe ID or M-Pesa reference
+
+  fulfillmentStatus String @default("PLACED") // PLACED, PROCESSING, SHIPPED, DELIVERED, CANCELLED
+
+  items  OrderItem[]
+  events OrderEvent[]
+
+  estimatedDelivery DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  user              User?     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([paymentStatus])
+  @@index([fulfillmentStatus])
+  @@index([region])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  priceAt   Decimal @db.Decimal(10, 2) // Snapshot of product price at purchase time
+
+  @@unique([orderId, productId])
+}
+
+// Order Event Log (Event Sourcing for Audit Trail)
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType String // CREATED, PAYMENT_CONFIRMED, SHIPPED, DELIVERED, CANCELLED
+  payload   Json // { "status": "SHIPPED", "carrier": "DHL", "trackingNumber": "..." }
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([eventType])
+}
+
+// Users
+model User {
+  id           String  @id @default(cuid())
+  email        String  @unique
+  phone        String? @unique
+  passwordHash String
+  name         String
+  avatar       String?
+
+  addresses      Address[]
+  paymentMethods PaymentMethod[]
+  orders         Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Address {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName   String
+  phone      String
+  region     String // "KE", "ET", "SO"
+  city       String
+  postalCode String
+  street     String
+
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PaymentMethod {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        String // "card", "mpesa", "telebirr"
+  token       String  @unique // Stripe token, M-Pesa reference, etc
+  last4       String? // Last 4 digits for display
+  expiryMonth Int?
+  expiryYear  Int?
+
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Admin Analytics Snapshot (Pre-computed for dashboard)
+model DailySalesMetric {
+  id          String   @id @default(cuid())
+  date        DateTime
+  region      String
+  ordersCount Int
+  revenue     Decimal  @db.Decimal(12, 2)
+  topProducts Json // [{ sku, name, qty, revenue }, ...]
+  createdAt   DateTime @default(now())
+
+  @@unique([date, region])
+  @@index([date])
+  @@index([region])
+}
