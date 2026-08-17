@@ -7,4 +7,9 @@ AWS infrastructure (RDS, Vercel multi-region config) deferred to operational set
 
 ## Task Progress
 
-Task 1 (U1: Project Setup): Dispatch 1 encountered environmental constraints → Redispatch 2 with adjusted local-only scope. Awaiting completion...
+Task 1 (U1: Project Setup): complete  
+- Dispatch 1 encountered environmental constraints (AWS RDS not provisable in sandbox)
+- Redispatch 2 with local-only scope: Next.js 15, TypeScript strict, Tailwind CSS, Prisma stub
+- Commit: 52c59a1 "U1: Initialize Next.js 15 project..."
+- Configuration templates created for Kenya/Ethiopia/Somalia regions
+- Ready for Task 2: Database Schema
