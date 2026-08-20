@@ -1,0 +1,26 @@
+// Hurbad Electronics E-commerce — Prisma schema
+//
+// This is a STUB for U1 (project setup). Full data model (Product,
+// Inventory, ShoppingCart, Order, User, Address, PaymentMethod,
+// OrderEvent, DailySalesMetric, etc.) is defined in U2 per the project
+// plan (see plans/2026-08-17-0920-feat-electronics-ecommerce-platform-plan.md).
+//
+// Local dev: DATABASE_URL is read from prisma/.env (gitignored; mirrors
+// .env.development — a local Docker Postgres instance).
+// Staging/production: DATABASE_URL is injected by Vercel per-region secrets.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Placeholder model so `prisma validate` / `prisma generate` succeed before
+// the real schema lands in U2. Safe to remove once real models are added.
+model HealthCheck {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+}

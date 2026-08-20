@@ -1,0 +1,37 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "_comment": [
+    "TEMPLATE — documents intended multi-region setup; provisioning three",
+    "separate Vercel projects (one per region) is done by ops in the Vercel",
+    "dashboard/CLI, not by this file alone. See docs/DEPLOYMENT.md.",
+    "",
+    "Kenya (primary):    Vercel project 'hurbad-ecommerce-ke', region eu-west-1 (London)",
+    "Ethiopia (Phase 2):  Vercel project 'hurbad-ecommerce-et', region af-south-1 (S. Africa)",
+    "Somalia (Phase 2):   Vercel project 'hurbad-ecommerce-so', region eu-west-1 (London)",
+    "",
+    "Each project gets its own env vars (NEXT_PUBLIC_REGION, DATABASE_URL,",
+    "DATABASE_READ_REPLICA_URL, payment gateway keys, currency, tax rate)",
+    "set via `vercel env add` or the dashboard — see .env.production.{ke,et,so}",
+    "for the full variable list per region."
+  ],
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["lhr1"],
+  "functions": {
+    "app/api/webhooks/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}

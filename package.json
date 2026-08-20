@@ -11,8 +11,9 @@
     "test:1-server-boot": "node scripts/test-server-boot.mjs",
     "test:2-prisma-migrate": "node scripts/test-prisma-migrate.mjs",
     "test:3-db-scenarios": "node scripts/test-db-scenarios.mjs",
+    "test:4-migration-reset": "node scripts/test-migration-reset.mjs",
     "test:unit": "vitest run",
-    "test": "npm run test:1-server-boot && npm run test:2-prisma-migrate && npm run test:3-db-scenarios && npm run test:unit",
+    "test": "npm run test:1-server-boot && npm run test:2-prisma-migrate && npm run test:3-db-scenarios && npm run test:4-migration-reset && npm run test:unit",
     "db:seed": "prisma db seed"
   },
   "prisma": {

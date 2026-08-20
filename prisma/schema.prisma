@@ -236,7 +236,13 @@ model DailySalesMetric {
   date        DateTime
   region      String
   ordersCount Int
-  revenue     Decimal  @db.Decimal(12, 2)
+  // Global constraint: "Decimal(10, 2) for ALL money fields, no
+  // Decimal(12,2)". The plan's schema text specified Decimal(12,2) here
+  // (headroom for a >$99.9M single-day revenue aggregate), but the
+  // constraint is treated as absolute rather than an oversight to
+  // interpret around — flagged for the SDD controller in the task-2
+  // report if that tradeoff needs revisiting.
+  revenue     Decimal  @db.Decimal(10, 2)
   topProducts Json // [{ sku, name, qty, revenue }, ...]
   createdAt   DateTime @default(now())
 

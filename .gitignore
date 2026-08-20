@@ -30,8 +30,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files
+# .env.example, .env.development, .env.production(.region) are committed as
+# templates — they hold sandbox/placeholder values only, never real secrets.
+# Any local override file with real secrets must use one of these names and
+# stays untracked:
+.env.local
+.env.*.local
 
 # vercel
 .vercel
