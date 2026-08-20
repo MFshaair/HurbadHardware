@@ -23,5 +23,13 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  // hurbad-ecommerce/ is a separate, stale duplicate Next.js scaffold
+  // (its own package.json, node_modules, next.config.ts against a
+  // different Next.js version) — not part of this app. Without this
+  // exclude, the root TS compiler type-checks its config file too and
+  // `next build` fails on a NextConfig shape mismatch unrelated to this
+  // project. See FEATURES.md M0-8 for the pending human decision on
+  // whether to delete or repurpose that directory; this exclude only
+  // unblocks the build, it doesn't resolve that decision.
+  "exclude": ["node_modules", "hurbad-ecommerce"]
 }

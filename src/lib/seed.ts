@@ -1,25 +1,27 @@
 /**
  * Seed script — populates the local/staging database with 200 sample
- * electronics products spanning 8 categories, each with regional pricing
+ * electronics products spanning 8 categories, each with 2 ProductVariant
+ * rows (v3 schema: variants are first-class, AHD2), regional pricing
+ * (RegionalPrice) and regional inventory (RegionalInventory) per variant
  * for Kenya (KES), Ethiopia (ETB), and Somalia (SOS).
  *
  * Run via `npx prisma db seed` (wired up through `prisma.seed` in
  * package.json) or directly with `npx tsx src/lib/seed.ts`.
  *
- * Idempotent: re-running upserts by SKU rather than duplicating rows, so it
- * is safe to run against a database that already has seed data (e.g. after
- * a manual reset, or repeated CI runs).
+ * Idempotent: re-running upserts Product by slug and ProductVariant by
+ * SKU rather than duplicating rows, so it is safe to run against a
+ * database that already has seed data.
  */
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, Region } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 // Approximate FX rates (USD -> local currency) and per-region tax codes.
 // Sandbox/demo values only — not live rates.
 const REGIONS = {
-  KE: { currency: "KES", rate: 129, taxCode: "VAT_KE_16", taxRate: 0.16 },
-  ET: { currency: "ETB", rate: 130, taxCode: "VAT_ET_15", taxRate: 0.15 },
-  SO: { currency: "SOS", rate: 571, taxCode: "VAT_SO_NONE", taxRate: 0.0 },
+  KE: { currency: "KES", rate: 129, taxCode: "VAT_KE_16" },
+  ET: { currency: "ETB", rate: 130, taxCode: "VAT_ET_15" },
+  SO: { currency: "SOS", rate: 571, taxCode: "VAT_SO_NONE" },
 } as const;
 
 type RegionKey = keyof typeof REGIONS;
@@ -31,9 +33,9 @@ interface ProductSeed {
 
 interface CategoryDef {
   category: string;
-  priceRange: [number, number]; // USD
+  priceRange: [number, number]; // USD, base (variant 1) price
   items: ProductSeed[]; // exactly 25 realistic (brand, model) pairs
-  specs: (idx: number) => Record<string, string>;
+  variantAttrs: (idx: number) => [Record<string, string>, Record<string, string>];
 }
 
 function pick<T>(arr: T[], idx: number): T {
@@ -48,6 +50,10 @@ function priceForIndex(range: [number, number], idx: number): number {
   // reproducible across runs).
   const fraction = ((idx * 37) % 100) / 100;
   return Math.round((min + spread * fraction) * 100) / 100;
+}
+
+function hashString(s: string): number {
+  return Array.from(s).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
 }
 
 const CATEGORY_DEFS: CategoryDef[] = [
@@ -81,13 +87,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Oppo", model: "Reno 11" },
       { brand: "Oppo", model: "A18" },
     ],
-    specs: (idx) => ({
-      RAM: pick(["4GB", "6GB", "8GB", "12GB"], idx),
-      Storage: pick(["64GB", "128GB", "256GB", "512GB"], idx + 1),
-      Color: pick(["Black", "Blue", "Green", "Titanium", "White"], idx + 2),
-      Display: pick(["6.1in AMOLED", "6.5in LCD", "6.7in AMOLED"], idx),
-      Battery: pick(["4000mAh", "4500mAh", "5000mAh"], idx + 1),
-    }),
+    variantAttrs: (idx) => [
+      { Storage: "128GB", Color: pick(["Black", "Blue", "Titanium"], idx) },
+      { Storage: "256GB", Color: pick(["White", "Green", "Silver"], idx + 1) },
+    ],
   },
   {
     category: "laptops",
@@ -119,13 +122,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Acer", model: "Nitro 5" },
       { brand: "Acer", model: "Predator Helios" },
     ],
-    specs: (idx) => ({
-      CPU: pick(["Intel Core i5", "Intel Core i7", "AMD Ryzen 5", "Apple M2", "Apple M3"], idx),
-      RAM: pick(["8GB", "16GB", "32GB"], idx + 1),
-      Storage: pick(["256GB SSD", "512GB SSD", "1TB SSD"], idx + 2),
-      Display: pick(["13.3in FHD", "14in FHD", "15.6in FHD"], idx),
-      Color: pick(["Silver", "Space Gray", "Black"], idx + 1),
-    }),
+    variantAttrs: () => [
+      { RAM: "8GB", Storage: "256GB SSD" },
+      { RAM: "16GB", Storage: "512GB SSD" },
+    ],
   },
   {
     category: "tablets",
@@ -157,12 +157,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Amazon", model: "Fire Max 11" },
       { brand: "Amazon", model: "Fire 7" },
     ],
-    specs: (idx) => ({
-      Storage: pick(["64GB", "128GB", "256GB"], idx),
-      Display: pick(["10.1in", "10.9in", "11in"], idx + 1),
-      Connectivity: pick(["Wi-Fi", "Wi-Fi + Cellular"], idx),
-      Color: pick(["Space Gray", "Silver", "Gold"], idx + 2),
-    }),
+    variantAttrs: () => [
+      { Storage: "64GB", Connectivity: "Wi-Fi" },
+      { Storage: "128GB", Connectivity: "Wi-Fi + Cellular" },
+    ],
   },
   {
     category: "accessories",
@@ -194,11 +192,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Apple", model: "Lightning Cable" },
       { brand: "Apple", model: "20W USB-C Power Adapter" },
     ],
-    specs: (idx) => ({
-      Type: pick(["Charger", "Audio", "Input Device", "Protection", "Cable"], idx),
-      Color: pick(["Black", "White", "Blue"], idx + 1),
-      Warranty: pick(["6 months", "12 months", "24 months"], idx),
-    }),
+    variantAttrs: (idx) => [
+      { Color: "Black" },
+      { Color: pick(["White", "Blue"], idx) },
+    ],
   },
   {
     category: "networking",
@@ -230,11 +227,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Huawei", model: "AX2 Pro Router" },
       { brand: "Huawei", model: "B818 4G Router" },
     ],
-    specs: (idx) => ({
-      Standard: pick(["Wi-Fi 5", "Wi-Fi 6", "Wi-Fi 6E"], idx),
-      Ports: pick(["4", "8", "24", "48"], idx + 1),
-      Range: pick(["150m", "300m", "500m"], idx),
-    }),
+    variantAttrs: (idx) => [
+      { Standard: pick(["Wi-Fi 5", "Wi-Fi 6"], idx), Ports: "4" },
+      { Standard: "Wi-Fi 6E", Ports: "8" },
+    ],
   },
   {
     category: "cctv",
@@ -266,12 +262,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Reolink", model: "Solar Panel Cam Kit" },
       { brand: "Reolink", model: "NVR 16CH" },
     ],
-    specs: (idx) => ({
-      Resolution: pick(["2MP", "4MP", "5MP", "8MP"], idx),
-      NightVision: pick(["10m", "20m", "30m"], idx + 1),
-      Storage: pick(["MicroSD", "1TB HDD", "2TB HDD", "Cloud"], idx),
-      Power: pick(["PoE", "12V DC", "Solar/Battery"], idx + 2),
-    }),
+    variantAttrs: (idx) => [
+      { Resolution: pick(["2MP", "4MP"], idx), Power: "PoE" },
+      { Resolution: pick(["5MP", "8MP"], idx), Power: "Solar/Battery" },
+    ],
   },
   {
     category: "printers",
@@ -303,11 +297,10 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Brother", model: "MFC-J1010DW" },
       { brand: "Brother", model: "PT-D210 Label Maker" },
     ],
-    specs: (idx) => ({
-      Type: pick(["Inkjet", "Laser", "All-in-One Ink Tank"], idx),
-      Connectivity: pick(["USB", "Wi-Fi", "USB + Wi-Fi"], idx + 1),
-      Color: pick(["Mono", "Color"], idx),
-    }),
+    variantAttrs: (idx) => [
+      { Connectivity: "USB", Color: "Mono" },
+      { Connectivity: "USB + Wi-Fi", Color: pick(["Mono", "Color"], idx) },
+    ],
   },
   {
     category: "components",
@@ -339,16 +332,40 @@ const CATEGORY_DEFS: CategoryDef[] = [
       { brand: "Crucial", model: "RAM DDR4 16GB Kit" },
       { brand: "Crucial", model: "RAM DDR5 32GB Kit" },
     ],
-    specs: (idx) => ({
-      Interface: pick(["SATA III", "NVMe PCIe 4.0", "DDR4", "DDR5"], idx),
-      Capacity: pick(["8GB", "16GB", "256GB", "500GB", "1TB", "2TB"], idx + 1),
-      FormFactor: pick(["2.5in", "M.2", "DIMM", "ATX"], idx + 2),
-    }),
+    variantAttrs: (idx) => [
+      { Capacity: pick(["256GB", "500GB", "1TB"], idx) },
+      { Capacity: pick(["1TB", "2TB"], idx) },
+    ],
   },
 ];
 
-function buildProducts() {
-  const products: Prisma.ProductCreateInput[] = [];
+interface VariantSeed {
+  sku: string;
+  name: string;
+  attributes: Record<string, string>;
+  images: string[];
+  usdPrice: number;
+}
+
+interface ProductSeedRow {
+  slug: string;
+  name: string;
+  category: string;
+  brand: string;
+  images: string[];
+  specs: Prisma.InputJsonValue;
+  variants: VariantSeed[];
+}
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildProducts(): ProductSeedRow[] {
+  const products: ProductSeedRow[] = [];
   let globalIdx = 0;
 
   for (const def of CATEGORY_DEFS) {
@@ -357,32 +374,41 @@ function buildProducts() {
       const name = `${brand} ${model}`;
       const skuCategory = def.category.slice(0, 3).toUpperCase();
       const skuBrand = brand.replace(/[^A-Za-z]/g, "").slice(0, 3).toUpperCase() || "GEN";
-      const sku = `${skuCategory}-${skuBrand}-${String(i + 1).padStart(4, "0")}`;
+      const productSku = `${skuCategory}-${skuBrand}-${String(i + 1).padStart(4, "0")}`;
+      const slug = `${slugify(name)}-${skuBrand.toLowerCase()}${i + 1}`;
       const basePrice = priceForIndex(def.priceRange, globalIdx);
+      const [attrs1, attrs2] = def.variantAttrs(i);
 
-      const regionData: Record<string, { price: number; taxCode: string; currency: string }> = {};
-      for (const [region, cfg] of Object.entries(REGIONS) as [RegionKey, (typeof REGIONS)[RegionKey]][]) {
-        // Small per-region markup (logistics/import cost) on top of FX conversion.
-        const markup = region === "SO" ? 1.08 : region === "ET" ? 1.05 : 1.0;
-        regionData[region] = {
-          price: Math.round(basePrice * cfg.rate * markup),
-          taxCode: cfg.taxCode,
-          currency: cfg.currency,
-        };
-      }
+      const labelFor = (attrs: Record<string, string>) => Object.values(attrs).join(" ");
+
+      const variants: VariantSeed[] = [
+        {
+          sku: `${productSku}-V1`,
+          name: `${name} — ${labelFor(attrs1)}`,
+          attributes: attrs1,
+          images: [`https://images.hurbad.example/${def.category}/${productSku.toLowerCase()}-v1.jpg`],
+          usdPrice: basePrice,
+        },
+        {
+          sku: `${productSku}-V2`,
+          name: `${name} — ${labelFor(attrs2)}`,
+          attributes: attrs2,
+          // Higher-spec variant costs more — plausible, deterministic delta.
+          images: [`https://images.hurbad.example/${def.category}/${productSku.toLowerCase()}-v2.jpg`],
+          usdPrice: Math.round(basePrice * 1.15 * 100) / 100,
+        },
+      ];
 
       products.push({
-        sku,
+        slug,
         name,
         category: def.category,
         brand,
-        basePrice: new Prisma.Decimal(basePrice.toFixed(2)),
         images: [
-          `https://images.hurbad.example/${def.category}/${sku.toLowerCase()}-1.jpg`,
-          `https://images.hurbad.example/${def.category}/${sku.toLowerCase()}-2.jpg`,
+          `https://images.hurbad.example/${def.category}/${productSku.toLowerCase()}-hero.jpg`,
         ],
-        specs: def.specs(i),
-        regionData,
+        specs: { ...attrs1 } as Prisma.InputJsonValue,
+        variants,
       });
 
       globalIdx++;
@@ -394,45 +420,98 @@ function buildProducts() {
 
 async function main() {
   const products = buildProducts();
-  console.log(`[seed] Preparing to upsert ${products.length} products...`);
+  console.log(`[seed] Preparing to upsert ${products.length} products (${products.length * 2} variants)...`);
 
-  let created = 0;
-  for (const product of products) {
-    const result = await prisma.product.upsert({
-      where: { sku: product.sku },
-      create: product,
+  let productsCreated = 0;
+  let variantsCreated = 0;
+
+  for (const p of products) {
+    const product = await prisma.product.upsert({
+      where: { slug: p.slug },
+      create: {
+        slug: p.slug,
+        name: p.name,
+        category: p.category,
+        brand: p.brand,
+        images: p.images,
+        specs: p.specs,
+      },
       update: {
-        name: product.name,
-        category: product.category,
-        brand: product.brand,
-        basePrice: product.basePrice,
-        images: product.images,
-        specs: product.specs as Prisma.InputJsonValue,
-        regionData: product.regionData as Prisma.InputJsonValue,
+        name: p.name,
+        category: p.category,
+        brand: p.brand,
+        images: p.images,
+        specs: p.specs,
       },
     });
+    productsCreated++;
 
-    // Ensure every product has a corresponding inventory row with plausible
-    // stock levels (deterministic, not random, for reproducible seeding).
-    const seedHash = Array.from(result.sku).reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-    const onHand = 10 + (seedHash % 190); // 10-199 units on hand
-    const reserved = seedHash % 5; // 0-4 reserved
-    const safetyBuffer = 5;
+    for (const v of p.variants) {
+      const variant = await prisma.productVariant.upsert({
+        where: { sku: v.sku },
+        create: {
+          productId: product.id,
+          sku: v.sku,
+          name: v.name,
+          attributes: v.attributes,
+          images: v.images,
+        },
+        update: {
+          name: v.name,
+          attributes: v.attributes,
+          images: v.images,
+        },
+      });
+      variantsCreated++;
 
-    await prisma.inventory.upsert({
-      where: { productId: result.id },
-      create: { productId: result.id, onHand, reserved, safetyBuffer },
-      update: { onHand, reserved, safetyBuffer },
-    });
+      const seedHash = hashString(v.sku);
 
-    created++;
-    if (created % 50 === 0) {
-      console.log(`[seed] ${created}/${products.length} products upserted...`);
+      for (const [region, cfg] of Object.entries(REGIONS) as [RegionKey, (typeof REGIONS)[RegionKey]][]) {
+        const markup = region === "SO" ? 1.08 : region === "ET" ? 1.05 : 1.0;
+        const price = Math.round(v.usdPrice * cfg.rate * markup * 100) / 100;
+
+        await prisma.regionalPrice.upsert({
+          where: { variantId_region: { variantId: variant.id, region: region as Region } },
+          create: {
+            variantId: variant.id,
+            region: region as Region,
+            price: new Prisma.Decimal(price.toFixed(2)),
+            currency: cfg.currency,
+            taxCode: cfg.taxCode,
+          },
+          update: {
+            price: new Prisma.Decimal(price.toFixed(2)),
+            currency: cfg.currency,
+            taxCode: cfg.taxCode,
+          },
+        });
+
+        // Deterministic per (variant, region) stock levels — not random,
+        // for reproducible seeding.
+        const regionSalt = region.charCodeAt(0) + region.charCodeAt(1);
+        const onHand = 10 + ((seedHash + regionSalt) % 190); // 10-199 units
+        const reserved = (seedHash + regionSalt) % 5; // 0-4 reserved
+        const safetyBuffer = 5;
+
+        await prisma.regionalInventory.upsert({
+          where: { variantId_region: { variantId: variant.id, region: region as Region } },
+          create: { variantId: variant.id, region: region as Region, onHand, reserved, safetyBuffer },
+          update: { onHand, reserved, safetyBuffer },
+        });
+      }
+    }
+
+    if (productsCreated % 50 === 0) {
+      console.log(`[seed] ${productsCreated}/${products.length} products upserted...`);
     }
   }
 
-  const total = await prisma.product.count();
-  console.log(`[seed] Done. ${created} products upserted this run. Total products in DB: ${total}`);
+  const totalProducts = await prisma.product.count();
+  const totalVariants = await prisma.productVariant.count();
+  console.log(
+    `[seed] Done. ${productsCreated} products / ${variantsCreated} variants upserted this run. ` +
+      `Total in DB: ${totalProducts} products, ${totalVariants} variants.`,
+  );
 }
 
 main()

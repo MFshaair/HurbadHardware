@@ -77,7 +77,7 @@ async function testCategoryQuery() {
 async function testFullTextSearch() {
   log("Test 4: full-text search for 'Samsung'...");
   const results = await prisma.$queryRaw`
-    SELECT "id", "name", "brand", "sku"
+    SELECT "id", "name", "brand"
     FROM "Product"
     WHERE "searchVector" @@ plainto_tsquery('english', 'Samsung')
     LIMIT 10;
@@ -89,18 +89,27 @@ async function testFullTextSearch() {
 }
 
 async function testInventory() {
-  log("Test 5: creating a product + inventory record...");
+  log("Test 5: creating a product + variant + regional inventory record...");
   const product = await prisma.product.upsert({
-    where: { sku: "TEST-INV-0001" },
+    where: { slug: "test-inventory-product" },
     create: {
-      sku: "TEST-INV-0001",
+      slug: "test-inventory-product",
       name: "Test Inventory Product",
       category: "accessories",
       brand: "TestBrand",
-      basePrice: new Prisma.Decimal("19.99"),
       images: [],
       specs: { Type: "Test" },
-      regionData: { KE: { price: 2580, taxCode: "VAT_KE_16", currency: "KES" } },
+    },
+    update: {},
+  });
+  const variant = await prisma.productVariant.upsert({
+    where: { sku: "TEST-INV-0001" },
+    create: {
+      productId: product.id,
+      sku: "TEST-INV-0001",
+      name: "Test Inventory Product — Default",
+      attributes: { Type: "Test" },
+      images: [],
     },
     update: {},
   });
@@ -108,9 +117,9 @@ async function testInventory() {
   const onHand = 100;
   const reserved = 15;
   const safetyBuffer = 5;
-  const inventory = await prisma.inventory.upsert({
-    where: { productId: product.id },
-    create: { productId: product.id, onHand, reserved, safetyBuffer },
+  const inventory = await prisma.regionalInventory.upsert({
+    where: { variantId_region: { variantId: variant.id, region: "KE" } },
+    create: { variantId: variant.id, region: "KE", onHand, reserved, safetyBuffer },
     update: { onHand, reserved, safetyBuffer },
   });
 
@@ -126,8 +135,21 @@ async function testInventory() {
 
 async function testOrderAndEvent() {
   log("Test 6: creating an order + order event...");
-  const product = await prisma.product.findFirst({ where: { category: "smartphones" } });
-  if (!product) throw new Error("Test 6 FAILED: no product available to attach to order");
+  const variant = await prisma.productVariant.findFirst({
+    where: { product: { category: "smartphones" } },
+  });
+  if (!variant) throw new Error("Test 6 FAILED: no variant available to attach to order");
+
+  const address = await prisma.address.create({
+    data: {
+      fullName: "Test Buyer",
+      phone: "+254700000000",
+      region: "KE",
+      city: "Nairobi",
+      postalCode: "00100",
+      street: "Test St",
+    },
+  });
 
   const orderNumber = `TEST-ORDER-${Date.now()}`;
   const order = await prisma.order.create({
@@ -140,11 +162,16 @@ async function testOrderAndEvent() {
       taxAmount: new Prisma.Decimal("1599.84"),
       shippingAmount: new Prisma.Decimal("300.00"),
       totalAmount: new Prisma.Decimal("11898.84"),
-      billingAddress: JSON.stringify({ city: "Nairobi", street: "Test St" }),
-      shippingAddress: JSON.stringify({ city: "Nairobi", street: "Test St" }),
-      paymentMethod: "mpesa",
+      shippingAddressId: address.id,
       items: {
-        create: [{ productId: product.id, quantity: 1, priceAt: product.basePrice }],
+        create: [
+          {
+            variantId: variant.id,
+            quantity: 1,
+            unitPrice: new Prisma.Decimal("9999.00"),
+            totalPrice: new Prisma.Decimal("9999.00"),
+          },
+        ],
       },
       events: {
         create: [{ eventType: "CREATED", payload: { status: "PLACED" } }],
@@ -164,25 +191,33 @@ async function testOrderAndEvent() {
   }
 
   log(`Test 6 PASS: order ${order.orderNumber} created with ${loggedEvents.length} logged event(s)`);
+
+  return { orderId: order.id, addressId: address.id };
 }
 
-async function cleanupTestFixtures() {
-  // Test 5 and Test 6 create their own fixtures (a dedicated test product +
-  // inventory row, and a fresh order + order event on every run, since
-  // order numbers are timestamp-based). Clean them up so the test suite is
-  // idempotent and doesn't leave synthetic rows mixed into the 200-product
-  // seed dataset or accumulate orders on repeated runs.
+async function cleanupTestFixtures(orderFixture) {
+  // Test 5 and Test 6 create their own fixtures. Clean them up so the test
+  // suite is idempotent and doesn't leave synthetic rows mixed into the
+  // 200-product seed dataset or accumulate orders/addresses on repeated runs.
+  if (orderFixture) {
+    await prisma.order.delete({ where: { id: orderFixture.orderId } }).catch(() => {});
+    await prisma.address.delete({ where: { id: orderFixture.addressId } }).catch(() => {});
+  }
   const deletedOrders = await prisma.order.deleteMany({
     where: { orderNumber: { startsWith: "TEST-ORDER-" } },
   });
-  const testProduct = await prisma.product.findUnique({ where: { sku: "TEST-INV-0001" } });
+  const testVariant = await prisma.productVariant.findUnique({ where: { sku: "TEST-INV-0001" } });
+  if (testVariant) {
+    await prisma.regionalInventory.deleteMany({ where: { variantId: testVariant.id } });
+    await prisma.productVariant.delete({ where: { id: testVariant.id } });
+  }
+  const testProduct = await prisma.product.findUnique({ where: { slug: "test-inventory-product" } });
   if (testProduct) {
-    await prisma.inventory.deleteMany({ where: { productId: testProduct.id } });
     await prisma.product.delete({ where: { id: testProduct.id } });
   }
   log(
-    `cleanup: removed ${deletedOrders.count} test order(s)` +
-      (testProduct ? " and the TEST-INV-0001 fixture product" : ""),
+    `cleanup: removed ${deletedOrders.count} extra test order(s)` +
+      (testVariant ? " and the TEST-INV-0001 fixture variant/product" : ""),
   );
 }
 
@@ -191,8 +226,8 @@ async function main() {
   await testCategoryQuery();
   await testFullTextSearch();
   await testInventory();
-  await testOrderAndEvent();
-  await cleanupTestFixtures();
+  const orderFixture = await testOrderAndEvent();
+  await cleanupTestFixtures(orderFixture);
   log("ALL TESTS PASSED (2-6)");
 }
 

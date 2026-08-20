@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "better-auth": "^1.7.1",
     "next": "15.5.23",
     "prisma": "^6.19.3",
     "react": "19.1.0",
@@ -28,6 +29,7 @@
     "stripe": "^22.5.0"
   },
   "devDependencies": {
+    "@better-auth/cli": "^1.4.22",
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",

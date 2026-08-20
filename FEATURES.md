@@ -19,36 +19,48 @@ orchestrator dispatches these items and the loop/escalation contract.
 all exit 0 on a clean working tree; first tagged known-good commit exists.
 
 ### M0-1: Rewrite Prisma schema to v3 shape
-**Status:** planned · **Owner:** catalog-inventory-engineer (design review: platform-architect)
+**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer (design review: platform-architect)
 - [ ] `Product`/`ProductVariant` split implemented; `CartItem`/`OrderItem` reference `variantId`
 - [ ] `RegionalPrice`, `RegionalInventory` relational, one row per (variantId, region)
 - [ ] `InventoryReservation` model exists (ACTIVE/CONFIRMED/RELEASED/EXPIRED, `expiresAt` TTL)
 - [ ] `PaymentTransaction` model exists, separate from `Order`, `idempotencyKey` unique
 - [ ] `Order.shippingAddressId`/`billingAddressId` are FK references to `Address`, not JSON strings
 - [ ] `Shipment`, `Refund`, `ReturnRequest`, `AdminAuditLog` models exist
-- [ ] All region/status fields use Prisma enums, not raw strings; money fields are `Decimal(12,2)` (`Decimal(14,2)` for `DailySalesMetric.revenue`)
+- [x] All region/status fields use Prisma enums, not raw strings; money fields are `Decimal(12,2)` (`Decimal(14,2)` for `DailySalesMetric.revenue`)
 
 ### M0-2: better-auth schema merge
-**Status:** planned · **Owner:** catalog-inventory-engineer
-- [ ] `better-auth generate` run; `session`/`account`/`verification` tables merged into `prisma/schema.prisma`
-- [ ] `User.passwordHash` hand-rolled field removed; `User.id` is the join key
-- [ ] `prisma migrate dev` succeeds cleanly from a reset state
+**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer
+- [x] `better-auth generate` run (via `@better-auth/cli`); `session`/`account`/`verification` tables merged into `prisma/schema.prisma`
+- [x] `User.passwordHash` hand-rolled field removed; `User.id` is the join key (credentials live in `Account.password`)
+- [x] `prisma migrate dev` succeeds cleanly from a reset state (local dev DB dropped/recreated directly via psql, not `prisma migrate reset` — see run-state.md)
 
 ### M0-3: Rebuild seed script for variants
-**Status:** planned · **Owner:** catalog-inventory-engineer
-- [ ] `src/lib/seed.ts` seeds ≥200 products, each with ≥2 `ProductVariant` rows
-- [ ] Each variant has `RegionalPrice` and `RegionalInventory` rows for KE/ET/SO
-- [ ] Seed is idempotent (re-running does not duplicate rows); verified by running it twice and asserting stable counts
+**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer
+- [x] `src/lib/seed.ts` seeds 200 products, each with 2 `ProductVariant` rows (400 total)
+- [x] Each variant has `RegionalPrice` and `RegionalInventory` rows for KE/ET/SO
+- [x] Seed is idempotent — run twice, stable at 200 products / 400 variants both times
 
 ### M0-4: Update schema-touching test scripts
-**Status:** planned · **Owner:** qa-dogfood-engineer
-- [ ] `scripts/test-prisma-migrate.mjs` and `scripts/test-db-scenarios.mjs` updated for the v3 models
-- [ ] Re-run `prisma migrate dev` 3x against the same DB to confirm no drift-correction migrations are generated (known trap — see `docs/agents/learnings/catalog-inventory-engineer.md`)
+**Status:** built (gate not yet run) · **Owner:** qa-dogfood-engineer
+- [x] `scripts/test-prisma-migrate.mjs` and `scripts/test-db-scenarios.mjs` updated for the v3 models
+- [x] `prisma migrate dev` re-run 3x against the same DB, confirmed "Already in sync" every time after the first — `test-prisma-migrate.mjs` now asserts this itself (fails if run 2 isn't a no-op)
+
+**M0-1..M0-5 note:** implemented directly in this session, outside the `/hurbad-team`
+loop (no `platform-architect` design pass, no `security-reviewer` sign-off, no
+`production-readiness-gate` run) — hence `built`, not `verified`. Also fixed two
+unrelated pre-existing build blockers while verifying: `tsconfig.json` was
+type-checking the stale `hurbad-ecommerce/` duplicate (added a narrow exclude,
+did not touch/delete the directory — see M0-8), and `src/lib/stripe.ts` pinned
+an API version string incompatible with the installed SDK.
 
 ### M0-5: Fix the 2 pre-existing vitest failures
-**Status:** planned · **Owner:** platform-infra-engineer
-- [ ] `tests/test4-stripe.test.ts` and `tests/test5-mpesa.test.ts` pass under `npm run test:unit` (env vars must load under vitest — add a vitest setup file or `dotenv` config)
-- [ ] No regression to the existing mocked-SDK fallback behavior in those tests
+**Status:** built (gate not yet run — see note) · **Owner:** platform-infra-engineer
+- [x] `tests/test4-stripe.test.ts` and `tests/test5-mpesa.test.ts` pass under `npm run test:unit` — added `vitest.config.mts` + `tests/setup.ts` to load `.env.development` before tests run, same pattern as `scripts/test-*.mjs`'s `loadDotEnv()`
+- [x] No regression to the existing mocked-SDK fallback behavior (real-key branches still correctly `it.skip` while keys are `REPLACE_ME` placeholders)
+
+Note: fixed directly in this session (outside the `/hurbad-team` loop), so it's
+`built`/human-verified rather than `verified` by `production-readiness-gate` —
+whoever runs the team next should let the gate confirm it formally.
 
 ### M0-6: Configure coverage threshold
 **Status:** planned · **Owner:** qa-dogfood-engineer
