@@ -1,4 +1,12 @@
-# SDD ledger — plan: /Users/shaacir/Documents/Ai Projects/HurbadHardware/plans/2026-08-17-0920-feat-electronics-ecommerce-platform-plan.md
+# SDD ledger (superseded, historical record only)
+
+This ledger was originally tracked against
+`plans/2026-08-17-0920-feat-electronics-ecommerce-platform-plan.md` (v1),
+which has since been deleted and replaced by `plans/Full PRD file.md` (v3,
+architecture-hardened) as the sole specification source — see
+`docs/agents/run-state.md` Tier 2, 2026-08-20 entry, for the full
+rationale. This file is kept only as a record of the pre-team U1/U2 work
+and is not maintained further; `FEATURES.md` is the active ledger now.
 
 ## Rulings
 
