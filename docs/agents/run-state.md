@@ -57,10 +57,14 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
   credentials live in the generated `Account.password`.
 - **Money fields: `Decimal(12,2)`** (prices), **`Decimal(14,2)`**
   (`DailySalesMetric.revenue`), per v3. Implemented 2026-08-20.
-- **Vercel region code for AWS `eu-west-1` is `dub1` (Dublin), not `lhr1`
-  (London — that's `eu-west-2`).** `tests/test3-vercel-config.test.ts`
-  encodes this; a migrated doc from the old duplicate directory got this
-  wrong and was corrected before commit — see Tier 2, 2026-08-20.
+- **Kenya/Somalia infra runs in AWS `eu-west-2` (London, Vercel `lhr1`),
+  NOT the PRD's `eu-west-1` (Dublin, `dub1`).** Deliberate user decision,
+  2026-08-20 — see Tier 2. This is a real, intentional divergence from
+  `plans/Full PRD file.md`, which still says `eu-west-1` throughout
+  (~25 references, untouched). Any future work that reads region info
+  from the PRD directly instead of this repo's `vercel.json`/env files
+  will get the wrong answer — always defer to the repo's actual config,
+  not the PRD, for this one fact.
 
 ### LAST KNOWN-GOOD CHECKPOINT
 None tagged yet. `npm run build && npm run lint && npm test` are all
@@ -70,6 +74,14 @@ hurbad-ecommerce/ removal), but no commit has been tagged `checkpoint/m0`
 hasn't run yet either.
 
 ### OPEN RISKS / ESCALATIONS
+- **PRD (`eu-west-1`/Dublin) vs. repo (`eu-west-2`/London) region mismatch**
+  — deliberate, not a bug (see ACTIVE DECISIONS above), but the PRD's
+  compliance appendix reasons about GDPR/EU jurisdiction assuming
+  EU-region infra (Dublin = EU; London = UK, separate post-Brexit regime).
+  That compliance reasoning was NOT re-examined against London — flagged
+  to the user, not resolved. Anyone doing real legal/compliance work on
+  Kenya data residency should treat the PRD's appendix as written for the
+  wrong region and verify UK GDPR equivalence before relying on it.
 - **Somalia data residency** — legal opinion outstanding (PRD Appendix).
   Blocks U14 only; does not block M0-M6.
 - **No real Stripe/M-Pesa sandbox credentials** — `.env.development` has
@@ -101,6 +113,37 @@ no UI/API routes built on the schema yet), so redesigning now is cheap;
 staying on v1 would mean shipping without oversell protection or payment
 idempotency, which the PRD treats as non-negotiable (AHD4/AHD5).
 **Approved by:** repo owner, in chat, 2026-08-20.
+
+### 2026-08-20 — Kenya/Somalia moved to eu-west-2 (London), deliberately diverging from the PRD
+After the eu-west-1-is-Dublin-not-London correction below, the user asked
+directly whether the mismatch was "just about the name" — asked to
+clarify whether they wanted the actual infra moved to London or just the
+label fixed, since those are different AWS regions (`eu-west-1` vs
+`eu-west-2`) with a real consequence: Dublin is EU/GDPR jurisdiction,
+London is UK (separate post-Brexit regime), and the PRD's compliance
+appendix was written assuming EU-region infra. User chose: actually move
+to London.
+
+Also flagged before doing it: `eu-west-1` appears ~25 times throughout
+`plans/Full PRD file.md` (KTD1 database decision, infrastructure cost
+estimates, system architecture diagram, compliance appendix) — not just
+the 2 mislabeled table cells. Asked whether to update the PRD too. User
+chose: repo files only, leave the PRD as `eu-west-1` (Dublin) — an
+explicit, acknowledged divergence between spec and implementation, not an
+oversight.
+
+Changed to `eu-west-2`/`lhr1`/London: `vercel.json` (regions + doc
+comment), `docs/DEPLOYMENT.md` (RDS primary, replica table, region table),
+`.env.production.kenya`, `.env.production.somalia`, `.env.production.ethiopia`
+(comment only, Ethiopia's own primary stays af-south-1), `.env.example`,
+`.env.production`, and `tests/test3-vercel-config.test.ts` (both
+assertions). Verified: `npm run build`, `npm run lint`, `npm test` all
+green after the change.
+
+**Not done, deliberately:** `plans/Full PRD file.md` itself, and no
+re-examination of its GDPR/compliance reasoning for UK vs. EU jurisdiction
+— see OPEN RISKS. Whoever picks up real legal/compliance work on this
+should not assume the PRD's compliance appendix is accurate as-is.
 
 ### 2026-08-20 — `hurbad-ecommerce/` duplicate resolved: migrate then delete (M0-8)
 User asked directly ("is it worse to delete or to use it instead of v3's

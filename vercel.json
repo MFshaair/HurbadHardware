@@ -5,9 +5,9 @@
     "separate Vercel projects (one per region) is done by ops in the",
     "Vercel dashboard/CLI, not by this file alone. See docs/DEPLOYMENT.md.",
     "",
-    "Kenya (primary):    Vercel project 'hurbad-ecommerce-ke', region dub1 (eu-west-1, Dublin)",
+    "Kenya (primary):    Vercel project 'hurbad-ecommerce-ke', region lhr1 (eu-west-2, London)",
     "Ethiopia (Phase 2): Vercel project 'hurbad-ecommerce-et', region cpt1 (af-south-1, Cape Town)",
-    "Somalia (Phase 2):  Vercel project 'hurbad-ecommerce-so', region dub1 (eu-west-1, Dublin)",
+    "Somalia (Phase 2):  Vercel project 'hurbad-ecommerce-so', region lhr1 (eu-west-2, London)",
     "",
     "Each project gets its own env vars (DATABASE_URL, DATABASE_READ_REPLICA_URL,",
     "NEXT_PUBLIC_REGION, payment gateway keys, currency, tax rate) set via",
@@ -17,7 +17,7 @@
   "framework": "nextjs",
   "buildCommand": "prisma generate && next build",
   "installCommand": "npm ci",
-  "regions": ["dub1"],
+  "regions": ["lhr1"],
   "functions": {
     "app/api/webhooks/**/*.ts": {
       "maxDuration": 30

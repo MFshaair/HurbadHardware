@@ -29,9 +29,11 @@ describe("vercel.json", () => {
     expect(config.git?.deploymentEnabled?.main).toBe(true);
   });
 
-  it("pins a function region matching eu-west-1 (Kenya primary / Somalia)", () => {
-    // dub1 (Dublin) is Vercel's eu-west-1-equivalent region.
-    expect(config.regions).toContain("dub1");
+  it("pins a function region matching eu-west-2 (Kenya primary / Somalia)", () => {
+    // lhr1 (London) is Vercel's eu-west-2-equivalent region. Deliberately
+    // eu-west-2, not the PRD's eu-west-1 (Dublin) — see
+    // docs/agents/run-state.md Tier 2, 2026-08-20 entry.
+    expect(config.regions).toContain("lhr1");
   });
 
   it("runs prisma generate before build so the client is available at build time", () => {
@@ -54,7 +56,7 @@ describe("Kenya region environment file", () => {
     expect(env).toMatch(/TAX_RATE="0\.16"/);
   });
 
-  it("points AWS_REGION at eu-west-1 (primary RDS region)", () => {
-    expect(env).toMatch(/AWS_REGION="eu-west-1"/);
+  it("points AWS_REGION at eu-west-2 (primary RDS region, London)", () => {
+    expect(env).toMatch(/AWS_REGION="eu-west-2"/);
   });
 });

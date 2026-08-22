@@ -2,22 +2,29 @@
 
 This document explains the manual provisioning steps needed to take this
 project from local development to a live, three-region deployment, per
-the v3 PRD's Regional Deployment Map (`plans/Full PRD file.md`). None of
-the steps below are runnable by an automated agent — no AWS credentials,
-no Vercel/Stripe/M-Pesa/SendGrid/Cloudflare accounts are available in this
-environment. They are written for whoever on the ops team has access to
-those accounts.
+the v3 PRD's Regional Deployment Map (`plans/Full PRD file.md`) — with one
+deliberate deviation: Kenya/Somalia run in AWS `eu-west-2` (London), not
+the PRD's `eu-west-1` (Dublin). See `docs/agents/run-state.md` Tier 2,
+2026-08-20 entry, for why, and for the resulting PRD-vs-repo mismatch this
+leaves open.
+
+None of the steps below are runnable by an automated agent — no AWS
+credentials, no Vercel/Stripe/M-Pesa/SendGrid/Cloudflare accounts are
+available in this environment. They are written for whoever on the ops
+team has access to those accounts.
 
 ## 1. Database — AWS RDS PostgreSQL
 
-- Primary instance: AWS RDS PostgreSQL in **eu-west-1** (Dublin), sized for
-  the Kenya launch (see PRD KTD1: single primary + read replicas).
+- Primary instance: AWS RDS PostgreSQL in **eu-west-2** (London), sized for
+  the Kenya launch (see PRD KTD1: single primary + read replicas — note
+  the PRD itself specifies `eu-west-1`/Dublin; this repo deliberately runs
+  `eu-west-2`/London instead, see `docs/agents/run-state.md` Tier 2).
   - Engine: PostgreSQL 16+
   - Enable automated backups, Multi-AZ for production
   - Enforce SSL connections
 - Read replicas:
   - **af-south-1** (South Africa) — serves Ethiopia traffic
-  - **eu-west-1** (Dublin) — serves Somalia traffic (co-located with primary; see PRD Appendix on Somalia data residency for the interim rationale)
+  - **eu-west-2** (London) — serves Somalia traffic (co-located with primary; see PRD Appendix on Somalia data residency for the interim rationale)
 - After the instances exist, set `DATABASE_URL` (primary) and
   `DATABASE_READ_REPLICA_URL` (nearest replica) as Vercel secrets for each
   region's project — see `.env.production.kenya` / `.env.production.ethiopia`
@@ -44,9 +51,9 @@ the same GitHub repo/branch, each with its own region and env vars:
 
 | Project name | Vercel region | Env template |
 |---|---|---|
-| `hurbad-ecommerce-ke` | `dub1` (eu-west-1 / Dublin) | `.env.production.kenya` |
+| `hurbad-ecommerce-ke` | `lhr1` (eu-west-2 / London) | `.env.production.kenya` |
 | `hurbad-ecommerce-et` | `cpt1` (af-south-1 / Cape Town) | `.env.production.ethiopia` |
-| `hurbad-ecommerce-so` | `dub1` (eu-west-1 / Dublin) | `.env.production.somalia` |
+| `hurbad-ecommerce-so` | `lhr1` (eu-west-2 / London) | `.env.production.somalia` |
 
 Steps per project:
 
