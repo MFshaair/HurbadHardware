@@ -3,6 +3,16 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     setupFiles: ["./tests/setup.ts"],
+    // test6-auth.test.ts and test7-auth-ui.test.ts (M1-2) each spawn a
+    // real `next dev` server as a child process from this same repo
+    // directory. Vitest's default parallel-file scheduling ran both dev
+    // servers concurrently, and they collided over the shared `.next`
+    // build/cache directory — sign-up/sign-in requests intermittently
+    // came back 500/401 instead of 200 even though either test file
+    // passes cleanly on its own. Forcing sequential file execution avoids
+    // two dev servers touching `.next` at once. Slower, but correctness
+    // over speed for this class of integration test.
+    fileParallelism: false,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],

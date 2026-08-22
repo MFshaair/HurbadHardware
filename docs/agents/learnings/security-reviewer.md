@@ -38,3 +38,27 @@ validity, require a case sending a garbage value under the real cookie name.
 Insist the name be derived at runtime from a live Set-Cookie header, not
 hardcoded — a hardcoded name that drifts makes the test silently degrade
 into the no-cookie path and still pass.
+
+## Enumeration hardening is only as strong as the weakest form in the flow
+**Symptom:** Login and forgot-password are carefully hardened to return
+byte-identical responses, and the acceptance criteria only name those two —
+while the registration form in the same milestone returns a distinguishable
+"already exists" error, restoring the enumeration oracle.
+**Cause:** Criteria are partitioned per-page, so the reviewer checks the two
+pages named and the third page's equivalent weakness never gets asked about.
+**Rule going forward:** Treat user-enumeration as a property of the whole
+auth surface, not a per-page criterion. Whenever a diff hardens one form
+against enumeration, enumerate every other form in the same flow that takes
+an email and check what each returns for a known vs. unknown address.
+
+## Prefer "cannot leak" over "does not leak" in client error rendering
+**Symptom:** Two pages both pass an enumeration check, but one renders the
+API's message verbatim while the other renders a hardcoded local constant
+and never reads the response body.
+**Cause:** Verbatim rendering is correct only for as long as the upstream
+library keeps its messages uniform — it's a passing test resting on an
+external invariant the repo doesn't control.
+**Rule going forward:** Where a response must be identical across cases,
+prefer a client that ignores the body entirely and renders a local constant.
+When reviewing a verbatim-render page, always confirm the invariant in the
+dependency's source and note that the guarantee is external, not local.

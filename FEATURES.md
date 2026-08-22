@@ -123,15 +123,90 @@ middleware-only false positive.
 
 **Verified:** `scripts/agents/gate-check.sh M1-1` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (87.5% statements/lines, 72.72% branches, 100% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login flow), and security sign-off STATUS: CLEAR. M0-6 prerequisite (test:coverage script and vitest coverage config) confirmed completed and verified in prior gate run.
 ### M1-2: Registration / login / password reset UI
-**Status:** planned · **Owner:** storefront-admin-engineer
-- [ ] Register/login/forgot-password pages functional against real better-auth flows
-- [ ] Wrong credentials rejected with a generic error (no user enumeration)
-- [ ] Reset link changes password and invalidates the old session
+**Status:** verified · **Owner:** storefront-admin-engineer (no platform-architect design pass needed — see note below)
+- [x] Four real pages exist and call better-auth directly (no placeholders): `/auth/register` (POSTs to better-auth sign-up), `/auth/login` (POSTs to sign-in — replaces M1-1's placeholder `src/app/auth/login/page.tsx`), `/auth/forgot-password` (POSTs to `/api/auth/request-password-reset` with `redirectTo` set to this app's `/auth/reset-password`), and `/auth/reset-password` (reads `?token=`/`?error=INVALID_TOKEN` off the query string; on a present token, POSTs `{token, newPassword}` to `/api/auth/reset-password`; on `error=INVALID_TOKEN`/no token, shows an expired/invalid message with no form). Confirmed by `tests/test7-auth-ui.test.ts`'s first describe block hitting each page over real HTTP.
+- [x] Wrong-credentials error is generic — proven by a test asserting byte-identical response for unregistered email vs. registered email + wrong password (`tests/test7-auth-ui.test.ts:115-161`).
+- [x] Forgot-password page renders the same generic confirmation regardless of whether the email exists — proven by a test comparing registered vs. unregistered email responses (`tests/test7-auth-ui.test.ts:163-208`).
+- [x] `src/lib/auth.ts`'s `emailAndPassword.revokeSessionsOnPasswordReset: true` added.
+- [x] "Reset invalidates the old session" proven end-to-end (`tests/test7-auth-ui.test.ts:210+`): log in → reset via the real flow → old session confirmed gone → login with new password succeeds and creates a fresh session.
+
+`bash scripts/agents/local-check.sh` (orchestrator-run, not self-reported): PASS —
+27 tests passing (was 18 before this item), 2 intentionally skipped.
+
+Note: this item is UI + one already-identified one-line `auth.ts` config flag (`revokeSessionsOnPasswordReset`), on top of M1-1's already-verified better-auth instance/routes/middleware — no schema change, no new model, no undecided design question remains. `platform-architect` is not needed for this item; dispatch storefront-admin-engineer directly. (Contrast with M1-1, where architect caught a real missing-schema-field blocker — no equivalent gap was found here.)
+
+**Verified:** `scripts/agents/gate-check.sh M1-2` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (87.5% statements/lines, 72.72% branches, 100% functions, all thresholds met), dogfood entrypoint (register/login/forgot-password/reset-password complete user flows), and security sign-off STATUS: CLEAR.
 
 ### M1-3: Profile & address management
+**Status:** planned · **Owner:** storefront-admin-engineer (no platform-architect
+design pass needed — see note below)
+- [ ] `/profile` (extends the existing placeholder at `src/app/profile/page.tsx`,
+      built in M1-1 — do not rebuild its `auth.api.getSession()` gate, only
+      add content behind it) lets the logged-in user edit `User.name` and
+      `User.phone` and persists via `prisma.user.update`, proven by a test
+      that submits the form/calls the handler and then re-queries the `User`
+      row directly to confirm the new values, not just a 200 response.
+- [ ] **Email is NOT editable in this item.** `src/lib/auth.ts` has no
+      `user.changeEmail` config (confirmed by reading the file — only
+      `emailAndPassword` sign-up/sign-in/reset are configured), and
+      `User.email` is better-auth's own credential/login identifier, so
+      changing it here would silently desync the `Account`/session
+      relationship without a verification flow. Out of scope for M1-3;
+      email change (with its own verify-new-address-before-cutover flow) is
+      a separate future item — do not add an editable email field to this
+      page.
+- [ ] Address CRUD on `Address` rows scoped to `userId = session.user.id`
+      (never another user's, proven by a test that creates two users, each
+      with an address, and confirms user A's request cannot read/edit/delete
+      user B's address — expect 403/404, not silent cross-tenant success):
+      create, edit (`fullName`/`phone`/`region`/`city`/`postalCode`/`street`),
+      and delete, each proven by re-querying `Address` directly afterward.
+- [ ] `region` is saved as one of the three `Region` enum values (`KE`/`ET`/`SO`)
+      via a select input, not free text — proven by a test asserting the
+      persisted `Address.region` is a valid enum member, and that submitting
+      an invalid/unlisted region value is rejected (400), not silently
+      coerced or stored.
+- [ ] "Set default" is concretely: exactly one `Address` row per `userId` can
+      have `isDefault = true` at any time. Setting a new default
+      atomically unsets the previous default in the same transaction
+      (`prisma.$transaction`) — proven by a test that sets address A default,
+      then sets address B default, then queries all of that user's addresses
+      and asserts exactly one (`B`) has `isDefault = true`. Deleting the
+      current default address does not auto-promote another address to
+      default (leaves the user with zero default addresses) — this is
+      explicitly acceptable per this item; auto-promotion is not required.
+- [ ] **Out of scope for M1-3** (do not build, do not let the criteria above
+      quietly expand to include this): using a saved/default address during
+      checkout (address *selection* at checkout time, prefilling the
+      checkout form, or `Order.shippingAddressId`/`billingAddressId`
+      wiring) — that consumption path is M3-3's job. This item only owns
+      the CRUD surface and the `Address` rows it produces; M3-3 reads them
+      later as an independent concern.
+
+Note: this item needs no new schema (the `Address` model, its `userId`
+relation, and the `Region` enum already exist — confirmed by reading
+`prisma/schema.prisma`) and no undecided design question — the only real
+decision (email non-editable in this item, and why) is settled above by
+reading `src/lib/auth.ts` directly rather than left ambiguous.
+`platform-architect` is not needed; dispatch storefront-admin-engineer
+directly, same pattern as M1-2.
+
+### M1-4: Registration-form user enumeration (non-blocking, from M1-2 security review)
 **Status:** planned · **Owner:** storefront-admin-engineer
-- [ ] Edit name/phone/email; add/edit/delete addresses; set default
-- [ ] Address saved with correct `Region` enum value
+Flagged by `security-reviewer` during M1-2 (`docs/agents/security-signoff/M1-2.md`,
+non-blocking observation): `/auth/register` renders better-auth's verbatim
+"User already exists. Use another email." (422) for a taken email, while
+`/auth/login` and `/auth/forgot-password` were deliberately hardened to give
+identical responses regardless of whether the email is registered. This
+restores the enumeration oracle those two pages close — login/forgot-password
+hardening is only as strong as the weakest form in the same flow.
+- [ ] Explicit product decision recorded here: either (a) accept this as normal
+      registration UX (most consumer apps do disclose "email taken" at
+      sign-up) and close this item as "won't fix, accepted", or (b) harden
+      register the same way (generic "check your email to continue" copy
+      regardless of outcome, real account-exists notification sent by email
+      instead of shown in the UI) — pick one, don't leave it ambiguous.
+- [ ] If (b): implement + test to the same standard as M1-2's login/forgot-password hardening.
 
 ---
 

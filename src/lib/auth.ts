@@ -38,6 +38,13 @@ export const auth = betterAuth({
         console.log(`[auth] password reset URL: ${url}`);
       }
     },
+    // M1-2 (AHD7-adjacent hardening): without this, completing a password
+    // reset leaves any existing sessions (e.g. an attacker's, if the reset
+    // was triggered because credentials were compromised) valid — see
+    // node_modules/better-auth/dist/api/routes/password.mjs's
+    // `resetPassword` handler, which only calls
+    // `internalAdapter.deleteUserSessions(userId)` when this flag is set.
+    revokeSessionsOnPasswordReset: true,
   },
   // `Account.issuer` (prisma/schema.prisma) is a builtin better-auth 1.7.x
   // column (`@better-auth/core/db`'s `createLocalAccountIssuer`) — it's

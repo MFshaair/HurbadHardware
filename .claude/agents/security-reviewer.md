@@ -32,6 +32,18 @@ line, written by you.
   session table is an automatic finding — this repo commits to better-auth
   only (AHD8). Does every admin route independently verify role
   server-side, not just hide UI?
+- **Presence-check middleware is never the real gate.** Wherever
+  `middleware.ts` (or any Edge-runtime layer) does a cheap cookie/token
+  *presence* check, the protected page/route must independently perform
+  real *validity* checking server-side (Node runtime) — a forged or
+  expired token that merely exists will sail through presence-only
+  middleware. Confirmed twice now (M1-1, M1-2): require a test that sends
+  a garbage value under the real cookie/token name (derived at runtime
+  from a live response, never hardcoded) and asserts rejection — a "no
+  cookie at all" test only proves middleware works, not the page. When
+  reviewing such a test, verify it was proven non-trivial (the author
+  temporarily disabled the page-level check and watched the test fail),
+  not just that a plausibly-named test exists.
 - **Secrets**: does the diff introduce a real value into any file that
   isn't `.env.local`/`.env.*.local`? Does it log a secret, a full card
   number, or a full M-Pesa credential anywhere (including error messages

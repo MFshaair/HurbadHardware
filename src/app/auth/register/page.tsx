@@ -4,18 +4,13 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Real login form (M1-2). Calls better-auth's sign-in endpoint directly.
-//
-// User-enumeration safety: better-auth's /api/auth/sign-in/email already
-// returns the identical `INVALID_EMAIL_OR_PASSWORD` (401, message
-// "Invalid email or password") for an unregistered email, a registered
-// email with the wrong password, and a credential-less account
-// (node_modules/better-auth/dist/api/routes/sign-in.mjs). This page must
-// not undo that: there is exactly one request, one error-handling branch,
-// and the rendered text is whatever the API returned — no pre-check call,
-// no per-case copy.
-export default function LoginPage() {
+// Real registration form (M1-2). Calls better-auth's sign-up endpoint
+// directly via fetch — no client-side password hashing, no custom
+// account creation. On success, better-auth's nextCookies plugin has
+// already set the session cookie server-side, so we just navigate.
+export default function RegisterPage() {
   const router = useRouter();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,10 +22,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/sign-in/email", {
+      const res = await fetch("/api/auth/sign-up/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password }),
       });
 
       if (!res.ok) {
@@ -53,8 +48,23 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4 py-8">
-      <h1 className="mb-6 text-2xl font-semibold text-gray-900">Log in</h1>
+      <h1 className="mb-6 text-2xl font-semibold text-gray-900">Create an account</h1>
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="name" className="text-sm font-medium text-gray-800">
+            Full name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            required
+            autoComplete="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="min-h-11 w-full rounded border border-gray-400 px-3 py-2 text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
+          />
+        </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="email" className="text-sm font-medium text-gray-800">
             Email
@@ -79,7 +89,8 @@ export default function LoginPage() {
             name="password"
             type="password"
             required
-            autoComplete="current-password"
+            autoComplete="new-password"
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="min-h-11 w-full rounded border border-gray-400 px-3 py-2 text-base text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-700"
@@ -95,19 +106,14 @@ export default function LoginPage() {
           disabled={loading}
           className="min-h-11 w-full rounded bg-blue-800 px-4 py-2 font-medium text-white disabled:opacity-60"
         >
-          {loading ? "Logging in…" : "Log in"}
+          {loading ? "Creating account…" : "Create account"}
         </button>
       </form>
-      <p className="mt-4 flex flex-col gap-2 text-sm text-gray-700">
-        <Link href="/auth/forgot-password" className="font-medium text-blue-800 underline">
-          Forgot your password?
+      <p className="mt-4 text-sm text-gray-700">
+        Already have an account?{" "}
+        <Link href="/auth/login" className="font-medium text-blue-800 underline">
+          Log in
         </Link>
-        <span>
-          Don&apos;t have an account?{" "}
-          <Link href="/auth/register" className="font-medium text-blue-800 underline">
-            Create one
-          </Link>
-        </span>
       </p>
     </main>
   );
