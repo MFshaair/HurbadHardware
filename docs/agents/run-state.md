@@ -24,14 +24,15 @@ expansion (Ethiopia/Somalia) and Phase 2 features are explicitly out of
 scope for autonomous execution — see OPEN RISKS.
 
 ### MILESTONE PLAN + current position
-Current milestone: **M0 — Repo Hygiene & v3 Schema Adoption** (in progress —
-M0-1..M0-5 built directly outside the team loop 2026-08-20; M0-6..M0-9 not
-started; gate/security sign-off not yet run for M0-1..M0-5).
+Current milestone: **M1 — Auth & Identity** (not started). M0's checkpoint
+condition is met (build/lint/test green, tagged `checkpoint/m0`) so M1 is
+unblocked; M0-6 (coverage threshold) and the full-test-suite half of M0-7
+(CI) remain open in the background and aren't blocking.
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Repo Hygiene & v3 Schema Adoption | in progress (5/9 items built) |
-| M1 | Auth & Identity (U3, better-auth) | blocked on M0 |
+| M0 | Repo Hygiene & v3 Schema Adoption | checkpoint tagged; M0-6/M0-7(partial) still open |
+| M1 | Auth & Identity (U3, better-auth) | ready to start |
 | M2 | Catalog, Variants & Search (U4) | blocked on M1 |
 | M3 | Cart, Checkout & Reservation (U5/U6/U12) | blocked on M2 |
 | M4 | Payments — Stripe & M-Pesa (U7/U8) | blocked on M3 |
@@ -67,11 +68,11 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
   not the PRD, for this one fact.
 
 ### LAST KNOWN-GOOD CHECKPOINT
-None tagged yet. `npm run build && npm run lint && npm test` are all
-green as of 2026-08-20 (v3 schema + better-auth + seed + vitest env fix +
-hurbad-ecommerce/ removal), but no commit has been tagged `checkpoint/m0`
-— M0-9 (tag the checkpoint) is still open, and M0-6 (coverage threshold)
-hasn't run yet either.
+`checkpoint/m0` tag, commit `3f26673` (2026-08-20). `npm run build && npm
+run lint && npm test` all green at this commit: v3 schema, better-auth,
+200-product/400-variant seed, vitest env fix, hurbad-ecommerce/ removed,
+Kenya/Somalia on eu-west-2 (London). Roll back here if a later milestone's
+integration checkpoint goes red and can't be cheaply fixed forward.
 
 ### OPEN RISKS / ESCALATIONS
 - **PRD (`eu-west-1`/Dublin) vs. repo (`eu-west-2`/London) region mismatch**

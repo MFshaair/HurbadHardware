@@ -84,10 +84,13 @@ whoever runs the team next should let the gate confirm it formally.
 - [x] **Deliberately NOT changed:** `plans/Full PRD file.md` still specifies `eu-west-1` (Dublin) ~25 times (KTD1, cost estimates, compliance appendix — which reasons about GDPR/EU jurisdiction assuming EU-region infra; UK is a separate post-Brexit regime). User chose to scope the London change to the repo only, not the source PRD. **This means the PRD and the repo now deliberately disagree on which AWS region Kenya/Somalia run in — flagged here so it isn't mistaken for an oversight.**
 
 ### M0-9: Reconcile working tree, tag first known-good checkpoint
-**Status:** planned · **Owner:** platform-infra-engineer
-- [ ] All M0-1..M0-7 changes committed; `git status` clean
-- [ ] `npm run build && npm run lint && npm test` all exit 0
-- [ ] A commit is tagged (e.g. `checkpoint/m0`); `docs/agents/run-state.md` Tier 1 "LAST KNOWN-GOOD CHECKPOINT" updated to point at it
+**Status:** verified (human-confirmed) · **Owner:** platform-infra-engineer
+- [x] All changes through the London-region decision committed; `git status` clean
+- [x] `npm run build && npm run lint && npm test` all exit 0
+- [x] Tagged `checkpoint/m0` on commit `3f26673`; `docs/agents/run-state.md` Tier 1 "LAST KNOWN-GOOD CHECKPOINT" updated
+
+M0-6 (coverage threshold) and the full-`npm test`-in-CI half of M0-7 are
+still open but not blocking — M1 can start against this checkpoint.
 
 ---
 
