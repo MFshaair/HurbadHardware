@@ -357,16 +357,237 @@ so they are tracked rather than silently dropped. None are blocking.
 <200ms locally; variant selector drives price/stock/images correctly.
 
 ### M2-1: Product listing, detail & variant selector
-**Status:** planned · **Owner:** catalog-inventory-engineer + storefront-admin-engineer
-- [ ] Paginated listing (20/page), grouped by product, shows variant count + price range
-- [ ] Detail page variant selector drives displayed price/stock/images
-- [ ] Out-of-stock variant disables "Add to Cart"
+**Status:** verified · **Owner:** catalog-inventory-engineer (data/query layer) + storefront-admin-engineer (pages/UI)
+(no platform-architect design pass needed — see note below)
+
+**Region determination (binding for this item):** resolved server-side
+from `process.env.NEXT_PUBLIC_REGION`, defaulting to `"KE"` if unset
+(matches the value already in `.env.development`/`.env.example`; ET/SO
+have their own values in `.env.production.ethiopia`/`.env.production.somalia`
+per the existing per-deployment env-file strategy from M0 — see
+`next.config.ts:34`). The value must be validated against the Prisma
+`Region` enum before being used to filter `RegionalPrice`/`RegionalInventory`
+(reject/500 on an invalid value rather than silently defaulting). No
+per-request visitor geolocation and no region-switcher UI in this item —
+each deployment is already single-region by construction; a real
+visitor-facing region switcher is out of scope until multi-region traffic
+on one deployment is a real requirement (not before U14 is unblocked).
+
+- [x] **(catalog-inventory-engineer)** Listing query returns only
+      `Product` rows with `isActive: true, deletedAt: null`, and only
+      counts/prices `ProductVariant` rows that are themselves
+      `isActive: true, deletedAt: null`. Paginated 20/page via a `page`
+      query param (`?page=N`, 1-indexed, default `1` when absent/invalid
+      non-numeric). Each product entry includes `variantCount` (count of
+      active, non-deleted variants) and `priceRange` computed from those
+      variants' `RegionalPrice.price` for the resolved region only — for a
+      product with 2 variants priced e.g. KES 45,000 and KES 52,000 in the
+      `KE` region, `priceRange` is `{ min: "45000.00", max: "52000.00",
+      currency: "KES" }` (or equivalent display string) — proven by a test
+      that seeds a 2-variant product with two distinct `RegionalPrice.price`
+      rows for `KE` and asserts the returned range matches exactly, not
+      just that a range field exists.
+      Implemented: `getProductListing(page, region)` in
+      `src/lib/productService.ts`; region resolved via `resolveRegion()`
+      in `src/lib/region.ts`. Tested in
+      `tests/test10-region.test.ts`/`tests/test11-product-catalog.test.ts`
+      (page-1 20-product/variantCount-2/price-range assertions against
+      real DB values, plus an explicit distinct-min/max case). Route
+      wiring (`?page=N` parsing, non-numeric default) is
+      storefront-admin-engineer's job in the page component.
+- [x] **(catalog-inventory-engineer)** A `page` beyond the last available
+      page (e.g. `?page=999` against 200 seeded products / 20-per-page ⇒
+      10 total pages) returns an empty result array with `200`, not
+      `404`/`500` — proven by a test.
+      Implemented/tested: `getProductListing(999, region)` returns
+      `{ products: [] }` (never throws) — see
+      `tests/test11-product-catalog.test.ts`.
+Data-layer note (catalog-inventory-engineer, for storefront-admin-engineer
+to consume — no separate checkbox above, folded into the two data-layer
+items and the detail/selector item below): `getProductDetail(slug, region)`
+in `src/lib/productService.ts` returns the product with all active,
+non-deleted variants, each variant's `RegionalPrice`/`RegionalInventory`
+row for the resolved region, and a pre-computed `availableForSale =
+onHand - reserved - safetyBuffer` per variant — this is what the variant
+selector and the disabled/enabled "Add to Cart" state below should read
+from directly rather than recomputing. Both `getProductListing` and
+`getProductDetail` filter `Product` and `ProductVariant` on
+`isActive: true, deletedAt: null`; verified with a test that manually
+soft-deletes one seeded variant via a direct Prisma call and confirms
+exclusion from both queries (`tests/test11-product-catalog.test.ts`).
+
+- [x] **(storefront-admin-engineer)** Listing page renders the paginated,
+      grouped-by-product result from the query above (variant count +
+      price range per product), with page-number navigation driven by the
+      same `page` query param the backend reads (no separate client-side
+      pagination state that could desync from the URL).
+      Implemented: `src/app/products/page.tsx` (`parsePage()` parses/
+      validates `?page=N` server-side, `getProductListing` reads it
+      directly, Previous/Next `<Link>`s point at `/products?page=N±1`).
+      Tested: `tests/test12-catalog-pages.test.ts` (page 1 vs page 2
+      content differs, Previous/Next link presence/absence, non-numeric
+      `page` defaults to 1, `?page=999` renders "No products found" with
+      200). Verified by direct `curl` against a real running dev server
+      as well (page text and links render correctly).
+- [x] **(storefront-admin-engineer)** Detail page (`/products/[slug]` or
+      equivalent) variant selector (one control per `ProductVariant`,
+      keyed by `variantId`) updates the displayed price, stock status, and
+      images to the selected variant's `RegionalPrice`/`RegionalInventory`
+      row for the resolved region — proven by a test that switches the
+      selection and re-reads the rendered DOM, not just that a selector
+      element exists.
+      Implemented: `src/app/products/[slug]/page.tsx` +
+      `src/app/products/[slug]/VariantSelector.tsx` (client component;
+      selection state keyed by `variantId`, initial selection is
+      `variants[0]`, whose order is now made deterministic via an explicit
+      `orderBy: [{ createdAt: "asc" }, { id: "asc" }]` on
+      `getProductDetail`'s variants query in `src/lib/productService.ts` —
+      Prisma/Postgres give no ordering guarantee without an explicit
+      `orderBy`, which previously let "the first variant" the UI selects
+      by default silently differ from what test fixtures/callers assumed).
+      Tested: `tests/test12-catalog-pages.test.ts` — real headless-browser
+      (Playwright) interaction clicks the second variant's radio label and
+      re-reads `selected-price`/`selected-stock`/`add-to-cart` from the
+      live DOM, confirming an actual client-side re-render, not just
+      selector-element presence.
+- [x] **(storefront-admin-engineer)** "Add to Cart" decision for this
+      item: the button IS rendered (not omitted) for every variant, and is
+      `disabled` exactly when the selected variant's available stock for
+      the resolved region (`RegionalInventory.onHand - reserved -
+      safetyBuffer <= 0`) is `<= 0`; for in-stock variants the button is
+      enabled but has no cart-mutation logic wired (no API call, no
+      client-side cart state) — real "add to cart" behavior is M3-1's job,
+      not this item's. Proven by a test asserting `disabled` toggles
+      correctly across an in-stock and an out-of-stock variant on the same
+      product.
+      Implemented: `VariantSelector.tsx` reads `availableForSale` straight
+      from the server-computed `getProductDetail` result (never
+      recomputed client-side); `disabled={outOfStock}` on the
+      `data-testid="add-to-cart"` button. Tested:
+      `tests/test12-catalog-pages.test.ts` — server-rendered-HTML test
+      forces a real DB variant's `RegionalInventory` to
+      `onHand: 0, reserved: 0, safetyBuffer: 0` and confirms both "Out of
+      stock" text and the `disabled` attribute on the rendered button;
+      Playwright test independently confirms the enabled→disabled toggle
+      when switching from an in-stock to an out-of-stock variant in the
+      live DOM.
+
+**Explicitly out of scope for M2-1** (do not build here): full-text /
+keyword search and faceted filtering (both M2-2); any region-switcher UI
+or visitor geolocation (see region-determination note above); any cart
+mutation logic, cart persistence, or "add to cart" click handler beyond
+the disabled/enabled state described above (M3-1). Somalia (`SO`) and any
+Phase 2 catalog behavior stay untouched by this item per the standing
+Somalia/Phase-2 hold.
+
+Note: this item touches new query patterns across `Product`/
+`ProductVariant`/`RegionalPrice`/`RegionalInventory` but no new schema
+field or model — all fields needed (`isActive`, `deletedAt`, the
+`[variantId, region]` unique indexes on `RegionalPrice`/
+`RegionalInventory`) already exist (confirmed by reading
+`prisma/schema.prisma`), and the region-determination question is settled
+above by reading the existing `NEXT_PUBLIC_REGION` per-deployment env
+pattern already established in M0 (`next.config.ts`,
+`.env.development`/`.env.example`/`.env.production.*`) rather than
+requiring a new design. No `platform-architect` pass needed; dispatch
+catalog-inventory-engineer + storefront-admin-engineer directly (contrast
+with M1-1, where architect caught a real missing-schema-field blocker).
+
+**Iteration 2 (2026-08-22): security-reviewer findings F1–F5 fixed (all five, none deferred).**
+See `docs/agents/security-signoff/M2-1.md` for the full review (STATUS:
+FINDINGS at iteration 1).
+
+- [x] **F1 (MEDIUM, confirmed) fixed:** `getProductListing` in
+      `src/lib/productService.ts` now clamps the page number used to
+      compute Prisma's `skip` to a fixed `MAX_PAGE = 1_000_000` constant,
+      independent of the page number echoed back in the result. Previously
+      `?page=99999999999999999999` overflowed Prisma's 64-bit signed
+      `skip` integer and threw an unhandled `PrismaClientValidationError`
+      that leaked the full query shape (where/orderBy/include) to an
+      anonymous visitor — confirmed 500 by security-reviewer's own repro.
+      Re-ran the exact repro after the fix against a real `next dev`
+      server on a scratch port: `GET
+      /products?page=99999999999999999999` now returns `HTTP_STATUS:200`,
+      response body contains "No products found" and zero occurrences of
+      `PrismaClientValidationError`. Added a regression test in
+      `tests/test11-product-catalog.test.ts` asserting
+      `getProductListing(99999999999999999999, REGION)` resolves to an
+      empty `products` array rather than throwing.
+- [x] **F2 (LOW) fixed:** `VariantSelector.tsx` (the "use client"
+      component) now accepts a narrowed `ClientVariant` type (`id`, `name`,
+      `attributes`, `images`, `price`, `currency`, `availableForSale`
+      only) instead of the full `VariantDetail`, so the raw `onHand`/
+      `reserved`/`safetyBuffer` inventory columns never serialize into the
+      public RSC payload. `src/app/products/[slug]/page.tsx` maps
+      `getProductDetail`'s `VariantDetail[]` down to `ClientVariant[]`
+      before passing it to `<VariantSelector>`. `getProductDetail` itself
+      is unchanged — it still computes and returns
+      `availableForSale = onHand - reserved - safetyBuffer` server-side,
+      per the item's original data-layer note; only the client-facing
+      prop surface was narrowed.
+- [x] **F3 (INFO) fixed:** `vitest.config.mts`'s coverage exclude list no
+      longer uses the `src/app/products/**` glob; it now lists the three
+      justified files explicitly (`src/app/products/page.tsx`,
+      `src/app/products/\[slug\]/page.tsx`,
+      `src/app/products/\[slug\]/VariantSelector.tsx` — brackets escaped
+      since `[slug]` is a literal directory name, not a glob character
+      class, and an unescaped `[slug]` would silently match any single
+      character among s/l/u/g instead of the real path). Verified via a
+      real `vitest run --coverage`: the three files are still correctly
+      excluded (thresholds unaffected, 93.25%/81.37%/100%/93.02%
+      stmts/branches/funcs/lines) and no unrelated file under
+      `src/app/products/` is swept in.
+- [x] **F4 (INFO) fixed:** `src/lib/productService.ts`'s header comment
+      now cites the real test files
+      (`tests/test11-product-catalog.test.ts` /
+      `tests/test12-catalog-pages.test.ts`) instead of the nonexistent
+      `test11-product-listing.test.ts` / `test12-product-detail.test.ts`.
+- [x] **F5 (LOW, test gap) fixed:** added a new case to the soft-delete
+      describe block in `tests/test11-product-catalog.test.ts` that
+      soft-deletes a `Product` directly (not a variant) via a direct
+      Prisma call, and asserts it is excluded from both
+      `getProductListing` (across all pages) and `getProductDetail`
+      (returns `null`, the detail page's not-found case) — restored in a
+      `finally` block. This closes the gap where only the variant-level
+      filter had a regression test; the product-level
+      `isActive: true, deletedAt: null` filter (productService.ts:56,
+      :155) is now independently proven.
+- [x] `bash scripts/agents/local-check.sh` (self-run, iteration 2): PASS —
+      build clean, lint clean, full test suite green (10 test files, 71
+      passed / 2 intentionally skipped), 2x `prisma migrate dev` with no
+      drift (part of `test:2-prisma-migrate`), coverage thresholds met
+      (93.25% stmts / 81.37% branches / 100% funcs / 93.02% lines,
+      all above the 80/80/60/60 gate).
+
+**Verified:** `scripts/agents/gate-check.sh M2-1` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (93.25% statements/lines, 81.37% branches, 100% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login flow), and security sign-off STATUS: CLEAR (iteration 2).
 
 ### M2-2: Full-text search & faceted filters
 **Status:** planned · **Owner:** catalog-inventory-engineer
 - [ ] GIN full-text search across `Product`/`ProductVariant` (name, brand, SKU)
 - [ ] Filters: category, brand, price range (from `RegionalPrice`), variant attributes
 - [ ] Search "iPhone"-equivalent query returns results in <200ms against the seeded DB (measured, not estimated)
+
+### M2-3: M2-1 non-blocking advisories backlog (from security-reviewer, iteration 2)
+**Status:** planned · **Owner:** storefront-admin-engineer / catalog-inventory-engineer
+Flagged by `security-reviewer` during M2-1 iteration 2
+(`docs/agents/security-signoff/M2-1.md`) as advisories, explicitly not
+fixed as part of the F1-F5 cycle. Neither is blocking.
+- [ ] **A1 (LOW/hardening):** `src/app/products/[slug]/page.tsx`'s
+      guarantee that raw `onHand`/`reserved`/`safetyBuffer` never reach
+      the client is compile-time only (TypeScript's excess-property check
+      protects the current field-by-field object literal, but does NOT
+      apply to a future `{ ...v }` spread, which would compile cleanly
+      and silently re-leak the raw numbers). Add a runtime/HTTP test in
+      `tests/test12-catalog-pages.test.ts`: set a variant's inventory row
+      to a distinctive `onHand` value, fetch the detail page, assert the
+      response body does not contain that raw number.
+- [ ] **A2 (INFO, doc accuracy):** `src/lib/productService.ts`'s comment
+      around the `page`/`skip` clamp (lines ~69-75) claims the echoed
+      `page` "reflects the caller's requested page" while only `skip` is
+      clamped — but the function actually returns `page: safePage`, so
+      the echoed value is clamped too (no behavioural or security impact,
+      since the listing page renders its own locally-parsed page value
+      and ignores the returned one). Fix the comment to match reality.
 
 ---
 

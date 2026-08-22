@@ -74,3 +74,86 @@ of this with v3's relational, variant-first, reservation-based model — see
 `docs/agents/run-state.md` Tier 2, 2026-08-20 entry, for the full
 rationale. If you're implementing M0-1/M0-2/M0-3, this context is already
 resolved; don't re-litigate v1 vs v3.
+
+## Pure query-layer functions don't need a spawned `next dev` server
+
+**Context:** M2-1's data layer (`src/lib/productService.ts`,
+`src/lib/region.ts`) is plain TypeScript importing only `@prisma/client`
+and the shared `db` singleton — no Next.js route/request dependency. Tests
+for these import the functions directly and run in-process against the
+real local Postgres (same pattern as
+`tests/test9-address-validation.test.ts`), not the spawn-a-dev-server
+pattern used for route-wired code (`tests/test6-auth.test.ts` /
+`tests/test8-profile-addresses.test.ts`). This matters twice: (1) it makes
+tests fast (no ~60s dev-server boot) and (2) v8 coverage instrumentation
+can actually see this code (unlike code only reachable through a spawned
+child process — see vitest.config.mts's coverage-exclude comment for that
+tradeoff). **Rule going forward:** keep data-layer query functions free of
+any framework import specifically so they stay directly testable
+in-process; push all `page`-param parsing / HTTP concerns into the route
+or page component that calls them, not into the query function itself.
+
+## Prisma.Decimal comparisons need `.equals()`/`.lessThan()`, not `===`/`<`
+
+**Symptom:** naive `price1 < price2` or `price1 === price2` on
+`Prisma.Decimal` values compiles fine (TS doesn't stop you) but is
+comparing object references / triggers implicit stringification, not
+numeric comparison.
+
+**Cause:** `RegionalPrice.price` is typed `Decimal` (from
+`prisma/generated` / `@prisma/client`'s `Decimal.js`-based class), not a
+JS `number`. It has no custom `valueOf`/operator overloading.
+
+**Rule going forward:** always use the `Decimal` instance methods
+(`.equals()`, `.lessThan()`, `.greaterThan()`, `.toFixed(2)` for display)
+when comparing or formatting money fields — never coerce with `<`/`>`/`===`
+or template-string interpolation and hope it round-trips correctly.
+
+## Clamp pagination `skip` separately from the page number you echo back
+
+**Symptom:** a naive upper-bound clamp on a paginated query's `page` param
+(e.g. clamping to the live `totalPages`) breaks the existing "a page far
+beyond the last page returns an empty array with the requested page number
+still echoed back" contract, because it silently redirects the caller to
+the last real page instead.
+
+**Cause:** two different concerns get conflated under one `safePage`
+variable: (1) the number reported back to the caller/UI (`result.page`),
+which should reflect what was actually requested (floored to 1 for
+invalid input only), and (2) the number used to compute Prisma's `skip`,
+which must never be allowed to overflow the 64-bit signed integer Prisma's
+query engine accepts — an unbounded value (e.g.
+`?page=99999999999999999999`) throws an unhandled
+`PrismaClientValidationError` that leaks the full query shape to the
+caller (security-reviewer M2-1 F1).
+
+**Rule going forward:** clamp the value used in the `skip` calculation to
+a fixed, generous `MAX_PAGE` constant (comfortably below the point where
+`(MAX_PAGE - 1) * PAGE_SIZE` could overflow, but far beyond any real
+catalog's page count) — do NOT clamp to the live `totalPages`, and do NOT
+let the clamped value overwrite what's echoed back to the caller unless
+the input was actually invalid (non-integer/`< 1`). Verify both cases with
+tests: a moderately-out-of-range page (e.g. `999` against 10 real pages)
+still returns `{ products: [], page: 999 }`, and an absurdly-out-of-range
+page (`99999999999999999999`) still resolves without throwing.
+
+## Escape literal `[...]` directory segments in vitest coverage exclude globs
+
+**Symptom:** narrowing a coverage-exclude glob from `src/app/products/**`
+to explicit file paths that include a Next.js dynamic-route directory
+(`src/app/products/[slug]/page.tsx`) looks correct but the bracket
+characters are a live glob feature, not literal text.
+
+**Cause:** `test-exclude`/minimatch (used by the v8 coverage provider)
+interprets `[slug]` as a character class matching any single character
+among `s`/`l`/`u`/`g` — it does not match the literal five-character
+directory name `[slug]`. An unescaped pattern like this either silently
+fails to exclude the intended file, or (worse) matches something
+unintended.
+
+**Rule going forward:** escape every literal `[`/`]` in a Next.js
+dynamic-route path used inside a glob (`vitest.config.mts` coverage
+include/exclude, or any other minimatch-based config) as `\[slug\]`.
+Verify with a real `vitest run --coverage` afterward and confirm the
+targeted files are still excluded (present in the summary or absent from
+per-file line detail) rather than trusting the pattern by inspection.

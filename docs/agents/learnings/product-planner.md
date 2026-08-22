@@ -58,4 +58,26 @@ criterion so the builder isn't left to rediscover it, and use that finding
 to decide whether the item is genuinely "pure UI" (no architect needed) or
 has a real remaining design gap.
 
+## Verify dispatch-supplied "there is no X" claims before designing a new X
+**Symptom:** M2-1's dispatch prompt asserted "no region-selection
+mechanism anywhere in the app (no `NEXT_PUBLIC_REGION` reading in any
+page)" and asked me to decide whether to hardcode a region. Taking that
+at face value would have led to inventing a fresh ad-hoc region constant
+for the criteria, duplicating/conflicting with a mechanism that already
+existed.
+**Cause:** A grep of the actual repo (`next.config.ts:34`,
+`.env.development`, `.env.example`, `.env.production.{kenya,ethiopia,
+somalia}`) showed `NEXT_PUBLIC_REGION` was already defined per-deployment
+by M0's env-file strategy — the dispatch's claim was only true in the
+narrow sense that no *page component* reads it yet, not that no mechanism
+exists at all.
+**Rule going forward:** Treat any dispatch-prompt claim of the form "there
+is no X in the codebase" as a hypothesis to verify with a grep/read before
+building acceptance criteria around it, especially for cross-cutting
+things (env vars, config, feature flags) that earlier milestones may have
+already established. Ground the criteria in what actually exists, and
+prefer wiring an existing mechanism over inventing a parallel one, even if
+the dispatch prompt's suggested fallback (hardcode) would also have
+"worked."
+
 (No further entries yet.)

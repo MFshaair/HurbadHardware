@@ -69,6 +69,28 @@ export default defineConfig({
         // applies to the route.ts files below.
         "src/app/api/profile/**",
         "src/app/api/addresses/**",
+        // M2-1: the listing/detail *page* components
+        // (src/app/products/page.tsx, src/app/products/[slug]/page.tsx,
+        // src/app/products/[slug]/VariantSelector.tsx) are only reachable
+        // via tests/test12-catalog-pages.test.ts's spawned `next dev`
+        // subprocess (+ a real Playwright browser for the client-side
+        // variant-switching interaction) — same measurement-gap
+        // justification as the routes above. The data layer they call
+        // (src/lib/productService.ts, src/lib/region.ts) is deliberately
+        // NOT excluded: both are pure modules with no framework
+        // dependency, directly importable and unit-tested in-process (see
+        // tests/test10-region.test.ts / tests/test11-product-catalog.test.ts) —
+        // same "only exclude the route, never the pure lib it imports"
+        // rule as addressValidation.ts above. Listed explicitly (not as a
+        // `src/app/products/**` glob) per security-reviewer M2-1 F3, so a
+        // future unrelated file added under src/app/products/ doesn't
+        // silently inherit an exclusion never argued for it.
+        "src/app/products/page.tsx",
+        // `[slug]` is a literal directory name here, not a glob character
+        // class — escaped so minimatch (used by the v8 coverage provider's
+        // test-exclude) doesn't interpret it as `[s|l|u|g]`.
+        "src/app/products/\\[slug\\]/page.tsx",
+        "src/app/products/\\[slug\\]/VariantSelector.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

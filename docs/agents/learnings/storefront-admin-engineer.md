@@ -163,3 +163,47 @@ against the unique index once it commits — proving the actual DB
 guarantee, not a coincidence of timing. Verify by running the race test
 several times in a row; a test whose pass/fail depends on which request
 "happens to" go first has proven nothing.
+
+## React SSR inserts `<!-- -->` comment nodes between adjacent JSX expression children — plain-substring HTML assertions can false-fail on genuinely correct output
+**Symptom (M2-1):** `expect(html).toContain("Page 1 of")` and
+`expect(html).toContain("2 variant")` both failed against a real,
+correctly-rendering `/products` page — the pagination text and page were
+right, but the raw server-rendered HTML was `Page <!-- -->1<!-- --> of
+<!-- -->10` / `2<!-- --> variant<!-- -->s`, not a contiguous string.
+**Cause:** when a JSX element has multiple sibling expression/text
+children (e.g. `Page {page} of {totalPages}`, or `{count} variant{count
+=== 1 ? "" : "s"}`), React's server renderer emits an empty `<!--
+-->` comment marker between each dynamic child so client hydration can
+correctly reattach text nodes — this is normal, correct React SSR
+behavior, not a bug, and it's invisible in a browser's rendered text but
+present in the raw HTML string.
+**Rule going forward:** for any UI text that a test will assert against
+via plain `html.includes(...)`/`toContain(...)` on raw SSR HTML, build
+the full string as a single JS template literal (e.g. `` {`Page ${page}
+of ${totalPages}`} ``) rather than interleaving multiple `{...}`
+expressions with literal text in JSX, so the rendered HTML has no
+comment-node gaps. When a test fails with a substring assertion against
+otherwise-plausible-looking rendered content, check for exactly this
+before assuming the component logic itself is wrong — grep the raw
+response body around the expected text rather than trusting a visual/DOM
+read.
+
+## Match a test's formatted-value assertions to the UI's actual number formatting, and DB variant "ordering" needs an explicit `orderBy` to be meaningful
+**Symptom (M2-1):** a Playwright test asserted a displayed price
+`toContain`s the raw `Decimal.toFixed(2)` digits (e.g. `"53922"`), but the
+UI intentionally formats prices with `Intl.NumberFormat` thousands
+separators (`"53,922"`), so the assertion never matches even though the
+UI is correct. Separately, a test manipulated "the first variant" as
+returned by its own `orderBy: { createdAt: "asc" }` Prisma query and
+expected the UI's default-selected variant to be that same one, but
+`getProductDetail`'s variants `include` had no `orderBy` at all — Prisma/
+Postgres give zero ordering guarantee without one, so the UI's
+`variants[0]` could legitimately differ from the test's "first" variant.
+**Rule going forward:** (1) when asserting a formatted on-screen value in
+a test, reproduce the exact formatting call the component uses (or import
+a shared formatter) rather than comparing against raw unformatted digits.
+(2) any query whose result order is depended on by UI logic (e.g. "the
+first variant is the default selection") must have an explicit `orderBy`
+in the underlying Prisma query itself — not just in whichever call site
+happens to add one — so "first" means the same, deterministic thing
+everywhere it's read.

@@ -43,6 +43,17 @@ improvising.
   (variantId, region) — never a JSON blob.
 - **Money fields are `Decimal`, never floats.** `Decimal(12,2)` for
   prices, `Decimal(14,2)` for `DailySalesMetric.revenue`.
+- **Bound BOTH ends of any user-controlled numeric input that reaches a
+  Prisma `skip`/`take`/index calculation**, not just the lower end.
+  Confirmed in M2-1: a `?page=N` handler clamped `page >= 1` but not the
+  upper bound, so an oversized page number overflowed the 64-bit `skip`
+  Prisma's query engine accepts, threw an unhandled
+  `PrismaClientValidationError`, and leaked the full query structure
+  (table/relation shape) into a public 500 response. Any pagination,
+  offset, or count-derived query parameter needs an explicit max clamp
+  (e.g. bound by computed `totalPages`, or a fixed constant) before it's
+  used in the query — write a test with a deliberately extreme value
+  (not just an out-of-range-but-plausible one) to prove it.
 
 ## Done Means Production-Ready
 
