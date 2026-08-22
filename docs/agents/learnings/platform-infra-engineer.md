@@ -30,3 +30,26 @@ exist for the real app.
 work inside `hurbad-ecommerce/`. Its disposition (delete vs. repurpose) is
 a human decision — escalate it (ledger item M0-8), don't resolve it
 unilaterally by deleting tracked files.
+
+## better-auth env vars use its own names, not NextAuth's
+
+**Symptom:** All env template files (`.env.example`, `.env.development`,
+`.env.production*`) declared `NEXTAUTH_SECRET`/`NEXTAUTH_URL`, a leftover
+from an earlier NextAuth assumption. better-auth 1.7.1 only reads
+`options.secret || env.BETTER_AUTH_SECRET || env.AUTH_SECRET` and derives
+`baseURL` separately (see `node_modules/better-auth/dist/context/create-context.mjs`);
+it never reads `NEXTAUTH_*`, and throws at construction time if no secret
+is resolvable.
+
+**Cause:** Env templates were scaffolded before the auth library choice
+(better-auth vs NextAuth) was finalized in the ledger, and nothing was
+updated when better-auth was selected for M1.
+
+**Rule going forward:** For any auth-related env var task, grep the repo
+(`grep -rn "NEXTAUTH_"`) before touching templates — if nothing else in
+the codebase reads a name, it's safe to rename/remove rather than leave
+dead config alongside the new one. Regional prod files (`.env.production.kenya`
+etc.) only carry `BETTER_AUTH_URL` (region-specific callback origin);
+`BETTER_AUTH_SECRET` for those lives as a Vercel-managed secret per
+project, matching the pre-existing pattern for `MPESA_CONSUMER_SECRET`
+etc. — do not add a secret placeholder to files that never had one.

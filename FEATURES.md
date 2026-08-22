@@ -63,9 +63,12 @@ Note: fixed directly in this session (outside the `/hurbad-team` loop), so it's
 whoever runs the team next should let the gate confirm it formally.
 
 ### M0-6: Configure coverage threshold
-**Status:** planned · **Owner:** qa-dogfood-engineer
-- [ ] `vitest.config.ts` created with `coverage` enabled and a threshold (`lines`/`statements` ≥ 80%, per PRD Definition of Done) that fails the run below threshold
-- [ ] `package.json` gets a `test:coverage` script; `scripts/agents/gate-check.sh` picks it up automatically (already wired to detect it)
+**Status:** verified (covered by M1-1's gate run — coverage threshold is
+global config, not item-scoped; `production-readiness-gate` confirmed
+`[gate] GREEN: test + coverage threshold` on 2026-08-20) · **Owner:** qa-dogfood-engineer
+- [x] `vitest.config.mts` (existing M0-5 file, extended not duplicated) has `coverage` enabled (`provider: "v8"`, `all: true` so untested files count against the total, not just files a test happens to import) with `thresholds: { lines: 80, statements: 80, branches: 60, functions: 60 }` that fails the run below threshold — proven by deliberately raising `lines` to 95 (measured coverage 87.5% at the time) and confirming `npm run test:coverage` exits 1, then restoring to 80 and confirming exit 0
+- [x] `package.json` gets a `"test:coverage": "vitest run --coverage"` script; `scripts/agents/gate-check.sh`'s `npm run | grep -q "test:coverage"` check now finds it and runs it — confirmed via `bash scripts/agents/gate-check.sh M1-1`, which now prints `[gate] GREEN: test + coverage threshold` (previously `[gate] RED: test:coverage — script not defined`)
+- Actual measured coverage at commit time: 87.5% statements/lines, 72.72% branches, 100% functions, across `src/lib/mpesa.ts` and `src/lib/stripe.ts` (the only files exercised in-process by vitest). `src/lib/auth.ts`, `src/lib/db.ts`, `src/middleware.ts`, `src/app/api/auth/**`, `src/app/profile/**`, `src/app/auth/**` are explicitly excluded from the coverage *metric* (not from testing) because they're only reachable through `tests/test6-auth.test.ts`'s spawned `next dev` child process, which v8's in-process coverage instrumentation cannot observe — see the exclude-list comment in `vitest.config.mts` for the full justification and the known limitation (no `NODE_V8_COVERAGE` subprocess merging wired up yet). `src/lib/seed.ts` (one-shot data script) and `src/app/layout.tsx`/`src/app/page.tsx` (unmodified create-next-app scaffold, zero business logic) are also excluded for the same "not in scope yet" reason, not to dodge real coverage.
 
 ### M0-7: Wire root-level CI
 **Status:** in-progress · **Owner:** platform-infra-engineer
@@ -99,11 +102,26 @@ still open but not blocking — M1 can start against this checkpoint.
 flow passes against local Postgres, dogfooded end to end.
 
 ### M1-1: better-auth routes & middleware
-**Status:** planned · **Owner:** storefront-admin-engineer
-- [ ] `lib/auth.ts`, `app/api/auth/[...auth]/route.ts` wired to the v3 schema
-- [ ] `middleware.ts` protects authenticated routes
-- [ ] Register creates `User` + better-auth account record (observed via DB query, not assumed)
+**Status:** verified · **Owner:** storefront-admin-engineer (design review: platform-architect)
+- [x] `lib/auth.ts` exports a configured `auth` instance covering email/password sign-up, sign-in, and password-reset (forgot-password) flows, wired to the v3 Prisma schema (`User`/`Account`/`Session`/`Verification`); `app/api/auth/[...auth]/route.ts` exposes it as the Next.js catch-all handler (`GET`/`POST`) per better-auth's Next.js integration docs
+- [x] `middleware.ts` defines an explicit `matcher` protecting `/profile/*` (the only authenticated route surface that exists by the end of M1 — `/admin/*` is M5 scope; extend the matcher then, do not leave it unprotected once M5 lands). A request to a matched path with no valid session cookie is redirected to `/auth/login`; with a valid session cookie it proceeds (200) — both proven by an automated test, not a manual browser check
+- [x] Register (call to the better-auth sign-up endpoint) creates exactly one `User` row and one `Account` row (`providerId`/`provider` = credential), and login with correct credentials creates a `Session` row — all three confirmed by a test/script that queries the DB directly (`prisma.user.findUnique`, `prisma.account.findFirst`, `prisma.session.findFirst`) after the call, not inferred from the HTTP status code alone
+- [x] All of the above run and pass under `npm test` (or `scripts/agents/dogfood.mjs` if extended for this item) against local Postgres
 
+Note: user-enumeration-safe error messaging on wrong credentials and the reset-link/old-session-invalidation flow are M1-2's job (UI-level), not duplicated here — M1-1 is the API/middleware layer only.
+
+Security review iteration 2 fixes (`docs/agents/security-signoff/M1-1.md`):
+`sendResetPassword` (`src/lib/auth.ts`) no longer logs the reset URL or
+user email in production (`NODE_ENV === "production"` no-ops; dev/test
+still logs the URL only, no email). Added a negative test in
+`tests/test6-auth.test.ts` sending a forged/garbage cookie under
+better-auth's real session-cookie name to `/profile` and asserting the
+redirect to `/auth/login` — confirmed (by temporarily disabling
+`profile/page.tsx`'s `getSession()` check and observing this test fail,
+then reverting) that it exercises the page-level check and is not a
+middleware-only false positive.
+
+**Verified:** `scripts/agents/gate-check.sh M1-1` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (87.5% statements/lines, 72.72% branches, 100% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login flow), and security sign-off STATUS: CLEAR. M0-6 prerequisite (test:coverage script and vitest coverage config) confirmed completed and verified in prior gate run.
 ### M1-2: Registration / login / password reset UI
 **Status:** planned · **Owner:** storefront-admin-engineer
 - [ ] Register/login/forgot-password pages functional against real better-auth flows

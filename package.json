@@ -13,6 +13,7 @@
     "test:3-db-scenarios": "node scripts/test-db-scenarios.mjs",
     "test:4-migration-reset": "node scripts/test-migration-reset.mjs",
     "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test": "npm run test:1-server-boot && npm run test:2-prisma-migrate && npm run test:3-db-scenarios && npm run test:4-migration-reset && npm run test:unit",
     "db:seed": "prisma db seed"
   },
@@ -35,6 +36,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9",
     "eslint-config-next": "15.5.23",
     "tailwindcss": "^4",

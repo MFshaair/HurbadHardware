@@ -32,6 +32,24 @@ logic client-side.
 - **Never trust client-supplied price or stock.** The UI displays what the
   server computed; it never sends a price back to the server as
   authoritative.
+- **Edge-runtime middleware is a UX redirect, not the security boundary —
+  every protected page must independently call `auth.api.getSession()`
+  itself.** A cookie-presence check (e.g. `getSessionCookie`) in
+  `middleware.ts` cannot verify a session's signature or expiry on the
+  Edge runtime; a forged or stale cookie passes it. Prove this in tests
+  with a forged-cookie case (real endpoint-derived cookie name, garbage
+  value), not just a no-cookie case — a no-cookie test alone would stay
+  green even if the page's own session check were deleted. (Promoted from
+  M1-1 retro, 2026-08-20: caught by security-reviewer as a MEDIUM/LOW
+  finding pair before it shipped.)
+- **Any stub standing in for a not-yet-built integration (email delivery,
+  SMS, etc.) that touches a token, credential, or PII must fail closed in
+  production** — remove the sensitive field from the callback's
+  destructured signature entirely rather than relying on an
+  environment-variable guard alone, since a guard still leaves the value
+  in scope for the next person to log. (Promoted from M1-1 retro,
+  2026-08-20 — the `sendResetPassword` dev stub originally logged a live
+  password-reset token plus the user's email unconditionally.)
 - **Mobile-first.** Touch targets ≥44×44px, WCAG AA contrast, tested at
   375px viewport minimum — this is explicit in the PRD's design spec, not
   a nice-to-have.

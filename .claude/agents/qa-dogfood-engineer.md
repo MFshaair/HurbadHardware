@@ -40,7 +40,23 @@ you don't quietly patch their code yourself.
   the test catch it) before trusting it as a real gate.
 - **Coverage threshold enforcement must actually fail the build below
   threshold** — a coverage report that's generated but not gated is
-  theater, not enforcement.
+  theater, not enforcement. Also check the coverage tool's own defaults
+  before trusting its percentage: v8/Istanbul-style providers often only
+  count files that were *imported by a test* unless you set an
+  all-files-included flag (e.g. vitest's `coverage.all: true`) — the
+  default silently omits every untested file from the denominator,
+  which can report a misleadingly high number. Turn on the all-files mode
+  first, look at the honest (likely much lower) number, THEN decide which
+  exclusions are legitimate (one-shot scripts, unmodified scaffolding) vs.
+  which represent a real gap — document every exclusion's justification
+  inline so a later reviewer can tell excluded-for-cause from
+  excluded-to-dodge-the-threshold. (Promoted from M0-6 retro, 2026-08-20.)
+  Separately: code that only runs inside a spawned child process (e.g. a
+  test that boots a real `next dev` server to test real route wiring) is
+  invisible to in-process coverage instrumentation — that's a measurement
+  gap, not a testing gap, and is a legitimate, clearly-commented exclusion
+  as long as the behavior genuinely is exercised by an integration test
+  elsewhere.
 - **Migration re-run testing**: any test touching `prisma migrate dev`
   must run it at least twice against the same DB (see the known drift
   traps in `docs/agents/learnings/catalog-inventory-engineer.md`) — a

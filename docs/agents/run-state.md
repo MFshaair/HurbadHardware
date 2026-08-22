@@ -24,15 +24,16 @@ expansion (Ethiopia/Somalia) and Phase 2 features are explicitly out of
 scope for autonomous execution — see OPEN RISKS.
 
 ### MILESTONE PLAN + current position
-Current milestone: **M1 — Auth & Identity** (not started). M0's checkpoint
-condition is met (build/lint/test green, tagged `checkpoint/m0`) so M1 is
-unblocked; M0-6 (coverage threshold) and the full-test-suite half of M0-7
-(CI) remain open in the background and aren't blocking.
+Current milestone: **M1 — Auth & Identity**. M1-1 (better-auth routes &
+middleware) is `verified` (gate GREEN, 2026-08-20, via `/hurbad-team`).
+M0-6 (coverage threshold) got pulled forward and completed as a side-quest
+to unblock M1-1's gate run — also verified. Next: M1-2 (registration/
+login/reset UI).
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Repo Hygiene & v3 Schema Adoption | checkpoint tagged; M0-6/M0-7(partial) still open |
-| M1 | Auth & Identity (U3, better-auth) | ready to start |
+| M0 | Repo Hygiene & v3 Schema Adoption | checkpoint tagged; only M0-7's full-test-in-CI half still open |
+| M1 | Auth & Identity (U3, better-auth) | M1-1 verified; M1-2, M1-3 next |
 | M2 | Catalog, Variants & Search (U4) | blocked on M1 |
 | M3 | Cart, Checkout & Reservation (U5/U6/U12) | blocked on M2 |
 | M4 | Payments — Stripe & M-Pesa (U7/U8) | blocked on M3 |
@@ -96,6 +97,47 @@ integration checkpoint goes red and can't be cheaply fixed forward.
 ---
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
+
+### 2026-08-20 — First full /hurbad-team autonomous cycle: M1-1 verified
+First real run of the orchestrator loop end to end. Chain: product-planner
+(sharpened M1-1's criteria, partitioned them against M1-2 to avoid
+overlap) → platform-architect (design pass found a real blocker: better-
+auth 1.7.1 requires `Account.issuer`, missing from the schema — grounded
+by reading `node_modules/better-auth` source directly, not assumed) →
+catalog-inventory-engineer (added `issuer` + unique index, verified no
+migration drift across 3 runs) → platform-infra-engineer (added
+`BETTER_AUTH_SECRET`/`BETTER_AUTH_URL`, retired dead `NEXTAUTH_*` vars) →
+storefront-admin-engineer (implemented `auth.ts`/route/middleware/
+placeholder pages, real-HTTP tests) → security-reviewer (found 1 MEDIUM:
+`sendResetPassword` logging a live reset token + email unconditionally; 1
+LOW: no forged-cookie negative test — RED, bounced back) →
+storefront-admin-engineer (fixed both, proved the new test wasn't a false
+positive by temporarily breaking the page check and watching it fail) →
+security-reviewer (re-reviewed, STATUS: CLEAR) → qa-dogfood-engineer
+(extended `dogfood.mjs` with a real register→login HTTP flow, proved it
+too by temporarily disabling `emailAndPassword` and watching it fail) →
+production-readiness-gate (RED — `test:coverage` didn't exist, an M0-6
+gap) → qa-dogfood-engineer (pulled M0-6 forward, configured coverage with
+honest `all:true` measurement — caught that vitest's default silently
+hides untested files from the denominator before trusting the number) →
+production-readiness-gate (GREEN, marked `verified`).
+
+The orchestrator (this session) ran `scripts/agents/local-check.sh`
+itself before accepting every builder handoff, per the enforced
+pre-handoff hook — never relied solely on an agent's self-report.
+
+**Retro / audit:** two learnings promoted from learnings files into
+permanent charters (both prevented or would-have-prevented an iron-rule
+violation, per the promotion criteria): (1) `storefront-admin-engineer` —
+Edge middleware is a UX redirect, not the security boundary, plus
+fail-closed logging for dev stubs handling tokens/PII; (2)
+`qa-dogfood-engineer` — coverage tools' "only count imported files"
+default can misleadingly report high coverage, check `all:true` first.
+Audit-the-greens: both `storefront-admin-engineer` and
+`qa-dogfood-engineer` independently proved their own new tests/gates could
+actually fail (temporarily broke the thing under test, watched red,
+restored, watched green) rather than asserting meaningfulness — judged
+genuinely non-trivial, not rubber-stamped.
 
 ### 2026-08-20 — North star PRD: v3 over v1
 **Decision:** Adopt `plans/Full PRD file.md` (v3 corrected) as the team's
