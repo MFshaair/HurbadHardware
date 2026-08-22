@@ -46,29 +46,30 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
 - **North star PRD: v3** (`plans/Full PRD file.md`), not v1
   (`plans/2026-08-17-0920-...-plan.md`). Decided 2026-08-20 — see Tier 2.
 - **Canonical app root is the repo root** (`prisma/`, `src/`, `app/` at
-  top level), NOT `hurbad-ecommerce/`. The latter is a stale duplicate
-  scaffold from Task 1 pending a human deletion decision — do not build
-  new work inside it.
-- **Coverage threshold: not yet set.** M0 must configure one in
-  `vitest.config.ts` before `npm run test:coverage` can gate anything.
+  top level). `hurbad-ecommerce/` no longer exists — deleted 2026-08-20
+  after its one useful asset (`docs/DEPLOYMENT.md`, Cloudflare Images
+  config) was salvaged into the canonical root files. See Tier 2.
+- **Coverage threshold: not yet set.** M0-6 must configure one (in
+  `vitest.config.mts`, which now exists for env-loading — see M0-5) before
+  `npm run test:coverage` can gate anything.
 - **Auth: better-auth only.** No hand-rolled credential fields on `User`
-  (AHD8). The committed v1 schema's `User.passwordHash` is a known
-  violation to be removed in M0.
+  (AHD8). Implemented 2026-08-20 — `User.passwordHash` is gone,
+  credentials live in the generated `Account.password`.
 - **Money fields: `Decimal(12,2)`** (prices), **`Decimal(14,2)`**
-  (`DailySalesMetric.revenue`), per v3. Supersedes the committed v1
-  schema's `Decimal(10,2)`.
+  (`DailySalesMetric.revenue`), per v3. Implemented 2026-08-20.
+- **Vercel region code for AWS `eu-west-1` is `dub1` (Dublin), not `lhr1`
+  (London — that's `eu-west-2`).** `tests/test3-vercel-config.test.ts`
+  encodes this; a migrated doc from the old duplicate directory got this
+  wrong and was corrected before commit — see Tier 2, 2026-08-20.
 
 ### LAST KNOWN-GOOD CHECKPOINT
 None tagged yet. `npm run build && npm run lint && npm test` are all
-green as of 2026-08-20 (v3 schema + better-auth + seed + vitest env fix),
-but no commit has been tagged `checkpoint/m0` — M0-9 (tag the checkpoint)
-is still open, and M0-6..M0-8 haven't run yet either.
+green as of 2026-08-20 (v3 schema + better-auth + seed + vitest env fix +
+hurbad-ecommerce/ removal), but no commit has been tagged `checkpoint/m0`
+— M0-9 (tag the checkpoint) is still open, and M0-6 (coverage threshold)
+hasn't run yet either.
 
 ### OPEN RISKS / ESCALATIONS
-- **`hurbad-ecommerce/` duplicate directory** — tracked, stale, needs a
-  human decision to delete or repurpose. High-blast-radius (deletes
-  tracked files); platform-infra-engineer escalates, does not act
-  unilaterally.
 - **Somalia data residency** — legal opinion outstanding (PRD Appendix).
   Blocks U14 only; does not block M0-M6.
 - **No real Stripe/M-Pesa sandbox credentials** — `.env.development` has
@@ -100,6 +101,44 @@ no UI/API routes built on the schema yet), so redesigning now is cheap;
 staying on v1 would mean shipping without oversell protection or payment
 idempotency, which the PRD treats as non-negotiable (AHD4/AHD5).
 **Approved by:** repo owner, in chat, 2026-08-20.
+
+### 2026-08-20 — `hurbad-ecommerce/` duplicate resolved: migrate then delete (M0-8)
+User asked directly ("is it worse to delete or to use it instead of v3's
+one?") rather than waiting for a formal team escalation. Answered with a
+comparison: using it instead of the canonical root would discard the full
+v3 schema, better-auth, 400 seeded variants, and all passing tests in
+favor of a bare `HealthCheck`-stub schema that was never even updated
+past U1 — clearly worse than deleting. But inspection turned up one
+genuinely useful, non-duplicated asset: `hurbad-ecommerce/docs/DEPLOYMENT.md`
+(a real three-region ops runbook: RDS, Vercel per-region projects, Stripe,
+M-Pesa, SendGrid, Cloudflare, CI activation steps) and Cloudflare
+Images/standalone-output settings in its `next.config.ts` — neither
+existed at root. User approved "migrate then delete."
+
+Migrated: `docs/DEPLOYMENT.md` (paths/env-filenames adapted to root, e.g.
+`.env.production.kenya` not `.env.production.ke`), the Cloudflare Images
+`remotePatterns`/`output: "standalone"`/`env` block in `next.config.ts`,
+the multi-region documentation comment + `functions.maxDuration` block in
+`vercel.json`, and the CI workflow template (`.github/workflows/deploy.yml`,
+`working-directory: hurbad-ecommerce` removed). Then deleted
+`hurbad-ecommerce/` entirely and removed the now-unneeded `tsconfig.json`
+exclude for it.
+
+**Bug caught during migration, not before:** the duplicate's docs said AWS
+`eu-west-1` = "London" and used Vercel region code `lhr1` throughout — this
+is wrong (`eu-west-1` is Dublin; London is `eu-west-2`). The pre-existing
+`tests/test3-vercel-config.test.ts` (written before this session, unrelated
+to this task) asserts `vercel.json` pins `"dub1"`, and failed immediately
+when the migrated `vercel.json` used `"lhr1"` instead. Corrected `vercel.json`
+and `docs/DEPLOYMENT.md` to `dub1`/Dublin throughout. Note: the v3 PRD
+itself (`plans/Full PRD file.md`, Regional Deployment Map table) also says
+"eu-west-1 (London)" — same error, upstream of this repo's docs. Not
+corrected in the PRD itself (out of scope to silently edit the source
+spec); flagged to the user in chat instead.
+
+Verified: `npm run build`, `npm run lint`, `npm test` all green after the
+deletion + fixes (re-ran after the region-code correction specifically,
+since the first pass had 1 failing vitest test from the `lhr1` mistake).
 
 ### 2026-08-20 — M0-1..M0-5 implemented directly (outside the team loop)
 Rewrote `prisma/schema.prisma` to the v3 shape, ran `@better-auth/cli

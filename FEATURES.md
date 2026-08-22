@@ -20,12 +20,12 @@ all exit 0 on a clean working tree; first tagged known-good commit exists.
 
 ### M0-1: Rewrite Prisma schema to v3 shape
 **Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer (design review: platform-architect)
-- [ ] `Product`/`ProductVariant` split implemented; `CartItem`/`OrderItem` reference `variantId`
-- [ ] `RegionalPrice`, `RegionalInventory` relational, one row per (variantId, region)
-- [ ] `InventoryReservation` model exists (ACTIVE/CONFIRMED/RELEASED/EXPIRED, `expiresAt` TTL)
-- [ ] `PaymentTransaction` model exists, separate from `Order`, `idempotencyKey` unique
-- [ ] `Order.shippingAddressId`/`billingAddressId` are FK references to `Address`, not JSON strings
-- [ ] `Shipment`, `Refund`, `ReturnRequest`, `AdminAuditLog` models exist
+- [x] `Product`/`ProductVariant` split implemented; `CartItem`/`OrderItem` reference `variantId`
+- [x] `RegionalPrice`, `RegionalInventory` relational, one row per (variantId, region)
+- [x] `InventoryReservation` model exists (ACTIVE/CONFIRMED/RELEASED/EXPIRED, `expiresAt` TTL)
+- [x] `PaymentTransaction` model exists, separate from `Order`, `idempotencyKey` unique
+- [x] `Order.shippingAddressId`/`billingAddressId` are FK references to `Address`, not JSON strings
+- [x] `Shipment`, `Refund`, `ReturnRequest`, `AdminAuditLog` models exist
 - [x] All region/status fields use Prisma enums, not raw strings; money fields are `Decimal(12,2)` (`Decimal(14,2)` for `DailySalesMetric.revenue`)
 
 ### M0-2: better-auth schema merge
@@ -68,14 +68,18 @@ whoever runs the team next should let the gate confirm it formally.
 - [ ] `package.json` gets a `test:coverage` script; `scripts/agents/gate-check.sh` picks it up automatically (already wired to detect it)
 
 ### M0-7: Wire root-level CI
-**Status:** planned · **Owner:** platform-infra-engineer
-- [ ] A GitHub Actions workflow at the repo root runs `npm ci && npm run build && npm run lint && npm test` on push/PR to `main`
-- [ ] The stale `hurbad-ecommerce/.github/workflows/deploy.yml` (pointed at the wrong project) is addressed as part of the duplicate-directory escalation (M0-8), not silently left contradicting the new one
+**Status:** in-progress · **Owner:** platform-infra-engineer
+- [x] A GitHub Actions workflow exists at the repo root (`.github/workflows/deploy.yml`, migrated from the former `hurbad-ecommerce/` duplicate and adapted to root paths) running lint/typecheck/build/`prisma validate` on push/PR to `main`
+- [ ] The workflow does not yet run the full `npm test` chain (needs a Postgres service container in the job — open)
+- [x] The stale `hurbad-ecommerce/.github/workflows/deploy.yml` no longer exists to contradict this one (see M0-8 — the directory was deleted)
 
-### M0-8: Escalate the `hurbad-ecommerce/` duplicate directory
-**Status:** planned · **Owner:** platform-infra-engineer
-- [ ] Written escalation produced (not a unilateral delete — high-blast-radius, tracked-file removal) describing the duplicate, its contents, and a recommendation
-- [ ] Human decision recorded back into `docs/agents/run-state.md` Tier 2 once made
+### M0-8: `hurbad-ecommerce/` duplicate directory — RESOLVED
+**Status:** verified (human-confirmed, not gate-run) · **Owner:** platform-infra-engineer
+- [x] Escalated to the user in chat with a comparison (deleting vs. using it instead of v3): using it would discard all real work (v3 schema, better-auth, 400 seeded variants, tests) for a bare `HealthCheck`-stub scaffold; deleting was clearly correct
+- [x] One genuinely useful asset was found and salvaged before deleting: `docs/DEPLOYMENT.md` (three-region ops runbook) and the Cloudflare Images / standalone-output settings in `next.config.ts` — merged into the canonical root versions
+- [x] Human decision: migrate the useful parts, then delete the rest — confirmed in chat 2026-08-20
+- [x] `hurbad-ecommerce/` fully removed; `docs/agents/run-state.md` Tier 2 updated with the decision and what was salvaged
+- [x] Caught and fixed a factual error carried over from the duplicate's docs during the migration: AWS `eu-west-1` is Dublin, not London (`eu-west-2` is London) — `tests/test3-vercel-config.test.ts` already encoded the correct Vercel region code (`dub1`); the duplicate's `vercel.json`/`DEPLOYMENT.md` had wrongly said `lhr1`/London, which the migration almost repeated until the test caught it
 
 ### M0-9: Reconcile working tree, tag first known-good checkpoint
 **Status:** planned · **Owner:** platform-infra-engineer

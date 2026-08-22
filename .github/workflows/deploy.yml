@@ -1,10 +1,15 @@
 name: CI / Deploy
 
-# Sample CI/CD pipeline template for the Hurbad Electronics platform.
-# This documents the intended pipeline for U1; it is not wired to a live
-# Vercel project/token in this sandbox (no external secrets configured).
-# Ops must add VERCEL_TOKEN, VERCEL_ORG_ID, and per-region VERCEL_PROJECT_ID_*
-# secrets in the GitHub repo settings before this can deploy anything.
+# CI/CD pipeline template for the Hurbad Electronics platform. Not yet
+# wired to a live Vercel project/token (no external secrets configured) —
+# ops must add VERCEL_TOKEN, VERCEL_ORG_ID, and per-region
+# VERCEL_PROJECT_ID_* secrets in the GitHub repo settings before this can
+# deploy anything. See docs/DEPLOYMENT.md.
+#
+# The `test` job currently runs lint/typecheck/build/Prisma-validate only
+# — it does NOT run the full `npm test` chain (that needs a live Postgres
+# instance; wiring a `postgres:` service container into this job is
+# tracked as an open item under FEATURES.md M0-7).
 
 on:
   push:
@@ -16,9 +21,6 @@ jobs:
   test:
     name: Lint, typecheck, build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: hurbad-ecommerce
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +28,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: hurbad-ecommerce/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -48,9 +50,6 @@ jobs:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: hurbad-ecommerce
     steps:
       - uses: actions/checkout@v4
       - name: Deploy to Vercel (KE)
@@ -61,6 +60,6 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_KE }}
 
   # Ethiopia and Somalia deploy jobs follow the same shape as deploy-kenya
-  # once those Vercel projects are provisioned (Phase 2, weeks 9-12 per
-  # the project plan) — duplicate the job above with VERCEL_PROJECT_ID_ET
+  # once those Vercel projects are provisioned (PRD Unit 14, Sprint 9-10 —
+  # see FEATURES.md) — duplicate the job above with VERCEL_PROJECT_ID_ET
   # / VERCEL_PROJECT_ID_SO and the corresponding region env file.
