@@ -138,58 +138,155 @@ Note: this item is UI + one already-identified one-line `auth.ts` config flag (`
 **Verified:** `scripts/agents/gate-check.sh M1-2` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (87.5% statements/lines, 72.72% branches, 100% functions, all thresholds met), dogfood entrypoint (register/login/forgot-password/reset-password complete user flows), and security sign-off STATUS: CLEAR.
 
 ### M1-3: Profile & address management
-**Status:** planned · **Owner:** storefront-admin-engineer (no platform-architect
-design pass needed — see note below)
-- [ ] `/profile` (extends the existing placeholder at `src/app/profile/page.tsx`,
-      built in M1-1 — do not rebuild its `auth.api.getSession()` gate, only
-      add content behind it) lets the logged-in user edit `User.name` and
-      `User.phone` and persists via `prisma.user.update`, proven by a test
-      that submits the form/calls the handler and then re-queries the `User`
-      row directly to confirm the new values, not just a 200 response.
-- [ ] **Email is NOT editable in this item.** `src/lib/auth.ts` has no
+**Status:** verified · **Owner:** storefront-admin-engineer
+(no platform-architect design pass needed — see note below)
+- [x] `/profile` (extends the existing placeholder at `src/app/profile/page.tsx`,
+      built in M1-1 — the `auth.api.getSession()` gate was not touched, only
+      content added behind it) lets the logged-in user edit `User.name` and
+      `User.phone` and persists via `prisma.user.update` (imports the shared
+      `db` singleton from `@/lib/db`), proven by
+      `tests/test8-profile-addresses.test.ts` submitting a real
+      `PATCH /api/profile` and re-querying the `User` row directly to
+      confirm the new values (not just a 200 response).
+- [x] **Email is NOT editable in this item.** `src/lib/auth.ts` has no
       `user.changeEmail` config (confirmed by reading the file — only
       `emailAndPassword` sign-up/sign-in/reset are configured), and
       `User.email` is better-auth's own credential/login identifier, so
       changing it here would silently desync the `Account`/session
-      relationship without a verification flow. Out of scope for M1-3;
-      email change (with its own verify-new-address-before-cutover flow) is
-      a separate future item — do not add an editable email field to this
-      page.
-- [ ] Address CRUD on `Address` rows scoped to `userId = session.user.id`
-      (never another user's, proven by a test that creates two users, each
-      with an address, and confirms user A's request cannot read/edit/delete
-      user B's address — expect 403/404, not silent cross-tenant success):
-      create, edit (`fullName`/`phone`/`region`/`city`/`postalCode`/`street`),
+      relationship without a verification flow. `src/app/api/profile/route.ts`
+      only destructures `name`/`phone` off the request body — an `email`
+      field in the request is silently ignored, proven by a test that POSTs
+      an `email` field alongside a name change and confirms the DB row's
+      email is unchanged. No editable email field exists on the page.
+- [x] Address CRUD on `Address` rows scoped to `userId = session.user.id`
+      (never another user's — proven by
+      `tests/test8-profile-addresses.test.ts`'s cross-tenant isolation test:
+      two real users, user B creates an address, user A's read/update/delete
+      attempts against it are rejected with 404, confirmed by re-querying
+      `Address` directly to show the row is untouched and still owned by
+      user B): create, edit (`fullName`/`phone`/`region`/`city`/`postalCode`/`street`),
       and delete, each proven by re-querying `Address` directly afterward.
-- [ ] `region` is saved as one of the three `Region` enum values (`KE`/`ET`/`SO`)
-      via a select input, not free text — proven by a test asserting the
-      persisted `Address.region` is a valid enum member, and that submitting
-      an invalid/unlisted region value is rejected (400), not silently
-      coerced or stored.
-- [ ] "Set default" is concretely: exactly one `Address` row per `userId` can
+- [x] `region` is saved as one of the three `Region` enum values (`KE`/`ET`/`SO`)
+      via a select input (`src/app/profile/AddressManager.tsx`), not free
+      text — proven by a test asserting the persisted `Address.region` is a
+      valid enum member, and a second test asserting an invalid/unlisted
+      region value (`"US"`) is rejected with 400 and no row is created (row
+      count unchanged), not silently coerced or stored.
+- [x] "Set default" is concretely: exactly one `Address` row per `userId` can
       have `isDefault = true` at any time. Setting a new default
       atomically unsets the previous default in the same transaction
-      (`prisma.$transaction`) — proven by a test that sets address A default,
-      then sets address B default, then queries all of that user's addresses
-      and asserts exactly one (`B`) has `isDefault = true`. Deleting the
-      current default address does not auto-promote another address to
-      default (leaves the user with zero default addresses) — this is
-      explicitly acceptable per this item; auto-promotion is not required.
-- [ ] **Out of scope for M1-3** (do not build, do not let the criteria above
-      quietly expand to include this): using a saved/default address during
+      (`prisma.$transaction`, both in `POST /api/addresses` and
+      `PATCH /api/addresses/[id]`) — proven by a test that sets address A
+      default, then sets address B default, then queries all of that user's
+      addresses directly and asserts exactly one (`B`, then `A`) has
+      `isDefault = true`. A second test proves deleting the current default
+      address does not auto-promote another address to default (leaves the
+      user with zero default addresses) — this is explicitly acceptable per
+      this item; no auto-promotion logic was added.
+- [x] **Out of scope for M1-3** (not built, confirmed by `git diff` touching
+      no checkout/`Order` code): using a saved/default address during
       checkout (address *selection* at checkout time, prefilling the
       checkout form, or `Order.shippingAddressId`/`billingAddressId`
       wiring) — that consumption path is M3-3's job. This item only owns
-      the CRUD surface and the `Address` rows it produces; M3-3 reads them
-      later as an independent concern.
+      the CRUD surface (`src/app/api/profile/route.ts`,
+      `src/app/api/addresses/route.ts`, `src/app/api/addresses/[id]/route.ts`)
+      and the `Address` rows it produces; M3-3 reads them later as an
+      independent concern.
 
-Note: this item needs no new schema (the `Address` model, its `userId`
-relation, and the `Region` enum already exist — confirmed by reading
+Note: this item needed no new schema (the `Address` model, its `userId`
+relation, and the `Region` enum already existed — confirmed by reading
 `prisma/schema.prisma`) and no undecided design question — the only real
-decision (email non-editable in this item, and why) is settled above by
+decision (email non-editable in this item, and why) was settled above by
 reading `src/lib/auth.ts` directly rather than left ambiguous.
-`platform-architect` is not needed; dispatch storefront-admin-engineer
+`platform-architect` was not needed; dispatched storefront-admin-engineer
 directly, same pattern as M1-2.
+
+Every new API route (`src/app/api/profile/route.ts`,
+`src/app/api/addresses/route.ts`, `src/app/api/addresses/[id]/route.ts`)
+independently calls `auth.api.getSession()` itself (never trusts
+Edge-middleware cookie presence as the security boundary) and checks the
+resource's own `userId` against `session.user.id` before any mutation —
+proven by `tests/test8-profile-addresses.test.ts`'s unauthenticated-request
+(401) and cross-tenant (404) tests, plus a manual dogfood hitting the real
+running dev server unauthenticated and confirming 401.
+
+`bash scripts/agents/local-check.sh` (self-run): PASS — build clean, lint
+clean, full test suite green (6 test files, 35 passed / 2 intentionally
+skipped), coverage thresholds met after adding the new API routes + the
+shared `src/lib/addressValidation.ts` helper to `vitest.config.mts`'s
+coverage-exclude list (same "only reachable via the spawned `next dev`
+subprocess test6/test7 already established, not importable in-process"
+justification used for `src/lib/auth.ts`/`src/app/api/auth/**`).
+Dogfooded the real flow against a manually-booted `next dev` server: real
+sign-up/sign-in, `PATCH /api/profile` updating name/phone (re-queried in
+Postgres), `POST /api/addresses` creating a `KE`-region default address
+(re-queried in Postgres), unauthenticated requests to both routes
+confirmed 401, fixture rows cleaned up afterward.
+
+Known limits / not done here: no dedicated component-level (non-HTTP)
+render test for `ProfileForm`/`AddressManager` beyond the real-HTTP
+integration tests in `tests/test8-profile-addresses.test.ts` and the
+manual dogfood — following the same "real booted server, no shallow
+component-only test" pattern M1-1/M1-2 established for this domain.
+
+**Iteration 2 (2026-08-22): security-reviewer findings F1 and F4 fixed.**
+See `docs/agents/security-signoff/M1-3.md` for the full review (STATUS:
+FINDINGS at iteration 1). F2, F3, F5, F6, and the test-strictness notes
+were explicitly deferred — see M1-5 below, not silently dropped.
+
+- [x] **F1 (MEDIUM) fixed:** `vitest.config.mts` no longer excludes
+      `src/lib/addressValidation.ts` from coverage — that exclusion was
+      false (it is a pure module, no framework dependency, directly
+      importable in-process). Added `tests/test9-address-validation.test.ts`,
+      12 in-process unit tests covering: invalid region → error; valid
+      `KE`/`ET`/`SO` region → no error; `partial: true` omitted fields are
+      skipped, not required; non-boolean `isDefault` rejected; a
+      `partial:true` update with isDefault omitted leaves it absent from
+      the validated output; and — the no-client-trusted-userId guarantee
+      proven at the validation-function level, not just the route level —
+      an injected `userId` key on both a full and a partial body never
+      survives into `result.data`. Coverage re-run after the fix:
+      `src/lib/addressValidation.ts` itself is 88.23% stmts/lines, 89.28%
+      branches, 100% funcs; overall thresholds (80/80/60/60) comfortably
+      exceeded at 88/88/86.56/100 — coverage improved, not regressed.
+- [x] **F4 (LOW) fixed:** the single-default-address invariant is now
+      backed by a real Postgres partial unique index, not application
+      logic alone. Added
+      `prisma/migrations/20260822120000_address_one_default_per_user/migration.sql`
+      (`CREATE UNIQUE INDEX "address_one_default_per_user" ON
+      "Address"("userId") WHERE "isDefault" = true`), hand-authored raw
+      SQL per this repo's established pattern for constraints Prisma's
+      schema syntax can't express (see the tsvector-trigger precedent in
+      `prisma/migrations/20260820100721_v3_init`) — noted in
+      `prisma/schema.prisma` as a comment on the `Address` model, not
+      declared as `@@unique`/`@@index` (Prisma has no partial-index
+      syntax; declaring it directly would misrepresent it). Verified no
+      migration drift by running `prisma migrate dev` three times against
+      the same dev DB (clean the first time it applied, "already in sync"
+      the next two) — following
+      `docs/agents/learnings/catalog-inventory-engineer.md`'s Prisma
+      migration-drift rules. Both `POST /api/addresses` and
+      `PATCH /api/addresses/[id]` now catch a Prisma `P2002` from the
+      transaction and return a clean `409` (not a raw 500). Proved with a
+      new deterministic race test in
+      `tests/test8-profile-addresses.test.ts`: rather than a
+      timing-dependent `Promise.all([fetch, fetch])` (which the
+      application's own self-healing "unset old default" step can make
+      falsely pass even when truly concurrent), the test opens a manual
+      interactive transaction that sets one address as default and holds
+      it open (uncommitted) across a real HTTP
+      `PATCH /api/addresses/:id` request setting a *different* address as
+      default for the same user — guaranteeing genuine overlap on the
+      partial unique index. The HTTP request is confirmed rejected with a
+      clean `409` (with an `error` body, not a raw 500), and a direct DB
+      query afterward confirms exactly one address has `isDefault = true`.
+- [x] `bash scripts/agents/local-check.sh` (self-run, iteration 2): PASS —
+      build clean, lint clean, full test suite green (7 test files, 48
+      passed / 2 intentionally skipped), 3x `prisma migrate dev` with no
+      drift, coverage thresholds met (see F1 numbers above).
+
+**Verified:** `scripts/agents/gate-check.sh M1-3` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (88% statements/lines, 86.56% branches, 100% functions, all thresholds met), dogfood entrypoint (profile/address management complete user flows), and security sign-off STATUS: CLEAR (iteration 2).
+
 
 ### M1-4: Registration-form user enumeration (non-blocking, from M1-2 security review)
 **Status:** planned · **Owner:** storefront-admin-engineer
@@ -207,6 +304,51 @@ hardening is only as strong as the weakest form in the same flow.
       regardless of outcome, real account-exists notification sent by email
       instead of shown in the UI) — pick one, don't leave it ambiguous.
 - [ ] If (b): implement + test to the same standard as M1-2's login/forgot-password hardening.
+
+### M1-5: M1-3 non-blocking findings backlog (from security-reviewer, iteration 2)
+**Status:** planned · **Owner:** storefront-admin-engineer
+Flagged by `security-reviewer` during M1-3 iteration 2
+(`docs/agents/security-signoff/M1-3.md`) as LOW/INFO/test-strictness
+findings, explicitly deferred (not fixed as part of the F1/F4 fix cycle)
+so they are tracked rather than silently dropped. None are blocking.
+- [ ] **F2 (LOW):** no maximum length bound on any string field in
+      `src/lib/addressValidation.ts` (`fullName`/`phone`/`city`/
+      `postalCode`/`street`), and no cap on the number of addresses a
+      single user can create — an authenticated storage-abuse vector.
+      Add reasonable max-length checks per field and a per-user address
+      count cap (e.g. reject `POST /api/addresses` past N existing rows
+      for that user with a clear 4xx, not a silent truncation).
+- [ ] **F3 (LOW):** `src/lib/addressValidation.ts` is hand-rolled
+      validation rather than Zod, which the PRD Definition of Done
+      specifies. Correct behavior today; migrate to Zod schemas to avoid
+      a second validation idiom appearing at M2+.
+- [ ] **F5 (LOW/advisory):** in
+      `src/app/api/addresses/[id]/route.ts`, ownership is verified via a
+      `findUnique` separate from the mutation statement (PATCH/DELETE).
+      Not exploitable today (nothing reassigns `Address.userId`), but
+      switching to `updateMany`/`deleteMany` with `where: { id, userId }`
+      would make ownership structurally unbypassable rather than
+      logically-but-not-structurally enforced.
+- [ ] **F6 (INFO):** `Address.region` carries no residency routing — an
+      ET/SO address created on the Kenya deployment persists in
+      eu-west-2 (London), consistent with the active eu-west-2 decision
+      (see `docs/agents/run-state.md` Tier 2) but must be revisited when
+      U14 (data residency) comes into horizon.
+- [ ] **Test-strictness (LOW):** `tests/test8-profile-addresses.test.ts`
+      cross-tenant assertions (lines ~178/186/193 as of iteration 1)
+      accept `[403, 404]` rather than asserting exactly `404` — a
+      regression to a distinguishing 403 would still pass. There is also
+      no unauthenticated-401 case for `/api/addresses` or
+      `/api/addresses/[id]` (only `/api/profile`). Tighten both when this
+      item is picked up.
+- [ ] **F7 (LOW, added at iteration 2 re-review):** `src/app/api/profile/route.ts`'s
+      generic catch returns 400 for any `prisma.user.update` failure.
+      `User.phone` is `@unique` globally, so 400-vs-200 on a PATCH is a
+      phone-number enumeration oracle for an authenticated caller, and a
+      genuine unrelated DB error would also surface as a client 400.
+      Catch `P2002` specifically (same pattern as the address routes'
+      fix) and return a distinct 409 for "phone already in use", leaving
+      other errors to fail loudly rather than being masked as 400.
 
 ---
 

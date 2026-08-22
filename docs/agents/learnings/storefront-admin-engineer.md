@@ -100,3 +100,66 @@ confirm `git diff` on the touched source file is empty before handoff.
 Discover the real cookie *name* from a real sign-in response in the same
 test rather than hardcoding it, so the test doesn't silently stop
 covering anything if the cookie name config ever changes.
+
+## New API routes tested only via a spawned dev server need adding to vitest.config.mts's coverage exclude list
+**Symptom:** after adding new route.ts files under `src/app/api/**` that
+are only exercised by a real-HTTP integration test (spawned `next dev`
+child process, same pattern as tests/test6/test7), `npx vitest run
+--coverage` fails the 80%/60% thresholds even though the routes are
+fully covered by real requests — because v8's in-process instrumentation
+can't see code running inside the spawned subprocess.
+**Cause:** `vitest.config.mts`'s coverage `exclude` list only listed the
+M1-1/M1-2-era files (`src/lib/auth.ts`, `src/app/api/auth/**`,
+`src/app/profile/**`, `src/app/auth/**`); it doesn't auto-extend to new
+API routes added under the same "spawned subprocess is the real test"
+pattern.
+**Rule going forward:** any new route/lib file whose only real test
+coverage comes from a spawned-dev-server integration test (not an
+in-process unit test) must be added to that same exclude list, with a
+comment citing the specific test file that covers it — same
+measurement-gap-not-testing-gap justification already documented there.
+Re-run `npx vitest run --coverage` after adding new such routes, before
+assuming the existing exclude list still covers everything.
+
+## Coverage-exclude the route, never the pure lib it imports — and a `Promise.all([fetch, fetch])` race test is not automatically a real race
+**Symptom (F1, M1-3 security review):** `src/lib/addressValidation.ts`
+was added to the same coverage-exclude list as the route files that call
+it, under the "only reachable via a spawned subprocess" justification —
+but that justification only actually held for the `route.ts` files. The
+validation helper itself was a pure function (only imports the `Region`
+enum type from `@prisma/client`, no server/framework dependency) that
+vitest could import and test in-process with a plain `import { fn } from
+"../src/lib/x"` (a `@/` path alias import does NOT resolve in this
+repo's vitest config without extra setup — use a relative import in test
+files instead, or add a resolver).
+**Rule going forward:** before excluding a new file from coverage under
+the spawned-subprocess justification, check whether it's actually only
+importable that way — a route handler that calls `headers()`/
+`auth.api.getSession()` genuinely needs a real request; a plain
+validation/transform function sitting next to it usually does not. Only
+the route files belong on that exclude list; pure helper modules need
+their own in-process unit test file instead.
+
+**Symptom (F4, M1-3 security review):** a first attempt at testing a DB
+unique-constraint race with `Promise.all([fetch(PATCH A), fetch(PATCH
+B)])` was flaky-to-outright-wrong: it can pass with `[200, 200]` even
+when the constraint is working correctly, because the route's own
+"unset the previous default in the same transaction" logic self-heals a
+race that resolves sequentially (whichever request's transaction commits
+second just sees — and unsets — the first one's now-committed default
+before setting its own). The constraint violation only actually surfaces
+when both transactions' conflicting writes are in flight at the same
+instant, which local Postgres round-trips are usually too fast to
+reliably produce over real HTTP.
+**Rule going forward:** to prove a DB-level constraint under
+concurrency deterministically (not luck-of-the-scheduler), force real
+overlap explicitly: open a manual interactive transaction
+(`db.$transaction(async (tx) => { ...write...; await delay(N); })`) that
+performs the conflicting write and holds it open/uncommitted for a fixed
+delay, then fire the real HTTP request under test while that transaction
+is still open. Postgres will make the HTTP request's own conflicting
+write wait on the still-open transaction, then fail deterministically
+against the unique index once it commits — proving the actual DB
+guarantee, not a coincidence of timing. Verify by running the race test
+several times in a row; a test whose pass/fail depends on which request
+"happens to" go first has proven nothing.

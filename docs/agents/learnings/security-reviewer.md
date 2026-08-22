@@ -62,3 +62,38 @@ external invariant the repo doesn't control.
 prefer a client that ignores the body entirely and renders a local constant.
 When reviewing a verbatim-render page, always confirm the invariant in the
 dependency's source and note that the guarantee is external, not local.
+
+## Coverage-exclude lists grow by false analogy
+**Symptom:** A new pure, in-process-testable module gets appended to a
+coverage exclude list whose existing entries were excluded for a real,
+narrow reason (code only reachable inside a spawned subprocess) — often
+the one module holding the item's input-validation logic.
+**Cause:** The list already exists with a paragraph of justification, so
+adding a line looks like following precedent rather than making a new
+claim; nobody re-tests whether the stated reason applies to the new file.
+**Rule going forward:** For every file added to a coverage exclude in a
+diff, check its imports yourself. If it has no framework/runtime
+dependency, the "can't be instrumented" justification is false and the
+exclusion is dodging coverage on business logic — treat it as a finding
+even when the module is integration-tested.
+
+## Ownership checks split from the mutation statement
+**Symptom:** A resource route does findUnique → compare userId → mutate by
+id. Correct today, and cross-tenant tests pass.
+**Cause:** Safety rests on an unstated global invariant (nothing anywhere
+reassigns the row's owner), not on the statement itself.
+**Rule going forward:** Prefer single-statement enforcement
+(updateMany/deleteMany with both id and userId in `where`). When
+reviewing the split form, verify no code path reassigns the owning
+foreign key and that the body allowlist cannot set it — then record it as
+advisory, since the guarantee is global, not local.
+
+## "Inside a transaction" is not "serialized"
+**Symptom:** An acceptance criterion asks for read-modify-write inside a
+single prisma.$transaction to prevent a race; the code complies and the
+test passes sequentially.
+**Rule going forward:** A transaction at the default Read Committed level
+does not prevent two concurrent unset-then-set flows from both
+committing. Confirm the criterion's intent separately from its letter,
+and note that uniqueness invariants need a DB constraint (e.g. a partial
+unique index) to actually hold.

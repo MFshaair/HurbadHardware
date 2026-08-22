@@ -52,6 +52,23 @@ export default defineConfig({
         "src/app/api/auth/**",
         "src/app/profile/**",
         "src/app/auth/**",
+        // M1-3: profile/address API routes are exercised end-to-end by
+        // tests/test8-profile-addresses.test.ts, which (same as
+        // test6/test7 above) spawns a real `next dev` server as a child
+        // process rather than importing these modules in-process — so
+        // v8 in-process coverage can't see them either. Same
+        // measurement-gap justification as the auth routes above, not a
+        // testing gap.
+        //
+        // src/lib/addressValidation.ts is deliberately NOT excluded here
+        // (security-reviewer M1-3 finding F1, MEDIUM): it is a pure
+        // module (only imports the `Region` enum from @prisma/client, no
+        // framework/server dependency) directly importable and testable
+        // in-process — see tests/test9-address-validation.test.ts. The
+        // "only reachable via a spawned subprocess" justification only
+        // applies to the route.ts files below.
+        "src/app/api/profile/**",
+        "src/app/api/addresses/**",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

@@ -443,6 +443,18 @@ model Address {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  // NOTE: a Postgres partial unique index — CREATE UNIQUE INDEX
+  // "address_one_default_per_user" ON "Address"("userId") WHERE
+  // "isDefault" = true — enforces at most one default address per user
+  // at the database level (M1-3 security fix, F4). It is hand-authored
+  // raw SQL in
+  // prisma/migrations/20260822120000_address_one_default_per_user/migration.sql
+  // and deliberately NOT declared with @@unique/@@index here: Prisma has
+  // no syntax for a filtered/partial unique index, so declaring it would
+  // misrepresent it as a plain (non-partial) unique constraint. Same
+  // "invisible by design" pattern as this repo's tsvector triggers — see
+  // docs/agents/learnings/catalog-inventory-engineer.md. Do not add a
+  // conflicting @@unique([userId]) here.
 }
 
 model PaymentMethod {

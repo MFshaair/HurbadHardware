@@ -1,0 +1,15 @@
+-- M1-3 security fix (F4, LOW): the "at most one default Address per
+-- user" invariant was previously application-only, enforced inside
+-- prisma.$transaction at Postgres's default Read Committed isolation.
+-- Two concurrent "set as default" requests for the same user (on
+-- different addresses) could both commit isDefault=true, since neither
+-- transaction's snapshot sees the other's uncommitted write.
+--
+-- This is a hand-authored raw-SQL partial/filtered unique index: Prisma's
+-- `@@unique`/`@@index` attributes have no syntax for a WHERE clause, so
+-- this object is intentionally NOT declared in schema.prisma (same
+-- "invisible by design" pattern already used for this repo's tsvector
+-- triggers — see docs/agents/learnings/catalog-inventory-engineer.md).
+-- Only one Address row per userId may have isDefault = true at a time;
+-- rows with isDefault = false are unrestricted (many per user).
+CREATE UNIQUE INDEX "address_one_default_per_user" ON "Address"("userId") WHERE "isDefault" = true;
