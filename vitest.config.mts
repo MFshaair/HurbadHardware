@@ -13,6 +13,19 @@ export default defineConfig({
     // two dev servers touching `.next` at once. Slower, but correctness
     // over speed for this class of integration test.
     fileParallelism: false,
+    // Vitest's built-in default (5000ms) is too tight for a real-browser
+    // (Playwright) interaction against a spawned `next dev` server, whose
+    // FIRST request to any given route pays a real JIT-compile cost on top
+    // of normal navigation/click latency. Confirmed as a genuine flake, not
+    // a logic bug: tests/test14-cart-ui.test.ts's "clicking Add to Cart..."
+    // test failed with `Test timed out in 5000ms` only when run as part of
+    // the full suite (this file spawns after several earlier files' dev
+    // servers/DB work), but passed cleanly (13.7s) run in isolation —
+    // catalog-inventory-engineer, M3-1. Raised suite-wide (not per-test)
+    // since every spawned-dev-server test file (test6/7/8/12/13/14) is
+    // equally exposed to this, not just the one that happened to flake
+    // first.
+    testTimeout: 20_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
@@ -91,6 +104,58 @@ export default defineConfig({
         // test-exclude) doesn't interpret it as `[s|l|u|g]`.
         "src/app/products/\\[slug\\]/page.tsx",
         "src/app/products/\\[slug\\]/VariantSelector.tsx",
+        // M2-2: SearchBar/FilterPanel are client components that call
+        // `useRouter()` from `next/navigation`, which throws outside a real
+        // Next.js app-router request context — they cannot be imported and
+        // rendered in-process the way a pure module can. Only reachable via
+        // tests/test13-product-search.test.ts's spawned `next dev`
+        // subprocess + real Playwright browser (same measurement-gap
+        // justification as VariantSelector.tsx above, not a testing gap).
+        // src/lib/searchParams.ts is deliberately NOT excluded — it's a
+        // pure module with no framework dependency, unit-tested in-process
+        // (same "only exclude the framework-coupled file, never the pure
+        // lib it uses" rule as addressValidation.ts above).
+        "src/components/SearchBar.tsx",
+        "src/components/FilterPanel.tsx",
+        // M3-1: framework-coupled cart PAGE/route files, only reachable via
+        // tests/test14-cart-ui.test.ts's spawned `next dev` subprocess (+
+        // one real Playwright run for the product-page "Add to Cart"
+        // click and the mobile-viewport layout check) and
+        // tests/test14-cart-api.test.ts's own spawned `next dev` subprocess
+        // (tier C) — same measurement-gap justification as the routes/pages
+        // above, not a testing gap.
+        //
+        // src/lib/cartCookie.ts is deliberately NOT in this list even
+        // though it imports `next/headers` (Route Handler / Server Action
+        // only, per its own file header): tests/test14-cart-api.test.ts's
+        // tier A mocks the `next/headers` module so this file's actual
+        // name/flag/rotation logic runs and is measured in-process, rather
+        // than only being reachable via a spawned subprocess. Also
+        // deliberately NOT excluded, same "only exclude the framework-
+        // coupled file, never the pure lib it uses" rule as
+        // addressValidation.ts/searchParams.ts above: src/lib/cartService.ts
+        // (no framework import, in-process tested — test14-cart-api.test.ts
+        // tier B), src/lib/cartView.ts (pure view-shaping, no framework
+        // import), src/lib/tax.ts (pure), src/lib/cartTypes.ts (type-only,
+        // no runtime logic).
+        "src/app/api/cart/**",
+        "src/app/cart/page.tsx",
+        "src/app/cart/CartLineItems.tsx",
+        "src/lib/useCart.ts",
+        // src/components/CartSummary.tsx is a plain presentational .tsx
+        // component (no hooks, no "use client" — see its own header
+        // comment) that in principle needs no Next.js request context to
+        // render. But this repo has no React Testing Library/jsdom setup
+        // (confirmed: no `@testing-library/react`/`jsdom` in
+        // package.json), so vitest cannot actually import-and-render a
+        // JSX component in-process today — it is only ever exercised as
+        // part of a real `/cart` page response (test14-cart-ui.test.ts's
+        // spawned `next dev` HTTP fetch, plus the mobile-layout Playwright
+        // test's `[data-testid="cart-summary"]` boundingBox assertion).
+        // Same measurement-gap-not-testing-gap justification as the other
+        // framework-only-reachable files above; excluded here rather than
+        // left showing a misleading 0% in the coverage table.
+        "src/components/CartSummary.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

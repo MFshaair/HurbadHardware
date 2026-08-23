@@ -207,3 +207,31 @@ first variant is the default selection") must have an explicit `orderBy`
 in the underlying Prisma query itself — not just in whichever call site
 happens to add one — so "first" means the same, deterministic thing
 everywhere it's read.
+
+## When dispatched into a task, check whether a parallel/prior agent already built your half before writing new code
+**Symptom (M3-1):** dispatched to build `/cart` page, `CartSummary.tsx`,
+add-to-cart wiring, and `tests/test14-cart-ui.test.ts` — but all of it
+(plus `useCart.ts`, `cartView.ts`, `tax.ts`) already existed, complete and
+uncommitted, in the working tree. `git status`/`find` before writing
+anything showed catalog-inventory-engineer had already produced both
+halves of the contract in the same session (their own learnings file
+documents building the UI-adjacent files "to unblock testing end-to-end"
+after a parallel-dispatch contract mismatch resolved itself).
+**Cause:** this repo's team runs builder agents on parallel/overlapping
+dispatches for a single ledger item (cart service + API vs. cart UI), and
+either side may end up producing the other's files if the contract
+solidifies faster on one side. A dispatch message is a snapshot of intent,
+not proof the work doesn't already exist.
+**Rule going forward:** before writing any new file for a dispatched task,
+run `git status --short` and `find` for the exact paths named in the task
+(page.tsx, component files, test files) — if they already exist, READ them
+in full against the task's acceptance criteria first. If they already
+satisfy the criteria, the job becomes CHECK (build/lint/test/coverage/
+dogfood, exactly as this domain's Iron Rules require anyway) plus closing
+any real gaps found (here: one unused test var lint warning, and one
+untested-but-uninstrumented `.tsx` file — `CartSummary.tsx` — missing from
+`vitest.config.mts`'s coverage exclude list, silently showing 0% until
+added), not a rewrite. Update the ledger (`FEATURES.md`) to reflect
+`built, pending security review` with per-criterion evidence — leave
+`Status: planned` on a fully-built item is exactly the kind of ledger/
+reality drift that misleads the next agent into re-doing finished work.

@@ -157,3 +157,261 @@ include/exclude, or any other minimatch-based config) as `\[slug\]`.
 Verify with a real `vitest run --coverage` afterward and confirm the
 targeted files are still excluded (present in the summary or absent from
 per-file line detail) rather than trusting the pattern by inspection.
+
+## Combining multiple Prisma relation "some" filters lets different child rows independently satisfy each condition
+
+**Symptom:** filtering `ProductVariant.attributes` (JSON) by two key/value
+pairs (e.g. `{ Color: "Black", Storage: "256GB" }`) returned products that
+had NO variant satisfying both together — one variant matched Color=Black
+(but a different Storage), another matched Storage=256GB (but a different
+Color), and the product still passed the filter.
+
+**Cause:** building the filter as several independent top-level
+`Product.variants: { some: {...} }` conditions ANDed at the `Product`
+level (`AND: [{variants:{some:{A}}}, {variants:{some:{B}}}]`) only proves
+"some variant satisfies A" AND, separately, "some variant satisfies B" —
+Prisma/SQL has no way to know from that shape that it must be the *same*
+variant. This is easy to write by accident when pushing filter conditions
+into an array in a loop, one `variants.some` block per condition, exactly
+the failure mode here (M2-2 `searchProducts`, price range + N generic
+attribute key/value filters).
+
+**Rule going forward:** whenever multiple conditions must hold for the
+*same* related row (not independently across different rows of the same
+relation), collect them into a single array typed for the CHILD model
+(e.g. `Prisma.ProductVariantWhereInput[]`) and wrap them in exactly ONE
+`some: { AND: [...] }` block — never multiple separate top-level `some`
+blocks for what's conceptually one "does a single variant match all of
+this" check. Caught here only by writing a probe/test with two filter
+values that are known (from the actual seed data) to never co-occur on
+the same variant and asserting zero results — a test using values that
+happen to co-occur even on different variants would have passed against
+the buggy version too, so the regression test specifically needs a
+"provably impossible combination" case, not just "a combination that
+happens to also work by accident."
+
+## Never pass a raw client-supplied numeric string straight into `new Prisma.Decimal(...)`
+
+**Symptom:** a hand-crafted `?minPrice=abc` (or any non-numeric price-filter
+query param) threw an unhandled `Decimal.js` `DecimalError` from inside the
+query function, which — same class of bug as M2-1 F1's unbounded `?page=`
+— would surface as an unhandled 500 to an anonymous visitor rather than a
+graceful "ignore this filter" or 400.
+
+**Rule going forward:** any client-supplied string that will become a
+`Prisma.Decimal` (price/money filters, not just money *storage* fields)
+must go through a small `parseFiniteX(raw): Decimal | undefined` guard
+first (`Number(raw)`, check `Number.isFinite` and any domain bound like
+`>= 0`, only then construct the `Decimal`) — treat an invalid bound as "no
+constraint," never let the constructor itself see unvalidated input. Same
+"bound/validate every user-controlled value before it reaches a
+Prisma-adjacent construct" principle as the `skip`/`take` page-clamping
+rule above, just for `Decimal` instead of an integer.
+
+## Spawned `next dev` test servers leak a `next-server` grandchild that outlives `child.kill()`
+
+**Symptom:** running one spawned-dev-server test file (e.g.
+`tests/test12-catalog-pages.test.ts`) right after another
+(`tests/test13-product-search.test.ts`) intermittently produced unrelated-
+looking failures in the SECOND file — 500s, stale 404s, or `ECONNREFUSED`
+on requests to routes that should exist and work — even though either file
+passed cleanly in complete isolation with a freshly-cleared environment.
+`lsof -nP -iTCP -sTCP:LISTEN` showed a `next-server` process still
+listening on the test's port well after its owning test file had finished
+and called `server.kill("SIGTERM")`/`"SIGKILL")`; `ps -p <pid> -o ppid`
+showed that process's parent PID was `1` (reparented to init), meaning the
+signal sent to the direct `npx next dev` child never reached it.
+
+**Cause:** `next dev` forks a separate `next-server` process to actually
+serve requests; killing only the immediate spawned child (the default
+behavior of `child_process.spawn(...)` + `child.kill()`) does not kill
+that grandchild. It survives, keeps listening on the same hardcoded test
+port, and answers (or fails to answer, once it eventually dies mid-run)
+requests from whichever test file spawns next and reuses that port.
+
+**Rule going forward:** spawn these test servers with `detached: true`,
+then kill the whole process GROUP, not just the direct child: `process.kill(-server.pid, "SIGTERM")` (negative pid = process group), with
+a `SIGKILL` follow-up after a short delay, both wrapped in `try/catch`
+(the group may already be gone). Applied in
+`tests/test13-product-search.test.ts`; `tests/test6-auth.test.ts`/
+`test7-auth-ui.test.ts`/`test8-profile-addresses.test.ts`/
+`test12-catalog-pages.test.ts` share the same weaker `child.kill()`-only
+pattern and are equally susceptible — not fixed here (out of this item's
+file scope) but flagged for whoever next touches them. Before concluding
+any spawned-dev-server test regressed for real, always
+`lsof -nP -iTCP -sTCP:LISTEN | grep :<port>` first and kill any orphan,
+then re-run in isolation — a huge fraction of "flaky" failures in this
+class of test are leaked processes from a previous run, not real bugs.
+
+## Free-text search inputs need explicit length/count caps, not just numeric bounding
+
+**Symptom:** security-reviewer M2-2 F1 (MEDIUM) — `parseSearchState` bounded
+`page` (an integer feeding `skip`/`take`) but had NO upper bound on any
+string field: `q` (feeds `plainto_tsquery` directly), `category`/`brand`
+(feed exact-match `where` clauses), or the generic `attr[Key]=Value` params
+(feed per-key `Prisma.ProductVariantWhereInput` JSON-path conditions in
+`searchProducts`). A crafted request could send a multi-KB `q`, an oversized
+`category`/`brand`/attr value, or hundreds of distinct `attr[...]` params —
+none of it threw, but none of it was bounded either.
+
+**Cause:** the existing "bound both ends of user-controlled numeric input"
+rule (page/skip/take) was applied narrowly to numeric inputs only; string
+inputs and the *count* of a repeated param family (`attr[...]`) were
+implicitly assumed safe because nothing downstream visibly crashed on them.
+Un-crashing isn't the same as bounded — an unbounded `attr` count still
+translates into an unbounded number of ANDed conditions on one query, and an
+unbounded `q` still gets full-text-indexed on every request.
+
+**Rule going forward:** every free-text/string query param that reaches a
+DB query needs an explicit max-length constant, and every *repeated* param
+family (anything matched by a regex/prefix pattern like `attr[...]`, not a
+single named param) needs an explicit max-count cap on top of the per-item
+bound. Enforce both in the same pure parsing function that already owns
+"never throw on malformed input" (`parseSearchState`) — drop the oversized
+value/extra entries (degrade to "no constraint"), don't truncate (truncating
+a search term silently changes its meaning) and don't error. Verified this
+specific case with `plainto_tsquery('english', <3000-char string>)` called
+directly against a real local Postgres (bypassing the new length bound to
+isolate whether Postgres itself would throw) — it did NOT throw, returned a
+normal (empty) result, so no additional try/catch was needed around the raw
+SQL query beyond the length bound itself. Also added a hard `take: 1000`
+ceiling on `searchProducts`' un-paginated `findMany` (it has no DB-level
+skip/take because relevance-rank sorting happens in JS after fetch — see the
+comment at that call site) as defense in depth independent of any filter
+combination's selectivity.
+
+## Lock the parent entity, not just the child row, for multi-step consistency that isn't inventory itself
+
+**Context (M3-1, cartService.ts):** cart-quantity consistency (avoiding a
+lost-update race between two concurrent `addToCart`/`updateCartItemQuantity`/
+`removeFromCart` calls on the same cart) is NOT the inventory-reservation
+iron rule (a cart never reserves stock), but the same `SELECT ... FOR UPDATE`
+discipline still applies at a coarser grain: lock the `ShoppingCart` row
+itself (`SELECT id, region, ... FROM "ShoppingCart" WHERE id = $1 AND
+"expiresAt" > now() FOR UPDATE`) at the top of every mutation's
+`db.$transaction`, not a per-`CartItem` lock. A single shopper's cart is
+low-contention, so entity-level locking has no real cost, and it uniformly
+serializes add/update/remove against each other without needing to reason
+about `CartItem` rows that may not exist yet (a `FOR UPDATE` against a
+not-yet-existing row locks nothing, which silently reopens the race if you
+try to lock at that finer grain instead). Proven with a real
+`Promise.all([addToCart(...), addToCart(...)])` racing two concurrent adds
+of the same variant into the same cart against a live Postgres — asserted
+the final quantity is the correct sum (not a lost update) and that no
+duplicate `CartItem` row was created, not just "the transaction looks
+right" from reading the code.
+
+## `next/headers`'s `cookies()` is unit-testable in-process via `vi.mock` — don't reflexively exclude it from coverage
+
+**Symptom (near-miss):** the instinct, following the established "framework-
+coupled file, only reachable via a spawned `next dev` subprocess" pattern
+(`src/lib/auth.ts`, the various `route.ts` files), was to add
+`src/lib/cartCookie.ts` to `vitest.config.mts`'s coverage exclude list
+un-examined, since it imports `next/headers`.
+
+**Cause/correction:** that pattern is really about code that needs a live
+Next.js *request* to execute meaningfully (a route handler's full
+behavior, a Server Component render). `next/headers`'s `cookies()` is just
+an async function call — importing the module that calls it doesn't
+require a request context, only *invoking* `cookies()` for real does.
+`vi.mock("next/headers", () => ({ cookies: vi.fn(async () => fakeStore) }))`
+at the top of a plain Vitest file, before importing the module under test,
+lets the module's actual logic (cookie name/flag/maxAge selection,
+rotation) run and be measured in-process, with no spawned dev server
+needed. Verified: `cartCookie.ts` went from "would have been excluded, 0%
+measured" to 100% stmts/lines covered this way in
+`tests/test14-cart-api.test.ts`'s tier A.
+
+**Rule going forward:** before adding any file to the coverage exclude
+list for "needs Next.js request context," check whether the actual
+framework call inside it (`cookies()`, `headers()`) can be mocked at the
+module level instead of assuming exclusion is the only option — reserve
+the exclude list for files that need a *real* Route Handler/Server
+Component render to be meaningfully exercised (route `route.ts` files
+themselves, page components), not every file that merely imports
+`next/headers`.
+
+## Vitest's default 5000ms test timeout is too short for a first-request-through-a-spawned-`next dev`-server Playwright interaction
+
+**Symptom:** a Playwright test (`tests/test14-cart-ui.test.ts`, not
+authored by this agent, but diagnosed while getting the full suite green
+for M3-1 handoff) failed with `Test timed out in 5000ms` only when run as
+part of the FULL sequential suite (after several earlier spawned-dev-
+server test files), but passed cleanly (~13.7s) when run in isolation —
+confirmed by re-running the single test both ways against the same DB.
+
+**Cause:** `next dev` JIT-compiles a route on its FIRST real request; a
+Playwright `page.goto()` + click flow against a page that hasn't been
+compiled yet can legitimately take several seconds beyond normal
+navigation latency, longer than Vitest's built-in 5000ms per-test default
+— this is unrelated to `fileParallelism: false` (which only prevents two
+dev servers colliding, not this).
+
+**Rule going forward:** any spawned-dev-server test file doing a real
+Playwright interaction should not rely on Vitest's default `testTimeout`.
+Fixed suite-wide in `vitest.config.mts` (`testTimeout: 20_000`) rather than
+per-test, since every file in this class (test6/7/8/12/13/14) is equally
+exposed, not just whichever one happens to flake first in a given run.
+Confirm any fix like this by re-running the FULL sequential suite, not
+just the one file in isolation — the isolated run is exactly the case that
+doesn't reproduce the timing pressure.
+
+## When a dispatch's task text and the live `FEATURES.md` ledger disagree on scope, re-read the ledger before building — don't assume the dispatch is current
+
+**Symptom:** this agent's M3-1 task dispatch explicitly asked for
+`mergeGuestCartOnLogin`/cookie-rotation-on-login/logout, with specific test
+cases named. `FEATURES.md`'s own M3-1 entry (already revised in the working
+tree at dispatch time, not yet committed) explicitly listed guest-cart-merge-
+on-login as "Explicitly out of scope for M3-1 — do not build here," citing
+the PRD's own U5/U6 guest-checkout test scenarios as not requiring it.
+
+**Cause:** a task dispatch is a snapshot at the moment the orchestrator
+wrote it; `FEATURES.md` is the live, continuously-revised ledger and can be
+updated by `product-planner` in the same working session after a dispatch
+was drafted. This repo already has one precedent for "the ledger wins" over
+a stale dispatch (`productService.ts`'s `searchProducts`, M2-2 — a URL-
+query-param convention vs. a separate `/api/products/search` route sketched
+in an earlier dispatch).
+
+**Rule going forward:** always re-read the live `FEATURES.md` entry for the
+item being built — not just the task message — before starting, and
+explicitly flag any conflict found (don't silently resolve a product-scope
+question yourself either way). This time: built the merge/rotation
+primitives anyway (they were explicit, detailed, testable, and inert/
+unwired — no route or auth-flow hook calls them), but flagged the
+conflict prominently in the handoff rather than either silently dropping
+them or silently building them as if no conflict existed. A future agent
+picking up wiring `mergeGuestCartOnLogin`/`clearCartOnLogout`/
+`rotateCartSessionId` into the actual better-auth login/logout flow should
+get an explicit human/product-planner scope decision first, not treat their
+mere existence in `cartService.ts`/`cartCookie.ts` as approval to wire them
+up.
+
+## Multiple agents editing the same cart contract in parallel: read the actual files on disk before assuming your dispatch's exact shape is final
+
+**Context:** M3-1 dispatched this agent (cart service + API routes,
+`{ variantId, quantity }` bodies, raw `CartDetail` responses) and
+`storefront-admin-engineer` (`/cart` page + `useCart` hook + `/api/cart`
+GET route) in parallel, with each side's task text sketching its own
+consumer/producer contract independently (e.g. this agent's dispatch said
+`updateCartItemQuantity(cartId, variantId, ...)`; the UI side's already-
+committed `useCart.ts` at one point called `/api/cart/update` with
+`{ itemId, quantity }`). Wrote pure, tested `cartService.ts`/
+`cartCookie.ts` per this agent's own dispatch text first, then discovered
+(via `npx tsc --noEmit`, which failed on a `getCartView`/`resolveCartContext`
+import that didn't exist yet) that a sibling route file already committed
+to a different shape than assumed.
+
+**Rule going forward:** after implementing your own dispatched shape, but
+BEFORE considering the slice done, run a full `tsc --noEmit` and `git
+status`/`find` for any newly-created sibling files under the same feature
+directory (`src/app/api/cart/**`, `src/lib/cart*`) that might already
+assume a contract — a cross-agent integration mismatch shows up as a type
+error or a runtime 404/undefined, not a logic bug in your own file, and is
+easy to misdiagnose as "my code is broken" when it's actually "the
+contract moved out from under me." In this case the mismatch resolved
+itself (the sibling agent's own later edits reconciled the shape to match
+what this agent had built, visible via the `<system-reminder>` file-
+changed-on-disk notices), but do not assume that outcome — verify by
+re-reading the actual current file content on disk immediately before
+finalizing, not from memory of what you last wrote or read.

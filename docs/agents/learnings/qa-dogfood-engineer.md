@@ -134,6 +134,100 @@ not fixed) — until then, files in that category are legitimately excluded
 from the coverage *metric* with a comment explaining why, while remaining
 in scope for their existing integration tests.
 
+## `next dev` embeds a fresh per-request timestamp into HTML — never diff/compare raw dev-mode HTML bytes across two fetches
+
+**Symptom:** A dogfood check asserting "the same `/products?...` URL fetched
+twice renders identically" (meant to prove search/filter state is fully
+URL-driven, no client-only desync) failed on a perfectly correct
+implementation. Diffing the two real HTML responses byte-for-byte showed
+the ONLY differences were `?v=<ms-timestamp>` query strings on `<script>`/
+`<link>` tags (and their duplicated copies inside the RSC streaming
+payload's inline `<script>` blocks) — never any actual product data.
+
+**Cause:** `next dev` (unlike a production `next build && next start`)
+appends a fresh HMR/asset-cache-busting timestamp to static asset URLs on
+literally every request, so two fetches of the identical URL are NEVER
+byte-identical in dev mode even when the rendered content is. The inverse
+failure mode is just as real and more dangerous: an assertion checking
+"page 1 and page 2 render *differently*" (to prove pagination works) would
+trivially pass even if the actual product list were identical on both
+pages, because the ever-changing timestamp alone guarantees byte
+inequality — a false pass that masks a real "pagination does nothing" bug.
+
+**Rule going forward:** Any dogfood/test assertion comparing two `next
+dev`-served HTML responses (for content-equality OR content-inequality)
+must extract and compare the meaningful rendered content (e.g. product
+name headings via a targeted regex/selector) rather than comparing raw
+HTML strings/bytes directly. Before trusting either direction of such an
+assertion, diff two real responses directly to see what actually varies
+independent of your change (same discipline as the coverage-tool-defaults
+and migration-drift lessons below: check the tool's real behavior before
+trusting a comparison built on top of it).
+
+## A test suite that only ever exercises the DEFAULT value of a parameter can't prove the parameter is actually used
+
+**Symptom:** M3-1's cart tests all passed, and the criterion "cart's region
+is set via `resolveRegion()`, never the schema's `@default("KES")`" looked
+covered — but `regionCurrency()` (the KE/ET/SO -> KES/ETB/SOS map) had ZERO
+test coverage anywhere in the repo (confirmed by grep), and every single
+cart test, in-process or live-server, only ever passed/resolved
+`region: Region.KE`. Since KE's correct currency ("KES") is *also* the
+schema's `@default("KES")`, a regression that hardcoded currency to "KES"
+regardless of the `region` argument would have passed every existing test.
+
+**Cause:** When a function's only tested input happens to produce the same
+output as the buggy fallback it's meant to guard against, the test suite
+cannot distinguish "correctly derived" from "coincidentally correct
+default" — this is a subtler version of the general lesson but specific to
+region/currency/locale-style code, where one region is always the
+default and also the first/most-tested region.
+
+**Rule going forward:** For any region-, locale-, or environment-derived
+value with a "convenient" default (KE/KES here), always add at least one
+test that passes a NON-default value through the full path and asserts the
+non-default output — don't rely on the default-path tests alone, even if
+there are many of them. Proved this class of test can actually fail: with
+`cartService.ts`'s `regionCurrency(region)` call temporarily replaced by a
+hardcoded `"KES"`, the KE-only tests all still passed; only the added
+ET/SO-region test caught it.
+
+## Dogfood/test fixture cleanup order matters when FK relations aren't cascaded — a silently-swallowed cleanup error leaks fixture rows every run
+
+**Symptom:** `scripts/agents/dogfood.mjs`'s new M3 cart leg passed (exit 0)
+on every run, but manually querying the DB afterward found 5 leftover
+`dogfood-m3-cart-*` fixture `Product` rows accumulated from repeated runs
+during this same QA session — the dogfood script's own cleanup was failing
+every time without ever surfacing it.
+
+**Cause:** Two compounding mistakes in the cleanup function itself: (1) it
+deleted the fixture `Product` BEFORE deleting the authenticated user's
+`ShoppingCart` (created by the flow's own "sign in, add to cart" step),
+but `CartItem.variant` has NO `onDelete: Cascade` in
+`prisma/schema.prisma` (only `CartItem.cart` does) — so the product
+delete hit a live FK constraint violation every single run, because a
+`CartItem` row still pointed at the fixture variant from the
+still-undeleted user's cart. (2) that failure was invisible because the
+delete call was wrapped in `.catch(() => {})` — a defensive-looking pattern
+that actually hid a real, 100%-reproducing bug. Caught only by manually
+querying the DB post-run while verifying this exact dogfood leg per this
+domain's "prove the test/dogfood step can fail" discipline — not by the
+script itself, which reported PASS throughout.
+
+**Rule going forward:** (1) Never wrap a fixture-cleanup DB call in a bare
+`.catch(() => {})`/swallow — let it throw (or at minimum log AND fail the
+script); a cleanup step that can fail silently is worse than no cleanup
+step, because it looks green while leaking rows. (2) When a dogfood/test
+flow creates rows across more than one FK-related table (e.g. a `Product`
+fixture PLUS a `ShoppingCart`/`CartItem` that references one of its
+variants via a NON-cascaded relation), delete child-with-FK-to-fixture
+rows first, in dependency order — don't assume "delete the top-level
+fixture and let Prisma cascade" without checking each relevant relation's
+actual `onDelete` behavior in `schema.prisma` directly. (3) After writing
+or extending any dogfood leg that creates fixture data, manually re-query
+the DB for that leg's fixture prefix after a run (or several) to confirm
+zero leftovers — a script reporting PASS is not proof its own cleanup
+worked, only that its assertions passed.
+
 ## Existing pre-M0 vitest failures were environment, not implementation bugs
 
 **Context (not yet a lesson):** `tests/test4-stripe.test.ts` and

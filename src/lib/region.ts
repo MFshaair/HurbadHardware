@@ -48,3 +48,21 @@ export function resolveRegion(env: NodeJS.ProcessEnv = process.env): Region {
 
   throw new InvalidRegionError(raw);
 }
+
+// Region -> currency map (M3-1). Mirrors the per-region config already
+// established in `src/lib/seed.ts` (`REGIONS`), duplicated here rather than
+// imported from seed.ts because seed.ts is a one-shot data-loading script
+// (excluded from unit coverage, see vitest.config.mts) and not meant to be
+// imported by application/request-path code. `ShoppingCart.currency` must
+// be set explicitly from this map at creation time (ADR M3-1 Decision 10)
+// — never left to `@default("KES")`, which is correct only for Kenya and
+// would mis-currency an ET or SO cart.
+const CURRENCY_BY_REGION: Record<Region, string> = {
+  KE: "KES",
+  ET: "ETB",
+  SO: "SOS",
+};
+
+export function regionCurrency(region: Region): string {
+  return CURRENCY_BY_REGION[region];
+}

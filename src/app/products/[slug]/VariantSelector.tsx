@@ -3,13 +3,20 @@
 import { useState } from "react";
 import type { VariantDetail } from "@/lib/productService";
 
-// Variant selector + "Add to Cart" (M2-1). Selecting a variant updates the
-// displayed price/stock/images to that variant's own pre-computed
-// RegionalPrice/RegionalInventory row for the resolved region — read
-// directly from `variants` (server-computed), never recomputed here. The
-// "Add to Cart" button is always rendered and disabled exactly when the
-// selected variant's `availableForSale <= 0`; it has no cart-mutation
-// logic wired (no fetch, no client-side cart state) — that's M3-1's job.
+// Variant selector + "Add to Cart" (M2-1, cart-mutation wiring added in
+// M3-1). Selecting a variant updates the displayed price/stock/images to
+// that variant's own pre-computed RegionalPrice/RegionalInventory row for
+// the resolved region — read directly from `variants` (server-computed),
+// never recomputed here. The "Add to Cart" button is always rendered and
+// disabled exactly when the selected variant's `availableForSale <= 0`
+// (a display hint from page-load data only — the server independently
+// re-checks real-time stock on every POST /api/cart/add, since this
+// component's `availableForSale` can go stale between page load and
+// click). Quantity is fixed at 1 (no quantity input in this item's
+// scope); clicking again adds another unit via the same increment-not-
+// duplicate cart semantics. Stays on the product page after adding
+// (rather than redirecting to /cart) — simpler of the two product
+// choices offered for this item.
 //
 // This is a "use client" component, so every prop passed to it serializes
 // into the public RSC payload readable by any anonymous visitor. Only the
@@ -41,6 +48,8 @@ export default function VariantSelector({
   fallbackImages: string[];
 }) {
   const [selectedId, setSelectedId] = useState<string>(variants[0]?.id ?? "");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [feedback, setFeedback] = useState<string | null>(null);
   const selected = variants.find((v) => v.id === selectedId) ?? variants[0];
 
   if (!selected) {
@@ -51,6 +60,29 @@ export default function VariantSelector({
   // Only trust the server-computed value; a missing RegionalInventory row
   // (`null`) is treated as unavailable rather than assumed in-stock.
   const outOfStock = (selected.availableForSale ?? 0) <= 0;
+
+  async function handleAddToCart() {
+    setStatus("loading");
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/cart/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variantId: selected.id, quantity: 1 }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        setStatus("error");
+        setFeedback(body.error ?? "Could not add to cart. Please try again.");
+        return;
+      }
+      setStatus("success");
+      setFeedback("Added to cart.");
+    } catch {
+      setStatus("error");
+      setFeedback("Network error — could not add to cart. Please try again.");
+    }
+  }
 
   return (
     <div className="mt-6 flex flex-col gap-4">
@@ -102,12 +134,24 @@ export default function VariantSelector({
 
       <button
         type="button"
-        disabled={outOfStock}
+        disabled={outOfStock || status === "loading"}
+        onClick={handleAddToCart}
         data-testid="add-to-cart"
         className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded bg-black px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-50"
       >
-        Add to Cart
+        {status === "loading" ? "Adding…" : "Add to Cart"}
       </button>
+
+      {feedback && (
+        <p
+          role="status"
+          aria-live="polite"
+          data-testid="add-to-cart-feedback"
+          className={`text-sm ${status === "error" ? "text-red-700" : "text-green-700"}`}
+        >
+          {feedback}
+        </p>
+      )}
     </div>
   );
 }

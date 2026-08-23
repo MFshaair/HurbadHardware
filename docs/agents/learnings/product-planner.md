@@ -80,4 +80,106 @@ prefer wiring an existing mechanism over inventing a parallel one, even if
 the dispatch prompt's suggested fallback (hardcode) would also have
 "worked."
 
-(No further entries yet.)
+## Don't assume a JSON attribute field has uniform keys across categories
+**Symptom:** Drafting M2-2's variant-attribute filter criterion around
+"color" and "storage" as if every product had that pair would have baked
+a false assumption into an acceptance criterion that a builder could
+implement literally (a fixed two-key filter) and still fail most of the
+catalog.
+**Cause:** `ProductVariant.attributes` is a free-form `Json` field; the
+PRD's own examples ("color, storage") only describe the smartphone
+category. Reading `src/lib/seed.ts` directly showed every category uses
+different keys (`Color`/`Storage` for phones, `RAM`/`Storage` for
+laptops, `Capacity` for storage devices, `Resolution`/`Power` for
+cameras, etc.) — there is no cross-category common key set. A criterion
+paraphrased from the PRD's illustrative example, without checking the
+actual seeded data, would have silently narrowed scope or required
+rework mid-build.
+**Rule going forward:** For any acceptance criterion involving a
+free-form `Json`/`Jsonb` field, grep the actual seed/fixture data (not
+just the PRD's illustrative examples) for the real key set before naming
+specific keys in the criterion. Prefer phrasing the criterion as a
+generic mechanism (works for any key/value pair) with one or two
+concrete keys named only as the proof-test case, not as the full scope.
+
+## Ledger items with a UI dependent on backend query work need a co-owner, spelled out at planning time
+**Symptom:** M2-2 arrived in `FEATURES.md` with a single owner
+(catalog-inventory-engineer) and three criteria that were all
+backend/query-layer (GIN search, filters, latency) — no search bar or
+filter panel anywhere in the criteria, and no other ledger item claimed
+that UI either. Dispatching as-is would have produced a working query
+layer with no way for a user to actually reach it.
+**Cause:** The PRD's U4 unit bundles data-layer and UI work together
+(`FilterPanel.tsx`, search bar, live results), but the ledger's condensed
+three-bullet paraphrase kept only the backend "Approach" bullets and
+dropped the UI ones during summarization — the same failure mode as the
+"split along owner seam" lesson above, but in the other direction (UI
+silently dropped instead of duplicated).
+**Rule going forward:** When refining/confirming criteria for an item
+whose PRD unit clearly names UI components/pages, explicitly check
+whether the ledger item's current owner list and criteria account for
+who builds the UI half, not just who builds the query/data half. If
+missing, add the second owner and UI-facing criteria in the same edit
+(mirroring a sibling item's existing owner split, e.g. M2-1's
+"(data/query layer) + (pages/UI)" pattern) rather than assuming a later
+item will pick it up — no later item was reserving that work here.
+
+## A required+unique column with no auth backing it is a design decision, even when the schema needs no migration
+**Symptom:** M3-1 (shopping cart) looked like pure CRUD on an
+already-committed, already-migrated schema (`ShoppingCart`/`CartItem`
+exist in full from M0's v3 schema, confirmed by reading
+`prisma/schema.prisma:155-190` directly) — easy to wave through as
+"no architect needed, nothing to design, the table's already there."
+**Cause:** Reading the column list, not just the table's existence,
+showed `ShoppingCart.sessionId` is `String @unique` (non-nullable) even
+though `userId` is optional — every cart row, guest or registered, needs
+a populated, globally-unique session identifier, and it is the *sole*
+lookup key for a guest's cart with no authentication behind it. Grepping
+`src/lib/auth.ts` and `src/lib` for any existing cookie/anonymous-session
+mechanism found none — this identifier has to be invented from scratch
+(name, entropy/generation method, cookie flags, lifetime). A criterion
+phrased only as "guest (sessionId, 7-day expiry) ... carts work" reads as
+a done-schema detail, not as "design a new security-relevant identity
+mechanism," and would have let a builder improvise a weak/predictable
+cookie with no review.
+**Rule going forward:** Before treating a ledger item as "pure CRUD, no
+architect needed" because its schema already exists, read the actual
+column definitions (nullable? unique? no FK/no auth relation?) of every
+model it touches, not just confirm the table is present. A
+required+globally-unique column with no relation to an authenticated
+entity is itself a signal that something (usually an identity/token
+mechanism) still needs a scoped design decision, even though zero
+migration work follows from it — flag that narrowly to platform-architect
+(schema unchanged, mechanism undecided) rather than either skipping
+review entirely or over-escalating the whole item as needing a redesign.
+
+## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
+**Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
+`useCart.ts` as the artifacts for "cart persistence." M3-1 (already
+verified) delivered `useCart.ts` but no `CartContext.tsx` anywhere in the
+repo, which could read as a dropped requirement needing a new ledger entry.
+**Cause:** `CartContext.tsx` was an early architecture-sketch name for a
+shared client-side store; the actual implementation deliberately chose a
+different, documented pattern instead — `useCart.ts`'s own file comment
+states the server is the sole source of truth and every mutation
+round-trips to the API and replaces local state wholesale, no
+localStorage/global-store layer. A cross-component live-updating consumer
+(e.g. a header cart-count badge) is the only thing that would actually
+need a Context/shared-store, and grepping `src/app` showed no
+Header/NavBar/site-chrome component exists yet anywhere in the codebase
+(`layout.tsx` is still the unmodified Next.js scaffold) and no ledger item
+in M0-M4 scopes one — so there is no current consumer for the named
+component, and nothing to test an acceptance criterion against.
+**Rule going forward:** When a Linear/PRD item names a specific
+file/component that a completed sibling item didn't produce, don't assume
+that's an automatic gap. Check (a) whether the sibling item's delivered
+code achieves the same *outcome* through a different, deliberately-chosen
+mechanism (read the file's own comments/tests for evidence of intent, not
+just its filename), and (b) whether any currently-scoped ledger item would
+actually consume the named component. If neither shows a real, testable
+need today, recommend closing the Linear item as satisfied-by/duplicate of
+the sibling rather than inventing a ledger entry for speculative
+infrastructure with no consumer — that violates "no ledger entry, no
+work" in reverse (manufacturing work instead of framing it). Revisit only
+when a future item actually scopes the consumer (e.g. a global nav/header
+with a live cart badge).
