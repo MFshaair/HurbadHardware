@@ -682,9 +682,70 @@ fixed as part of the F1-F5 cycle. Neither is blocking.
 (one 200, one 409); full cart→reservation dogfood exits 0.
 
 ### M3-1: Shopping cart
-**Status:** planned · **Owner:** catalog-inventory-engineer
-- [ ] Cart keyed by `variantId`; guest (sessionId, 7-day expiry) and registered (userId) carts both work
-- [ ] Real-time stock check against `RegionalInventory` on add
+**Status:** verified · **Owner:** catalog-inventory-engineer (cart service + API routes) + storefront-admin-engineer (`/cart` page + wiring `VariantSelector.tsx`'s existing add-to-cart button) · **Design review: platform-architect, scoped to the guest-session identity mechanism only — see note below**
+- [x] Cart identity/lookup: `getOrCreateCart(...)` (`src/lib/cartService.ts`) resolves an authenticated user's cart by `userId` (via `auth.api.getSession()`, same pattern as M1's protected pages); resolves a guest's cart by the `hurbad_cart` session cookie (`src/lib/cartCookie.ts`) per `docs/agents/arch-decisions/M3-1-guest-session-cookie.md` (`crypto.randomUUID()`, httpOnly, `sameSite: lax`, `__Host-` prefix + `secure` in production only, 7-day `maxAge` kept in lockstep with `ShoppingCart.expiresAt`). Confirmed by reading both files and by dogfooding: `GET /api/cart` with no cookie returns an empty cart with no DB row created; `POST /api/cart/add` mints one only on that first write.
+- [x] Add-to-cart: `addToCart` upserts on the existing `@@unique([cartId, variantId])` constraint (increments quantity rather than duplicating the row); a different variant of the same product creates a separate `CartItem`. `VariantSelector.tsx`'s `data-testid="add-to-cart"` button now POSTs `{ variantId, quantity: 1 }` to `/api/cart/add` with loading/success/error feedback (`data-testid="add-to-cart-feedback"`). Dogfooded live: added a real seeded variant twice, confirmed quantity became the sum with a single `CartItem` row.
+- [x] Real-time stock check on add: `addToCart`/`updateCartItemQuantity` compute `onHand - reserved - safetyBuffer` inside the same DB transaction that locks the cart row and reject with `InsufficientStockError` (409, `{ error, availableForSale }`) before any write — no `CartItem` created or incremented, and `InventoryReservation` is never touched. Dogfooded live: `POST /api/cart/add` with `quantity: 500` against a variant with 110 available returned `409 {"error":"Requested quantity exceeds available stock (110 available)","availableForSale":110}`.
+- [x] Update-quantity (`POST /api/cart/update`) and remove-item (`POST /api/cart/remove`) routes exist, both 404 (never silently mint a cart) when no cart is resolvable; `removeFromCart` only touches `CartItem`/`ShoppingCart.expiresAt`, never `RegionalInventory.reserved` — proven in `tests/test14-cart-ui.test.ts`.
+- [x] Guest cart TTL: `findActiveCart`/`getOrCreateCart` filter `expiresAt > now()` on every read; an expired row is never returned and `getOrCreateCart` transparently creates a fresh cart under the same `sessionId`. Proven in `tests/test14-cart-ui.test.ts` by forcing `expiresAt` into the past via Prisma directly.
+- [x] Cart's `region` is set via `resolveRegion()` (same env-driven pattern as M2-1/M2-2) at cart creation, with `currency` from `regionCurrency(region)` — never the schema's `@default("KES")`. All price/stock reads for cart contents are scoped to that cart's own `region` against `RegionalPrice`/`RegionalInventory`.
+- [x] `/cart` page (`src/app/cart/page.tsx` + `CartLineItems.tsx`) renders live cart contents — variant name/attributes, quantity (+/− steppers, disabled at `availableForSale`), line total, sourced only from the server-side cart via `useCart` (no client-only state that could desync: every mutation round-trips to `/api/cart/*` and the response wholesale-replaces local state). Empty-cart state, error banner (`role="alert"`) on a failed fetch, and a "Proceed to Checkout" link to `/checkout` (M3-3) are all present. Mobile-first: every interactive control is >=44x44px; layout stacks at 375px and goes 2-column at `md`+, both proven live in `tests/test14-cart-ui.test.ts`'s Playwright viewport test.
+- [x] `src/components/CartSummary.tsx` (read-only, no hooks) renders item count/subtotal/tax/total from the server-computed `Cart` view — used by `/cart` today and reusable as-is by `/checkout` (M3-3).
+- [x] Tax computed server-side only (`src/lib/tax.ts`'s `getTaxRate`, KE 16% / ET 15% / SO 0%), applied in `src/lib/cartView.ts`'s `toCartView` (integer-cents money math, no floating-point drift) — never recomputed or trusted from the client. Dogfooded live: KES 150,130.20 subtotal produced exactly KES 24,020.83 tax (16%) and KES 174,151.03 total.
+
+**Verified:** `scripts/agents/gate-check.sh M3-1` exit 0 on 2026-08-23. All checks GREEN: build, lint, test+coverage (97.04% statements/lines, 82.99% branches, 98.59% functions, all thresholds met), dogfood entrypoint (add-to-cart → view → update → remove → stock-check-409 → logout-rotation complete M3 cart flow), and security sign-off STATUS: CLEAR (second pass; F1-F7 findings closed, F8/F9/F10/F11 explicitly deferred as non-blocking for M3-1 per security-reviewer decision in `docs/agents/security-signoff/M3-1.md`). HRH-41 gate passed.
+
+**Note (scope conflict, flagged not silently resolved):** `cartService.ts`/`cartCookie.ts` also contain `mergeGuestCartOnLogin`, `clearCartOnLogout`, and `rotateCartSessionId` — built and unit-tested (`tests/test14-cart-ui.test.ts`). **`rotateCartSessionId` IS now wired into better-auth's `/sign-out` hook** (`src/lib/auth.ts`, added as the fix for security-reviewer M3-1 F1 — session fixation on logout, see `docs/agents/security-signoff/M3-1.md`). `mergeGuestCartOnLogin` and `clearCartOnLogout` remain **deliberately unwired** — this section's own "Explicitly out of scope" note below says guest-cart-merge-on-login is out of scope for M3-1; a future item needs an explicit human/product-planner scope call before wiring the login-side merge.
+
+**Known follow-ups from security-reviewer's second pass (non-blocking for M3-1, tracked for M3-2/M3-3):**
+- **F8 (MEDIUM):** `findActiveCart`'s sessionId lookup doesn't require `userId: null`, so a leaked/copied cart cookie can still read/mutate a cart already bound to a real user. Must be closed before M3-2/M3-3 attach guest email + shipping address to the cart.
+- **F9 (MEDIUM):** Login-side claim path is de-facto promotion-on-login (a planted guest cookie becomes bound to whoever authenticates next); accepted for M3-1 since merge-on-login is out of scope, but the claim path should rotate the row's `sessionId` when it claims.
+- **F10 (MEDIUM):** Rate-limit key trusts the first `x-forwarded-for` entry (client-spoofable).
+- **F11 (LOW):** Rate limiter is a fixed window, not sliding, despite the name.
+
+**Architect review: required, narrowly scoped (not a full re-design).**
+Everything else in this item is CRUD on infrastructure already committed
+and verified: the `ShoppingCart`/`CartItem` schema exists in full
+(`prisma/schema.prisma:155-190`), part of the M0 v3 schema already
+migrated — confirmed by reading it directly, no new model or migration
+needed. The region-resolution pattern and the `availableForSale` formula
+are both already established and verified in M2-1/M2-2. The one open gap
+is genuinely new and security-relevant: `ShoppingCart.sessionId` is a
+required (non-nullable), globally-unique column with no auth backing it
+for guest carts — whoever holds that cookie value owns that cart's
+contents. No guest/anonymous-session mechanism exists anywhere in this
+repo today — confirmed by reading `src/lib/auth.ts` directly (only
+`emailAndPassword` + `nextCookies()` are configured, no anonymous plugin)
+and by finding no cookie helper under `src/lib`. Naming the cookie, its
+generation/entropy, and its flags is a cross-cutting decision that a later
+item (M3-3's guest checkout) will also depend on, so platform-architect
+should decide it once rather than each builder improvising a parallel
+mechanism — same precedent as M2-1's region-mechanism finding. The schema
+itself needs no change; this is a design note, not a migration.
+
+**Dependencies verified:** M2's product/variant/region infrastructure is
+`verified` (M2-1, M2-2 — `FEATURES.md` lines 360, 566 — confirmed by
+reading both entries directly). `ShoppingCart`/`CartItem` models exist in
+`prisma/schema.prisma:155-190` from the M0 v3 schema (no migration
+needed). `VariantSelector.tsx`'s add-to-cart button already exists with
+disabled/enabled logic wired (M2-1 — confirmed by reading
+`src/app/products/[slug]/VariantSelector.tsx` and its `FEATURES.md`
+entry) — this item wires its click handler, it does not build the button.
+
+**Blocks:** M3-2 (atomic reservation reads cart contents at checkout
+start) and M3-3 (checkout flow reviews cart, computes tax/total from it)
+— neither can start meaningfully until this item's cart-read surface
+exists.
+
+**Explicitly out of scope for M3-1** (do not build here): merging a guest
+cart into a registered user's cart on login — the PRD's U5 test scenarios
+name no such behavior, and U6 independently confirms guest checkout works
+end-to-end without ever requiring login ("E2E test: guest checkout from
+cart to confirmation"), so guest and registered carts are two independent
+lookup paths for this item, not a source/target of a merge. If a human
+wants merge-on-login later, track it as a new item — don't let a builder
+invent it here. Also out of scope: any `InventoryReservation` creation
+(M3-2 only) and the checkout flow itself (M3-3).
 
 ### M3-2: Atomic inventory reservation
 **Status:** planned · **Owner:** catalog-inventory-engineer
