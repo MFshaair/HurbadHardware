@@ -561,11 +561,97 @@ FINDINGS at iteration 1).
 
 **Verified:** `scripts/agents/gate-check.sh M2-1` exit 0 on 2026-08-22. All checks GREEN: build, lint, test+coverage (93.25% statements/lines, 81.37% branches, 100% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login flow), and security sign-off STATUS: CLEAR (iteration 2).
 
+
 ### M2-2: Full-text search & faceted filters
-**Status:** planned · **Owner:** catalog-inventory-engineer
-- [ ] GIN full-text search across `Product`/`ProductVariant` (name, brand, SKU)
-- [ ] Filters: category, brand, price range (from `RegionalPrice`), variant attributes
-- [ ] Search "iPhone"-equivalent query returns results in <200ms against the seeded DB (measured, not estimated)
+**Status:** verified · **Owner:** catalog-inventory-engineer (data/query layer) + storefront-admin-engineer (search bar + filter panel UI)
+
+- [x] `Product`/`ProductVariant` full-text search: a query function in
+      `src/lib/productService.ts` (e.g. `searchProducts(query, region)`)
+      uses the `searchVector` GIN-indexed tsvector columns that already
+      exist and are trigger-maintained from M0 — `Product.searchVector`
+      covers `name` + `brand`; `ProductVariant.searchVector` covers
+      `name` + `sku` (confirmed by reading `prisma/schema.prisma:65-77,
+      96-110` and `prisma/migrations/20260820100721_v3_init/migration.sql:
+      620-647`) — via `to_tsquery`/`plainto_tsquery` through
+      `$queryRaw`/`$queryRawTyped` (Prisma has no native tsvector query
+      API), returning matching products with their matching variants for
+      the resolved region. No new schema field, trigger, or index is
+      needed for this bullet.
+- [x] Filters are composable with search and with each other: `category`
+      (exact match, `Product.category`), `brand` (exact match,
+      `Product.brand`), price range (`min`/`max` against the resolved
+      region's `RegionalPrice.price`), and variant attributes — the
+      attribute filter must be generic key/value matching (e.g.
+      `?attr[Color]=Black`), not a fixed cross-category key list: reading
+      `src/lib/seed.ts` shows attribute keys vary per category (`Color`/
+      `Storage` for smartphones, `RAM`/`Storage` for laptops, `Capacity`
+      for storage devices, `Resolution`/`Power` for cameras, etc. — there
+      is no single "color"/"storage" pair common to all products) via
+      Prisma JSON path/containment filtering on `ProductVariant.attributes`.
+      A variant missing the filtered key is excluded from the result, not
+      an error. At minimum, the smartphone category's `Color` and
+      `Storage` keys must be proven filterable end-to-end by a test, with
+      the mechanism generic enough to reach every other category's keys
+      without further schema or code changes.
+- [x] `/products` reads all of the above from URL query params (`?q=`,
+      `?category=`, `?brand=`, `?minPrice=`, `?maxPrice=`, and a generic
+      `?attr[<Key>]=<Value>` form for variant attributes, e.g.
+      `?attr[Color]=Black`) — same pattern M2-1 established for `?page=N`
+      (no separate `/api/products/search|filter` REST route; the PRD's
+      `app/api/products/search/route.ts`/`filter/route.ts` file paths do
+      not match this repo's actual App-Router/server-component
+      convention). Combining multiple filters narrows results (AND, not
+      OR) — proven by a test using at least two simultaneous filters.
+- [x] A visible search input and filter controls (category/brand
+      dropdowns or checkboxes, price min/max number inputs, attribute
+      checkboxes) exist on `/products`, submit through the URL query
+      params above (no client-only filter state that could desync from
+      the URL — same rule M2-1 applied to pagination), and an
+      empty-result search/filter combination renders a "No products
+      found" state with `200`, not `404`/`500`.
+- [x] Search for a known seeded product's exact name (confirmed against
+      actual seed data, not assumed) returns that product; a search term
+      matching no seeded product returns zero results, not an error —
+      both proven by tests, not reasoned about.
+- [x] Search "iPhone"-equivalent query against the full seeded DB (200
+      products / 400 variants) executes in <200ms, measured (not
+      estimated) via a repeatable benchmark that times the actual
+      Prisma/`$queryRaw` call directly — excluding Next.js
+      request/render overhead and one-off cold-start/compile latency
+      (warm up first, then take the median of >=5 runs).
+
+**Explicitly out of scope for M2-2** (do not build here): autocomplete /
+live-suggestions (PRD US-1.2's "top 5 live results" is a stretch beyond
+this ledger's MVP scope — track separately if a human wants it, don't
+drop it silently); relevance-highlighted result text; a "N products
+match" filter-count string; a price-range slider specifically (min/max
+number inputs satisfy the functional filter criterion; a slider is a
+styling choice); Somalia (`SO`) region search/filtering — stays untouched
+per the standing Somalia/Phase-2 hold, same boundary M2-1 used.
+
+**Dependencies verified:** M2-1 (`verified`, `gate-check.sh M2-1` exit 0,
+2026-08-22) already provides `getProductListing`/`getProductDetail` and
+the resolved-region pattern this item extends — confirmed by reading
+`FEATURES.md`'s M2-1 entry and `src/lib/productService.ts` directly. The
+GIN full-text infrastructure (`searchVector` columns, BEFORE
+INSERT/UPDATE triggers, GIN indexes) already exists from M0 — confirmed
+by reading `prisma/schema.prisma` and the `20260820100721_v3_init`
+migration directly, not assumed from the PRD. This item queries that
+infrastructure; it does not design or migrate it.
+
+**Architect review: not required.** This item adds new query functions
+and URL-param-driven UI on infrastructure already built and verified in
+M0/M2-1 — no new schema shape, no new state machine, no cross-cutting
+infra decision. The one possible schema touch is an additional GIN index
+on `ProductVariant.attributes` (jsonb) if the <200ms benchmark fails once
+attribute filters are combined with search — that is an index-only
+addition (same category as the `searchVector` GIN indexes M0 already
+established), which per the M2-1 precedent does not require a design
+pass. catalog-inventory-engineer may add it directly only if the
+benchmark demands it, and must re-verify no migration drift (2x `prisma
+migrate dev`) per the standing schema-change convention.
+
+**Verified:** `scripts/agents/gate-check.sh M2-2` exit 0 on 2026-08-23. All checks GREEN: build, lint, test+coverage (96.44% statements/lines, 84.95% branches, 96.29% functions, all thresholds met), dogfood entrypoint (search/filter complete user flows, browse/search/filter legs confirmed), and security sign-off STATUS: CLEAR. Both HRH-39 (Full-Text Search API) and HRH-40 (Faceted Filtering) verified.
 
 ### M2-3: M2-1 non-blocking advisories backlog (from security-reviewer, iteration 2)
 **Status:** planned · **Owner:** storefront-admin-engineer / catalog-inventory-engineer
