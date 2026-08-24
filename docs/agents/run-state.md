@@ -98,6 +98,22 @@ integration checkpoint goes red and can't be cheaply fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-24 — HRH-43 ("Real-Time Stock Validation on Add") closed as duplicate of M3-1, no dispatch
+`product-planner` was dispatched to frame HRH-43. No Linear MCP tool was
+actually available in that session (contrary to the dispatch prompt's
+expectation), so the finding is grounded entirely in the repo/PRD rather
+than a fetched Linear description — flagged explicitly, not silently
+assumed away. PRD roadmap item 1.5 (U5, `plans/Full PRD file.md:943`)
+names this exact behavior, and U12 (`:1851-1884`) confirms add-time stock
+checking is deliberately non-reserving, separate from checkout-time atomic
+reservation (M3-2). `src/lib/cartService.ts`'s `addToCart`/
+`updateCartItemQuantity` already implement it in full (read directly,
+lines 17, 65-68, 208-223, 408-453, 474-511) and it's already the
+`M3-1`/HRH-41 gate-verified checked bullet at `FEATURES.md:688`. Same
+pattern as HRH-42's earlier duplicate closure. No new ledger item created,
+no agent dispatched against HRH-43; full detail in `FEATURES.md`'s M3-1
+section note.
+
 ### 2026-08-20 — First full /hurbad-team autonomous cycle: M1-1 verified
 First real run of the orchestrator loop end to end. Chain: product-planner
 (sharpened M1-1's criteria, partitioned them against M1-2 to avoid

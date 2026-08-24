@@ -695,6 +695,29 @@ fixed as part of the F1-F5 cycle. Neither is blocking.
 
 **Verified:** `scripts/agents/gate-check.sh M3-1` exit 0 on 2026-08-23. All checks GREEN: build, lint, test+coverage (97.04% statements/lines, 82.99% branches, 98.59% functions, all thresholds met), dogfood entrypoint (add-to-cart → view → update → remove → stock-check-409 → logout-rotation complete M3 cart flow), and security sign-off STATUS: CLEAR (second pass; F1-F7 findings closed, F8/F9/F10/F11 explicitly deferred as non-blocking for M3-1 per security-reviewer decision in `docs/agents/security-signoff/M3-1.md`). HRH-41 gate passed.
 
+**Note (HRH-43 duplicate, resolved without new code):** Linear issue
+HRH-43 ("18. Real-Time Stock Validation on Add") was investigated by
+`product-planner` on 2026-08-24 (Linear MCP tools were unavailable in that
+session — this finding is grounded in the repo/PRD, not a fetched Linear
+description) and found to be fully covered by this item's already-checked
+bullet above. PRD roadmap item 1.5 (`plans/Full PRD file.md:943`, U5) names
+exactly this behavior — "Real-time stock check against `RegionalInventory`
+when adding to cart" — and U12 (`plans/Full PRD file.md:1851-1884`)
+confirms it is deliberately *not* a reservation ("Adding to cart does NOT
+reserve; reservation happens only at checkout start"). `cartService.ts`'s
+`addToCart`/`updateCartItemQuantity` implement exactly this: both compute
+`onHand - reserved - safetyBuffer` and throw `InsufficientStockError`
+(409) before any write, and neither ever touches `InventoryReservation`
+(confirmed by reading `src/lib/cartService.ts:17,65-68,208-223,408-453,
+474-511` directly). Covered by 10 assertions in
+`tests/test14-cart-ui.test.ts` and by M3-1's gate dogfood (line above:
+`quantity: 500` against 110-available stock -> `409`). No race-condition/
+oversell gap remains under this title either — that's explicitly M3-2's
+scope (atomic `SELECT FOR UPDATE` reservation at checkout, still
+`planned`), matching U12's own on-add-vs-at-checkout split. **HRH-43
+requires no new code; treat as resolved-by-duplicate, same pattern as
+HRH-42 below.**
+
 **Note (scope conflict, flagged not silently resolved):** `cartService.ts`/`cartCookie.ts` also contain `mergeGuestCartOnLogin`, `clearCartOnLogout`, and `rotateCartSessionId` — built and unit-tested (`tests/test14-cart-ui.test.ts`). **`rotateCartSessionId` IS now wired into better-auth's `/sign-out` hook** (`src/lib/auth.ts`, added as the fix for security-reviewer M3-1 F1 — session fixation on logout, see `docs/agents/security-signoff/M3-1.md`). `mergeGuestCartOnLogin` and `clearCartOnLogout` remain **deliberately unwired** — this section's own "Explicitly out of scope" note below says guest-cart-merge-on-login is out of scope for M3-1; a future item needs an explicit human/product-planner scope call before wiring the login-side merge.
 
 **Known follow-ups from security-reviewer's second pass (non-blocking for M3-1, tracked for M3-2/M3-3):**

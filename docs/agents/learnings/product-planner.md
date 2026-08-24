@@ -153,6 +153,24 @@ migration work follows from it — flag that narrowly to platform-architect
 (schema unchanged, mechanism undecided) rather than either skipping
 review entirely or over-escalating the whole item as needing a redesign.
 
+## Dispatch prompts can claim tool access ("you likely have Linear MCP
+tools") that isn't actually granted in the session
+**Symptom:** Dispatched to look up HRH-43 in Linear "using Linear MCP
+tools," but the actual tool list available in-session was only
+Read/Edit/Grep/Glob — no Linear tool present at all, despite the prompt's
+confident phrasing.
+**Cause:** The dispatching orchestrator's prompt text describes an
+expected capability set, not a verified one; MCP tool grants are decided
+by the harness/permission layer, not by what a prompt asserts.
+**Rule going forward:** Never assume a tool exists because a dispatch
+prompt says so — check the actual tool list first. If a claimed tool
+(Linear, or any external system) is absent, don't fabricate its output or
+silently skip the check: ground the task in whatever primary sources ARE
+available (repo files, PRD, git history) and explicitly flag in the
+handoff that the claimed tool was unavailable, so a human/orchestrator
+knows the finding wasn't verified against the live source of truth it was
+meant to be checked against.
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already
