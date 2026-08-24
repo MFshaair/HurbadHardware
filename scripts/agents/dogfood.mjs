@@ -8,7 +8,11 @@
 // PLUS M2's browse -> search -> filter leg (real HTTP requests against
 // /products, added 2026-08-23 for M2-2) PLUS M3's add-to-cart -> view ->
 // update -> remove -> insufficient-stock(409) -> logout-cookie-rotation leg
-// (real HTTP requests against /api/cart/*, added 2026-08-23 for M3-1).
+// (real HTTP requests against /api/cart/*, added 2026-08-23 for M3-1) PLUS
+// M2-4's land-on-/ -> click-category-card -> search leg (real HTTP requests
+// against /, added 2026-08-24 for M2-4 — closes the gap where every leg in
+// this file previously started at /products directly, never actually
+// exercising the real homepage entry point a shopper lands on first).
 //
 // KNOWN GAP (flagged, not silently ignored): M1-2 (forgot-password/reset
 // UI) and M1-3 (profile/address management) both shipped and were marked
@@ -214,6 +218,156 @@ async function dogfoodRegisterLogin() {
     }
 
     console.log("[dogfood] PASS: register -> login via real HTTP requests");
+  } finally {
+    await cleanup();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// M2 (homepage leg, M2-4) — land on `/` -> click a real category card ->
+// arrive at `/products` pre-filtered, via real HTTP requests against a
+// booted server. Added 2026-08-24 by qa-dogfood-engineer: until this leg
+// existed, EVERY dogfood leg in this file started at `/products` directly,
+// skipping the actual entry point a real shopper lands on — dogfoodCart()
+// even fetches `/products/<slug>` directly rather than starting from `/`.
+// That's exactly the "dogfood entrypoint stops meaning anything" failure
+// mode this file's own charter warns against for a milestone (M2-4) that IS
+// a real user-facing flow (browse by category from the homepage).
+//
+// Same HTTP-only style/reasoning as dogfoodCatalogSearch() below: the
+// homepage's category cards are plain `<a href="/products?category=...">`
+// links (`src/app/page.tsx`, confirmed by reading it — a real Next.js
+// `Link`, not a JS-only click handler), so fetching the extracted href IS a
+// faithful proxy for a real click, no browser required. The search bar
+// (`src/components/SearchBar.tsx`) IS a client-side `router.push` on
+// submit, not a plain GET form, so a raw fetch can't faithfully prove that
+// exact interaction — the real click+type+submit against a live browser is
+// covered by tests/test15-homepage.test.ts's Playwright legs instead; this
+// leg proves the homepage renders the search entry point and that its
+// submit destination (`/products?q=...`) behaves correctly, matching how
+// dogfoodCatalogSearch() below already treats /products?q= (fetched
+// directly, not typed+submitted) as sufficient for its own HTTP-only style.
+// ---------------------------------------------------------------------------
+async function dogfoodHomepage() {
+  const PORT = process.env.DOGFOOD_HOMEPAGE_PORT ?? "3105";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const BOOT_TIMEOUT_MS = 60_000;
+
+  console.log("[dogfood] land on / -> click a category card -> search, via real HTTP requests...");
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  async function cleanup() {
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(BASE_URL);
+        if (res.status) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // 1. Land on / -> real 200 with a search entry point and category cards.
+    const homeRes = await fetch(BASE_URL);
+    if (homeRes.status !== 200) {
+      throw new Error(`GET / returned ${homeRes.status}, expected 200`);
+    }
+    const homeHtml = await homeRes.text();
+    if (!homeHtml.includes('role="search"')) {
+      throw new Error("/ did not render a search entry point (role=search)");
+    }
+    if (!homeHtml.includes('aria-label="Product categories"')) {
+      throw new Error("/ did not render a category-cards grid (aria-label=\"Product categories\")");
+    }
+
+    // 2. Extract a real category card's href straight out of the rendered
+    // HTML (proxy for a click, per the header note above) and follow it.
+    const hrefMatch = homeHtml.match(/href="(\/products\?category=[^"]+)"/);
+    if (!hrefMatch) {
+      throw new Error("/ rendered no category card links to click through");
+    }
+    const categoryHref = hrefMatch[1];
+    const categoryFromHref = decodeURIComponent(categoryHref.split("category=")[1]);
+
+    const categoryProduct = await db.product.findFirst({
+      where: { category: categoryFromHref, isActive: true, deletedAt: null },
+    });
+    if (!categoryProduct) {
+      throw new Error(
+        `Homepage rendered a category card for "${categoryFromHref}" but no active seeded product has that category`,
+      );
+    }
+
+    const categoryRes = await fetch(`${BASE_URL}${categoryHref}`);
+    if (categoryRes.status !== 200) {
+      throw new Error(`Following the homepage's category card link returned ${categoryRes.status}, expected 200`);
+    }
+    const categoryHtml = await categoryRes.text();
+    if (!categoryHtml.includes(categoryProduct.name)) {
+      throw new Error(
+        `Clicking through the "${categoryFromHref}" category card did not land on a /products page listing the seeded product "${categoryProduct.name}"`,
+      );
+    }
+
+    // 3. Homepage's search entry point submits to /products?q=... (real
+    // click+type covered live by tests/test15-homepage.test.ts's Playwright
+    // leg; this fetches the exact destination URL that submit produces).
+    const seededProduct = await db.product.findFirst({
+      where: { isActive: true, deletedAt: null },
+    });
+    if (!seededProduct) {
+      throw new Error("Expected at least one active seeded product to search for from the homepage");
+    }
+    const searchRes = await fetch(`${BASE_URL}/products?q=${encodeURIComponent(seededProduct.name)}`);
+    if (searchRes.status !== 200) {
+      throw new Error(`Homepage search submit destination returned ${searchRes.status}, expected 200`);
+    }
+    const searchHtml = await searchRes.text();
+    if (!searchHtml.includes(seededProduct.name)) {
+      throw new Error(
+        `Searching for the seeded product "${seededProduct.name}" from the homepage's search entry point did not surface it in /products results`,
+      );
+    }
+
+    console.log("[dogfood] PASS: land on / -> click a category card -> search");
   } finally {
     await cleanup();
   }
@@ -759,11 +913,13 @@ async function dogfoodCart() {
 }
 
 await dogfoodRegisterLogin();
+await dogfoodHomepage();
 await dogfoodCatalogSearch();
 await dogfoodCart();
 
 console.log(
-  "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2 browse/search/filter + " +
-    "M3 cart add/view/update/remove/409/logout-rotation covered; M1-2/M1-3 legs and " +
-    "M2-1 detail/variant-select leg still pending — see header comment)",
+  "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
+    "search-entry + M2-2 browse/search/filter + M3 cart add/view/update/remove/409/" +
+    "logout-rotation covered; M1-2/M1-3 legs and M2-1 detail/variant-select leg still " +
+    "pending — see header comment)",
 );

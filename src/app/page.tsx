@@ -1,103 +1,108 @@
-import Image from "next/image";
+import Link from "next/link";
+import { getProductFacets } from "@/lib/productService";
+import { InvalidRegionError, resolveRegion } from "@/lib/region";
+import { parseSearchState } from "@/lib/searchParams";
+import SearchBar from "@/components/SearchBar";
 
-export default function Home() {
+// Unlike /products (which is implicitly dynamic because it reads
+// `searchParams`), this page takes no params, so without this it would be
+// statically prerendered at build time — baking in whatever categories
+// existed at build time (and requiring a live DATABASE_URL during `next
+// build`, which this repo's build step doesn't provide). Category data
+// changes as products are added/removed, so it must be resolved per
+// request like /products is.
+export const dynamic = "force-dynamic";
+
+// Homepage (M2-4, `FEATURES.md` M2-4). Replaces the untouched
+// create-next-app scaffold with a real storefront entry point: a search
+// bar (the existing M2-2 `SearchBar`, reused as-is, submitting to
+// `/products?q=...`) plus one card per distinct category returned by
+// `getProductFacets(region).categories` (already deduped/sorted, M2-2),
+// each linking straight into the existing `/products?category=` filter.
+// No new query function, API route, or schema field — call sites only.
+
+// Static local icon set keyed by category name — content choice only, not
+// a data-model addition (PRD US-1.1 "category icons" with no
+// icon-per-category field in the schema/seed). Falls back to a generic
+// icon for any category value not in this map, so an unmapped/new
+// category never breaks rendering.
+const CATEGORY_ICONS: Record<string, string> = {
+  smartphones: "📱",
+  laptops: "💻",
+  tablets: "📟",
+  accessories: "🎧",
+  networking: "📡",
+  cctv: "🎥",
+  printers: "🖨️",
+  components: "🔧",
+};
+const DEFAULT_CATEGORY_ICON = "🛒";
+
+function categoryLabel(category: string): string {
+  return category.length > 0 ? category[0].toUpperCase() + category.slice(1) : category;
+}
+
+export default async function Home() {
+  // resolveRegion() throws InvalidRegionError on a misconfigured deployment
+  // env var — reuse the exact same try/catch pattern as
+  // src/app/products/page.tsx so this never surfaces as a raw Next.js
+  // unhandled-exception page to a real customer.
+  let region;
+  try {
+    region = resolveRegion();
+  } catch (err) {
+    if (err instanceof InvalidRegionError) {
+      return (
+        <main className="mx-auto max-w-3xl px-4 py-8">
+          <h1 className="text-xl font-semibold">Configuration error</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            This store is temporarily unavailable due to a region configuration
+            issue. Please try again later.
+          </p>
+        </main>
+      );
+    }
+    throw err;
+  }
+
+  const facets = await getProductFacets(region);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="mx-auto max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-semibold">Hurbad Hardware</h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Electronics and hardware, shipped across the region.
+      </p>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+      <div className="mt-6">
+        <SearchBar current={parseSearchState({})} />
+      </div>
+
+      <h2 className="mt-10 text-lg font-semibold">Shop by category</h2>
+      {facets.categories.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-600">
+          No categories available right now.
+        </p>
+      ) : (
+        <ul
+          className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4"
+          aria-label="Product categories"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          {facets.categories.map((category) => (
+            <li key={category}>
+              <Link
+                href={`/products?category=${encodeURIComponent(category)}`}
+                className="flex min-h-[44px] flex-col items-center justify-center gap-2 rounded border p-4 text-center hover:bg-gray-50"
+              >
+                <span aria-hidden className="text-3xl">
+                  {CATEGORY_ICONS[category] ?? DEFAULT_CATEGORY_ICON}
+                </span>
+                <span className="font-medium">{categoryLabel(category)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </main>
   );
 }

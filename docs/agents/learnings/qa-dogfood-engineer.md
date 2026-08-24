@@ -228,6 +228,69 @@ the DB for that leg's fixture prefix after a run (or several) to confirm
 zero leftovers — a script reporting PASS is not proof its own cleanup
 worked, only that its assertions passed.
 
+## Tests that mutate real seeded data need a fail-closed dev/test-DB guard, not just a `finally`-restore
+
+**Symptom:** `tests/test15-homepage.test.ts`'s zero-categories edge case
+mass-deactivated every real seeded `Product` row via an unbounded
+`updateMany`, relying solely on a `finally` block to restore state. Flagged
+by security-reviewer (F3, `docs/agents/security-signoff/M2-4.md`): (a) not
+crash-safe — a killed process (Ctrl-C, CI cancellation, OOM) never runs
+`finally`, leaving the dev DB's entire catalog deactivated; (b) no check
+that `DATABASE_URL` actually points at a dev/test database before the
+mutation — `tests/setup.ts` only fills `DATABASE_URL` if unset, so an
+ambient exported `DATABASE_URL` in the operator's shell would let the test
+mutate whatever DB that happened to point at.
+
+**Cause:** No prior test in this repo that touches real seeded data
+(`tests/test14-cart-ui.test.ts`, `scripts/test-db-scenarios.mjs`) had
+established a DB-safety-guard convention to follow — this was a genuine
+gap, not a missed existing pattern.
+
+**Rule going forward:** Any test doing an unbounded/broad mutation
+(`updateMany`, `deleteMany` without a narrow fixture-only `where`) against
+real seeded data must call a guard FIRST that throws (refuses to run,
+loudly, before touching the DB) unless the resolved `DATABASE_URL` looks
+like a local dev/test database (host `localhost`/`127.0.0.1`, db name
+matching this repo's own `_dev`/`_test` naming convention — see
+`.env.development`'s committed `hurbadhardware_dev`) AND
+`NODE_ENV !== "production"`. Prove the guard is real, not theater, by
+temporarily pointing `DATABASE_URL` at a non-matching name (e.g.
+`hurbadhardware_prod`) and confirming the test refuses to run with a clear
+error BEFORE any connection/mutation is attempted — this is fast (no real
+DB round-trip needed if the guard runs first) and should be standard
+practice for every such guard added. Separately, for crash-safety (the
+`finally`-only half of this class of bug): register `SIGINT`/`SIGTERM`
+handlers around the mutation window that attempt the same restore before
+exiting, and remove them again in `finally` — this is a real, provable
+mitigation (verified via the same "does the guard actually change
+behavior" discipline) but is NOT airtight (`SIGKILL`/OOM still can't be
+caught by any in-process handler); say so explicitly rather than implying
+full crash-safety.
+
+## `scripts/agents/dogfood.mjs` legs can silently skip the real entry point even while individually passing
+
+**Symptom:** Every leg in `dogfood.mjs` (`dogfoodCatalogSearch`,
+`dogfoodCart`) started at `/products` or `/products/<slug>` directly —
+none of them ever actually hit `/`, even though M2-4 shipped a real
+homepage that's the actual first page a shopper lands on. All legs passed
+green throughout, so nothing about the script's own output would have
+surfaced this gap without deliberately re-reading the whole file's flow
+against "what does a real shopper actually click first."
+
+**Cause:** Each milestone's dogfood leg was added in isolation, scoped to
+that milestone's own new routes/APIs, without re-checking whether an
+earlier leg's starting point (`/products`) had quietly become stale once an
+earlier-in-the-journey page (`/`) shipped later.
+
+**Rule going forward:** When dispatched for a QA/dogfood task on any
+ledger item that is a real user-facing flow, explicitly check whether
+`dogfood.mjs`'s existing legs still start from the actual real entry point
+for that flow (not just "does a leg exist that touches the new code") —
+grep for the route the new page/component lives at and confirm at least
+one leg's very first `fetch` hits it, not a downstream page reached only by
+already knowing its URL. Add a new leg starting from `/` rather than
+patching an existing downstream leg to reach backwards into it.
+
 ## Existing pre-M0 vitest failures were environment, not implementation bugs
 
 **Context (not yet a lesson):** `tests/test4-stripe.test.ts` and

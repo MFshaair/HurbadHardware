@@ -676,7 +676,7 @@ fixed as part of the F1-F5 cycle. Neither is blocking.
       and ignores the returned one). Fix the comment to match reality.
 
 ### M2-4: Homepage — category cards & search entry point
-**Status:** planned · **Owner:** storefront-admin-engineer
+**Status:** verified · **Owner:** storefront-admin-engineer
 **Linear:** could not create an issue — the workspace's free-tier issue
 limit is exceeded (`save_issue` returned `invalid_request`/"exceeded the
 free issue limit"; `sales@linear.app` upgrade needed). Tracked here in
@@ -697,18 +697,170 @@ Per PRD US-1.1 (Epic 1: Product Browsing & Search,
 US-1.2 (`plans/Full PRD file.md:1090`): "Search bar on homepage and
 product listing."
 
-- [ ] Replace `src/app/page.tsx`'s scaffold content with a real homepage:
-      category icons/cards, a search bar, and links into the already-
-      built `/products` (filtered by category) and `/products/[slug]`
-      pages.
-- [ ] No new backend query logic expected — presentation-layer work
-      consuming M2-1/M2-2's already-verified `productService.ts`/search
-      API surface. Only loop in `platform-architect` if a real gap turns
-      up (e.g. no existing category-grouping field to drive cards from —
-      confirm against `prisma/schema.prisma` before assuming one is
-      missing).
-- [ ] Mobile-first; matches existing page load budget (PRD 1.3.7,
-      <2.5s).
+**Confirmed no new backend work is needed** (checked directly, not
+assumed): `Product.category` is a plain, already-populated `String`
+column (`prisma/schema.prisma:58`, indexed at line 74) — there is no
+separate `Category` table and none is needed. `getProductFacets(region)`
+(`src/lib/productService.ts:400-449`, M2-2-verified) already returns a
+sorted, deduped `categories: string[]` derived from active products —
+this is the exact data a "category cards" homepage needs, with zero new
+query code. `/products?category=<value>` (exact match) already works via
+`searchProducts` (M2-2). The `SearchBar` component
+(`src/components/SearchBar.tsx`) is already self-contained and reusable
+as-is: it hardcodes its submit target to `/products?q=...` regardless of
+what page renders it, so it can be dropped onto the homepage unmodified
+by passing `parseSearchState({})` as its `current` prop — no new search
+component needed. There is no "category icon" data anywhere in the
+schema/seed (`Product` has no icon/image-per-category field), so "icons"
+per PRD US-1.1 means a static local icon set keyed by category name (a
+content/config choice for storefront-admin-engineer), not a data-model
+gap.
+
+- [x] Replaced `src/app/page.tsx`'s scaffold content with a real homepage
+      (`src/app/page.tsx`) that renders one card per distinct value in
+      `getProductFacets(region).categories`, each linking to
+      `/products?category=<value>` (URL-encoded via `encodeURIComponent`),
+      and reuses the existing `SearchBar` component (imported as-is,
+      `current={parseSearchState({})}`) as a visible, functional search
+      entry point that submits to `/products?q=<term>`. Zero new query
+      function, API route, or schema field — call sites only. Category
+      "icons" are a static local emoji map (`CATEGORY_ICONS`) keyed by the
+      8 real seeded category values (`smartphones`/`laptops`/`tablets`/
+      `accessories`/`networking`/`cctv`/`printers`/`components`, all
+      clean lowercase strings — no near-duplicate/data-quality problem
+      found, confirming product-planner's framing pass), with a generic
+      fallback icon for any unmapped category so an unrecognized value
+      never breaks rendering. Added `export const dynamic =
+      "force-dynamic"` (the page takes no `searchParams`, so without it
+      Next would statically prerender `/` at `next build` time — baking
+      in build-time category data and requiring a live `DATABASE_URL`
+      during build, which this repo's build step doesn't provide; caught
+      by a real `npm run build` failure, not reasoned about).
+- [x] Same region-resolution error handling as `/products`
+      (`src/app/products/page.tsx`'s `InvalidRegionError` try/catch
+      pattern, copied verbatim): a misconfigured region env var renders a
+      clear non-crashing "Configuration error" message, not an unhandled
+      exception page.
+- [x] Zero-categories edge case proven live, not reasoned about
+      (`tests/test15-homepage.test.ts`, "zero-categories edge case"
+      describe block): every real seeded active product is temporarily
+      deactivated (restored in `finally` regardless of outcome), confirmed
+      `getProductFacets(KE).categories` is genuinely `[]`, then the real
+      running `/` route is fetched and asserted `200` with "No categories
+      available right now." rendered — not a 500.
+- [x] Mobile-first: every category card and the search bar's input/button
+      use the same `min-h-[44px]` (cards additionally get
+      `flex ... items-center justify-center` so the whole card, not just
+      text, is the tap target) convention already used on `/products`.
+      Warm-run page load measured directly (not cold-start/compile time,
+      matching M2-1/M2-2's methodology): `curl -w '%{time_total}'` against
+      a warmed-up local dev server returned 31-65ms per request, well
+      under the PRD 1.3.7 <2.5s budget.
+- [x] `tests/test15-homepage.test.ts` proves the real click-through path
+      against real seeded data via a spawned `next dev` server + real
+      Playwright browser (same pattern as `tests/test12-catalog-pages.test.ts`/
+      `test13-product-search.test.ts`): (1) homepage → click a real seeded
+      category card → lands on `/products?category=<value>` with that
+      category's first real product visibly rendered; (2) homepage →
+      fill+submit a real seeded product's name in the `SearchBar` →
+      lands on `/products?q=...` with that product visibly rendered. A
+      third, HTTP-only test asserts the raw homepage HTML contains an
+      `href="/products?category=<value>"` link for every real category
+      `getProductFacets` currently returns. 4/4 tests passing.
+
+**Verified (builder self-check, not the gate):** `npm run build` clean
+(`/` now shows `ƒ` dynamic in the route table, not `○` static),
+`npm run lint` clean (0 errors; 1 pre-existing unrelated warning in
+`tests/test13-product-search.test.ts`), full `npm test` (all 4 pre-unit
+DB/server-boot scripts + `vitest run`: 14 test files / 175 passed / 2
+skipped, including the new `test15-homepage.test.ts`), and
+`npx vitest run --coverage`: 97.04% statements / 83.28% branches / 98.59%
+functions / 97.03% lines, all above the 80/60/60/80 thresholds
+(`src/app/page.tsx` added to `vitest.config.mts`'s coverage exclude list
+alongside `src/app/products/page.tsx`, same "only reachable via a spawned
+`next dev` subprocess, already integration-tested" measurement-gap
+justification — `src/lib/productService.ts`/`src/lib/region.ts`, the pure
+modules it calls, remain in-process unit-tested and NOT excluded). Not yet
+independently re-run by `production-readiness-gate` or reviewed by
+`security-reviewer` — this item stays `built, pending security review`,
+not `verified`, until that happens.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M2-4.md`,
+2026-08-24) — no blocking findings. 4 advisories tracked as non-blocking
+follow-ups (same pattern as M3-1's F8-F11):
+- **F1 (LOW):** `page.tsx`'s `CATEGORY_ICONS[category] ?? fallback` is an
+  unguarded object index — a category literally named `"constructor"` /
+  `"__proto__"` / etc. resolves to an inherited `Object.prototype` value
+  instead of the fallback, breaking the card. Not reachable today (no
+  admin product-create surface exists yet), but becomes admin-input-
+  reachable once M5 (Admin Product Management) lands. Fix before/at M5:
+  use `Object.create(null)`, a `Map`, or an `Object.hasOwn` guard.
+- **F2 (LOW, cost/availability):** `force-dynamic` runs `getProductFacets`'s
+  full 5-query fan-out (including an unbounded `productVariant.findMany`
+  selecting `attributes` for every active variant) on every anonymous
+  homepage hit, even though the page only reads `.categories`. No rate
+  limit on page routes. Track as a catalog-inventory-engineer /
+  storefront-admin-engineer follow-up: a narrow `getCategories(region)`
+  query and/or `unstable_cache`/short `revalidate` instead of full
+  `force-dynamic`.
+- **F3 (LOW, test hygiene) — FIXED 2026-08-24 by qa-dogfood-engineer:**
+  `test15-homepage.test.ts`'s zero-categories test mass-deactivates all
+  real `Product` rows via `finally`-restore — was not crash-safe (a killed
+  test process leaves the dev catalog empty) and had no dev-DB guard before
+  the `updateMany`. Fixed with `assertSafeToMutateAllProducts()`, called
+  before any DB access in that test, which throws (refusing to run) unless
+  `DATABASE_URL` resolves to `localhost`/`127.0.0.1` with a db name ending
+  `_dev`/`_test` and `NODE_ENV !== "production"` — proved this actually
+  blocks the run (not just theater) by pointing `DATABASE_URL` at
+  `hurbadhardware_prod` and confirming the test refuses to run with a clear
+  error, before the connection/mutation is even attempted. Also added
+  best-effort SIGINT/SIGTERM handlers around the mutation window that
+  attempt the same restore before exiting (mitigates, doesn't fully close,
+  the crash-safety half of F3 — SIGKILL/OOM still can't be caught).
+  Additionally, `scripts/agents/dogfood.mjs` gained a new
+  `dogfoodHomepage()` leg (land on `/` -> click a real category card ->
+  arrive pre-filtered on `/products` -> homepage search entry point's
+  destination URL) — every prior dogfood leg started at `/products`
+  directly, never exercising the actual homepage entry point; proved this
+  leg can fail by temporarily breaking the category-grid `aria-label` in
+  `page.tsx` and confirming a clear, specific dogfood failure, then
+  restored and reconfirmed green (`node scripts/agents/dogfood.mjs`,
+  `npm test`, `bash scripts/agents/local-check.sh` all pass).
+- **F4 (INFO):** `src/app/layout.tsx` still ships the `create-next-app`
+  scaffold's `<title>`/`<meta description>` ("Create Next App"/"Generated
+  by create next app") even though `/` itself is no longer the scaffold —
+  the browser tab title is stale. Cheap fix, not scoped to M2-4 but worth
+  folding into whichever item next touches `layout.tsx`.
+
+**Verified:** `scripts/agents/gate-check.sh M2-4` exit 0 on 2026-08-24. All checks GREEN: build, lint, test+coverage (97.04% statements/lines, 83.28% branches, 98.59% functions, all thresholds met), dogfood entrypoint (homepage/category-card/search-entry legs specifically verified), and security sign-off STATUS: CLEAR. New test leg in `scripts/agents/dogfood.mjs` (homepage → category card click → filtered /products listing) confirmed working alongside all prior legs (M0 baseline, M1 auth, M2-1 detail/variants, M2-2 search/filter, M3 cart).
+
+**Explicitly out of scope for M2-4** (do not build here): autocomplete/
+live-suggestions on the homepage search bar (same M2-2 boundary — PRD
+US-1.2's "top 5 live results" stretch goal is tracked separately, not
+here); a dedicated `/category/[slug]` route (cards link straight into
+the existing `/products?category=` filter, no new route); category
+*icons* beyond a static local icon set (no per-category image/icon data
+model — do not add one); Somalia (`SO`) region — stays untouched per the
+standing Somalia/Phase-2 hold used by every prior M2 item.
+
+**Architect review: not required — pure presentation-layer wiring, no
+design ambiguity.** Every piece of data and every component this item
+needs already exists and is already verified (M2-1/M2-2's
+`getProductFacets`, `SearchBar`, `/products?category=` filter,
+`resolveRegion`/`InvalidRegionError` pattern) — this item calls existing,
+tested functions/components from a new page file; it introduces no new
+schema, no new query shape, no new state machine, and no cross-cutting
+infra decision. Unlike M3-1 (a required+unique, unauthenticated schema
+column that needed a from-scratch identity mechanism), there is nothing
+here comparable in kind — `Product.category` is a plain, already-migrated
+column with no missing relation or auth gap. If `storefront-admin-engineer`
+discovers mid-build that `Product.category`'s free-text values are too
+inconsistent to render as clean cards (e.g. near-duplicate category
+strings), that is a data-quality finding to flag back to
+`product-planner`/`platform-architect`, not something to silently
+normalize in the UI layer — but nothing found during this framing pass
+suggests that's the case (`getProductFacets` already dedupes/sorts
+cleanly, consistent with M2-2's verified facet-panel behavior).
 
 ---
 

@@ -41,7 +41,6 @@ export default defineConfig({
         // catalog/cart code touches these yet). Will stop being excluded
         // the moment real storefront UI lands here (M2+).
         "src/app/layout.tsx",
-        "src/app/page.tsx",
         "src/app/globals.css",
         // These files DO carry real business/security logic (session
         // creation, the /profile auth gate, route wiring) and ARE
@@ -156,6 +155,30 @@ export default defineConfig({
         // framework-only-reachable files above; excluded here rather than
         // left showing a misleading 0% in the coverage table.
         "src/components/CartSummary.tsx",
+        // M2-4: the homepage Server Component is only reachable via
+        // tests/test15-homepage.test.ts's spawned `next dev` subprocess (+
+        // one real Playwright run for the category-card and search-bar
+        // click-through legs) — same measurement-gap justification as
+        // src/app/products/page.tsx above, not a testing gap. It calls
+        // src/lib/productService.ts's getProductFacets (already
+        // in-process unit-tested, M2-2) and src/lib/region.ts
+        // (already in-process unit-tested, M2-1) — neither of those pure
+        // modules is excluded here.
+        "src/app/page.tsx",
+        // M3-3a: the checkout page/client component are framework-coupled
+        // (Server Component reading cookies()/headers(), Client Component
+        // using useState + a real fetch to /api/addresses) and only
+        // reachable via tests/test16-checkout-ui.test.ts's spawned `next
+        // dev` subprocess (+ Playwright for the interactive address/
+        // payment-method/mobile-viewport legs) — same measurement-gap
+        // justification as src/app/cart/CartLineItems.tsx above, not a
+        // testing gap. src/lib/addressValidation.ts (already unit-tested,
+        // M1-3), src/lib/cartService.ts/cartView.ts/tax.ts (already
+        // unit-tested, M3-1), and src/lib/region.ts (already unit-tested,
+        // M2-1) are deliberately NOT re-excluded here — this item reuses
+        // them, it doesn't own them.
+        "src/app/checkout/page.tsx",
+        "src/app/checkout/CheckoutClient.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

@@ -171,6 +171,32 @@ handoff that the claimed tool was unavailable, so a human/orchestrator
 knows the finding wasn't verified against the live source of truth it was
 meant to be checked against.
 
+## Before flagging "needs architect" for a new page, check whether existing verified components are already fully reusable
+**Symptom:** M2-4 ("homepage category cards & search entry point") arrived
+with a hedge ("only loop in platform-architect if a real gap turns up").
+Left unresolved, that hedge would have forced the orchestrator to guess
+whether to dispatch platform-architect, or a builder to discover mid-task
+that nothing was actually missing.
+**Cause:** The item touches two prior verified items' surface
+(`getProductFacets` from M2-2, `SearchBar` from M2-2) — reading those
+directly (not just their FEATURES.md summary) showed `SearchBar` already
+hardcodes its own submit target (`/products?q=`) independent of which
+page renders it, and `getProductFacets` already returns the exact
+category list a "category cards" UI needs, with no per-category
+icon/image field anywhere in the schema. A component built for one page
+can be a drop-in on a second page with zero modification if it was
+already written page-target-agnostic — worth checking explicitly instead
+of assuming a new page always needs new plumbing.
+**Rule going forward:** When a new ledger item's UI overlaps functionally
+with an already-verified item's components/queries, read those
+components' actual source (not just the prose description in FEATURES.md)
+to check whether they're reusable as-is (self-contained navigation
+target, generic props) before defaulting to "needs architect" or drafting
+new component names. If fully reusable, say so explicitly and name the
+exact reuse (component + prop shape) in the acceptance criteria, and give
+an unhedged yes/no on architect review rather than leaving it as a
+builder's runtime discovery.
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already

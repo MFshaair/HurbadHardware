@@ -208,6 +208,28 @@ in the underlying Prisma query itself — not just in whichever call site
 happens to add one — so "first" means the same, deterministic thing
 everywhere it's read.
 
+## A param-less Server Component page needs `export const dynamic = "force-dynamic"` if it reads live DB state
+**Symptom (M2-4):** `src/app/page.tsx` was rewritten to fetch
+`getProductFacets(region)` (a real Prisma query) and rendered fine in
+`next dev`, but `npm run build` failed during "Generating static pages"
+with a Prisma `DATABASE_URL` validation error, even though `/products`
+(which calls the same query layer) builds cleanly.
+**Cause:** Next.js App Router statically prerenders any Server Component
+page with no dynamic API usage (no `searchParams`, no `cookies()`/
+`headers()`, etc.) at `next build` time by default. `/products` is
+implicitly opted into dynamic rendering because it destructures
+`searchParams`; a homepage with no params has nothing to force that
+opt-out, so it silently gets prerendered — which both bakes in
+build-time-stale DB data and requires a live `DATABASE_URL` during the
+build step, which this repo's build environment doesn't provide.
+**Rule going forward:** any new param-less page that reads live DB/region
+state needs an explicit `export const dynamic = "force-dynamic";` (with a
+comment explaining why, since it's not obvious from the diff alone) —
+don't rely on incidental `searchParams` usage elsewhere in the app to
+paper over this. Catch it with a real `npm run build` before handoff, not
+just `next dev`, since dev mode never prerenders and won't surface this
+class of bug.
+
 ## When dispatched into a task, check whether a parallel/prior agent already built your half before writing new code
 **Symptom (M3-1):** dispatched to build `/cart` page, `CartSummary.tsx`,
 add-to-cart wiring, and `tests/test14-cart-ui.test.ts` — but all of it
