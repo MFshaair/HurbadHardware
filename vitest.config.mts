@@ -165,20 +165,43 @@ export default defineConfig({
         // (already in-process unit-tested, M2-1) — neither of those pure
         // modules is excluded here.
         "src/app/page.tsx",
-        // M3-3a: the checkout page/client component are framework-coupled
-        // (Server Component reading cookies()/headers(), Client Component
-        // using useState + a real fetch to /api/addresses) and only
-        // reachable via tests/test16-checkout-ui.test.ts's spawned `next
-        // dev` subprocess (+ Playwright for the interactive address/
-        // payment-method/mobile-viewport legs) — same measurement-gap
-        // justification as src/app/cart/CartLineItems.tsx above, not a
-        // testing gap. src/lib/addressValidation.ts (already unit-tested,
-        // M1-3), src/lib/cartService.ts/cartView.ts/tax.ts (already
-        // unit-tested, M3-1), and src/lib/region.ts (already unit-tested,
-        // M2-1) are deliberately NOT re-excluded here — this item reuses
-        // them, it doesn't own them.
+        // M3-3a: the checkout layout/pages/client step components are
+        // framework-coupled (Server Components reading cookies()/
+        // headers(), Client Components using useState/useEffect + real
+        // fetches to /api/addresses) and only reachable via
+        // tests/test16-checkout-ui.test.ts's spawned `next dev` subprocess
+        // (+ Playwright for the interactive address/payment/review/
+        // mobile-viewport legs) — same measurement-gap justification as
+        // src/app/cart/CartLineItems.tsx above, not a testing gap.
+        // src/lib/addressValidation.ts (already unit-tested, M1-3),
+        // src/lib/cartService.ts/cartView.ts/tax.ts (already unit-tested,
+        // M3-1), and src/lib/region.ts (already unit-tested, M2-1) are
+        // deliberately NOT re-excluded here — this item reuses them, it
+        // doesn't own them. src/lib/checkoutDraft.ts is ALSO deliberately
+        // NOT excluded: it's a pure module (guards `typeof window` itself,
+        // no framework import) directly importable and unit-tested
+        // in-process in tests/test16-checkout-ui.test.ts's tier A — same
+        // "only exclude the framework-coupled file, never the pure lib it
+        // uses" rule as addressValidation.ts above.
+        //
+        // NOTE: this replaces a stale pre-existing exclude-list entry for
+        // "src/app/checkout/page.tsx" (a plain redirect, trivial, still
+        // listed below) and "src/app/checkout/CheckoutClient.tsx", which
+        // never actually existed in this repo (confirmed via `git log
+        // --all -- src/app/checkout*` finding zero commits) — leftover
+        // from an earlier, different, reverted checkout attempt. Real file
+        // list for M3-3a's actual three-route/layout architecture below.
         "src/app/checkout/page.tsx",
-        "src/app/checkout/CheckoutClient.tsx",
+        "src/app/checkout/layout.tsx",
+        "src/app/checkout/CheckoutDraftContext.tsx",
+        "src/app/checkout/checkoutCart.ts",
+        "src/app/checkout/EmptyCheckoutCart.tsx",
+        "src/app/checkout/address/page.tsx",
+        "src/app/checkout/address/AddressStep.tsx",
+        "src/app/checkout/payment/page.tsx",
+        "src/app/checkout/payment/PaymentStep.tsx",
+        "src/app/checkout/review/page.tsx",
+        "src/app/checkout/review/ReviewStep.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

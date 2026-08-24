@@ -963,9 +963,247 @@ invent it here. Also out of scope: any `InventoryReservation` creation
 - [ ] Two concurrent checkouts for the last unit: one succeeds, one returns 409 (proven by an actual concurrency test, not reasoned about)
 - [ ] Background job releases expired ACTIVE reservations every 5 minutes; a late webhook cannot confirm an expired reservation
 
+### M3-3a: Checkout address & payment-method selection UI (HRH-44)
+**Status:** verified · **Owner:** storefront-admin-engineer · **Design review: platform-architect, scoped to the cross-page checkout-selection persistence mechanism only — see note below**
+
+**Implementation note (storefront-admin-engineer, 2026-08-24):** built
+exactly against `docs/agents/arch-decisions/M3-3a-checkout-draft-state.md`
+— `CheckoutDraftProvider` Context (`src/app/checkout/CheckoutDraftContext.tsx`)
+mounted in `src/app/checkout/layout.tsx`, backed by `sessionStorage` via
+the sole accessor module `src/lib/checkoutDraft.ts` (versioned payload,
+key `hurbad_checkout_draft_v1`, 60-min TTL, hydrate-in-`useEffect` with an
+`isHydrated` flag, degrade-not-crash on storage failure). Routes:
+`src/app/checkout/{address,payment,review}/page.tsx` (Server Components,
+each independently calling `auth.api.getSession()` and reusing M3-1's
+`findActiveCart`/`toCartView` via the shared `src/app/checkout/checkoutCart.ts`
+helper — no new pricing logic) + client step components `AddressStep.tsx`/
+`PaymentStep.tsx`/`ReviewStep.tsx`. `src/app/checkout/page.tsx` is a bare
+redirect to `/checkout/address` (keeps the existing `/cart` page's
+"Proceed to Checkout" link working). All 5 checklist items below proven by
+`tests/test16-checkout-ui.test.ts` (17 tests: pure `checkoutDraft.ts`
+storage/TTL/validation tests in-process, plus a spawned-`next
+dev`+Playwright tier for the real flow) — full run: `npx vitest run
+tests/test16-checkout-ui.test.ts` → 17 passed. Full suite (`npm test`):
+192 passed / 2 skipped (the pre-existing consent-gated migration-reset
+skip), 0 failed. `npm run build`/`npm run lint` clean. Coverage 95.6%
+stmts / 83.4% branch / 98.7% funcs / 97.0% lines (thresholds 80/60/60/80
+all met); `checkoutDraft.ts` is NOT coverage-excluded (pure module,
+directly unit-tested) — only the framework-coupled route/component files
+are, per `vitest.config.mts`'s established rule (see that file's comment
+for the full list). This entry also fixed a pre-existing
+`vitest.config.mts` drift: its coverage-exclude list already named
+`src/app/checkout/page.tsx` + `src/app/checkout/CheckoutClient.tsx` before
+this item started, but `CheckoutClient.tsx` never existed in this repo's
+git history (leftover from an earlier, reverted, unrelated checkout
+attempt) — replaced with the real M3-3a file list.
+
+**Known limit / flagged gap:** ADR Decision 7 requires clearing the draft
+on logout as well as login. Login is wired (`src/app/auth/login/page.tsx`
+calls `clearCheckoutDraft()` on success). Logout is NOT wired because this
+app has no sign-out UI/call site anywhere yet (confirmed by a repo-wide
+grep — only `src/lib/auth.ts`'s better-auth hook references `/sign-out`,
+no page calls it); building a logout feature to attach this to would have
+been out-of-scope invention. The next engineer who builds a sign-out
+control MUST call `clearCheckoutDraft()` from `src/lib/checkoutDraft.ts`
+in it.
+
+**Framing note (product-planner, 2026-08-24):** Linear HRH-44 ("19.
+Checkout Address & Payment Method UI") names `app/checkout/{address,
+payment,review}/page.tsx`, `AddressForm.tsx`, `OrderSummary.tsx`. This was
+M3-3's original first bullet ("Address/payment-method UI; tax computed
+server-side by region") — split out here because it does NOT require
+M3-2 (atomic inventory reservation, still `planned`) to exist. Grounded in
+what's already built: M1-3's `Address` CRUD (`src/app/api/addresses/
+route.ts`, `src/app/api/addresses/[id]/route.ts`,
+`src/lib/addressValidation.ts`) is `verified` and its own scope note
+explicitly names "address *selection* at checkout time... that consumption
+path is M3-3's job" (`FEATURES.md` M1-3, line ~186) — this item is that
+consumption path. M3-1's cart (`useCart`, `CartSummary.tsx`,
+`src/lib/tax.ts`'s `getTaxRate`, `src/lib/cartView.ts`'s `toCartView`) is
+`verified` and `CartSummary.tsx` is explicitly documented as "reusable
+as-is by `/checkout`." `prisma/schema.prisma`'s `Order.shippingAddressId`
+is required (non-nullable `String`) — but that only constrains *creating*
+an `Order` row, which this item never does. The remaining two bullets of
+the old M3-3 (price always read from `RegionalPrice` server-side; checkout
+always reads primary DB not a replica) are properties of the real
+order-creation transaction, which cannot exist before M3-2's atomic
+reservation lands (AHD4: inventory must be reserved before payment/order
+commit) — those stay under M3-3 below, still correctly blocked.
+
+- [x] `/checkout/address` (`src/app/checkout/address/page.tsx` +
+      `AddressStep.tsx`, reusing M1-3's existing address CRUD): an
+      authenticated user sees their saved `Address` rows (server-scoped by
+      `session.user.id`, same as `/profile`) and can select one or create a
+      new one inline; a guest sees only the create-new form (no saved
+      addresses to list, no save checkbox rendered at all). `POST
+      /api/addresses` is called only when authenticated AND the "Save this
+      address for next time" checkbox is checked. Proven by
+      `tests/test16-checkout-ui.test.ts`'s "Guest address step" test
+      (asserts `Address` row count unchanged after a guest submission) and
+      "fills a new address with 'save this address' checked" test (asserts
+      exactly +1 row).
+- [x] `/checkout/payment` (`src/app/checkout/payment/page.tsx` +
+      `PaymentStep.tsx`): a payment-method **choice** UI (Stripe vs.
+      M-Pesa) recording only which provider was picked — no card field, no
+      phone capture, no `PaymentMethod`/`PaymentTransaction` row (grepped:
+      zero references to either in the new code). M-Pesa is shown only
+      when `resolveRegion() === "KE"` (this deployment's configured
+      region), proven by the "M-Pesa is only offered when the deployment
+      region is KE" test.
+- [x] `/checkout/review` (`src/app/checkout/review/page.tsx` +
+      `ReviewStep.tsx`, reusing M3-1's `CartSummary.tsx`/`toCartView` as-is
+      via `src/app/checkout/checkoutCart.ts`, no new pricing logic): shows
+      cart summary, the selected address (a `savedAddressId` is re-fetched
+      via `GET /api/addresses/[id]`, which independently re-verifies
+      session ownership — a forged id belonging to another user 404s,
+      proven by the "forged savedAddressId... is rejected" test), and the
+      selected payment method. "Place order" is explicitly inert (no
+      network call in its click handler at all) and shows a visible "not
+      yet available" message. Proven by the "'Place order' is inert" test:
+      asserts `Order`/`InventoryReservation`/`PaymentTransaction` row
+      counts are byte-for-byte unchanged before/after the click.
+- [x] The three pages' selections survive client-side navigation
+      `/checkout/address` -> `/checkout/payment` -> `/checkout/review`,
+      AND a page refresh mid-flow, via the exact mechanism decided in
+      `docs/agents/arch-decisions/M3-3a-checkout-draft-state.md`:
+      `CheckoutDraftProvider` (`src/app/checkout/CheckoutDraftContext.tsx`)
+      mounted in `src/app/checkout/layout.tsx`, persisted to/rehydrated
+      from `sessionStorage` under `hurbad_checkout_draft_v1` via the sole
+      accessor module `src/lib/checkoutDraft.ts` (mirrors
+      `src/lib/cartCookie.ts`'s discipline — no page/form touches
+      `sessionStorage` directly). No cookie, no URL params, no new table,
+      no schema change. Draft contents are treated as untrusted input
+      throughout (see the review-step ownership re-check above; no price/
+      tax/region field exists in the payload shape at all — enforced by
+      `checkoutDraft.ts`'s own shape validator, which discards anything
+      that doesn't match). Proven by the "selection survives address ->
+      payment -> review navigation AND a page refresh" test (reloads
+      mid-flow on `/checkout/payment` and again on `/checkout/review`,
+      asserting the selection is still there both times).
+- [x] Mobile-first: every interactive control is >=44x44px (verified via
+      the "44x44px at 375px width" Playwright boundingBox test, same
+      pattern as `tests/test14-cart-ui.test.ts`); all form/step controls
+      use `min-h-[44px]` consistently across `AddressStep.tsx`/
+      `PaymentStep.tsx`/`ReviewStep.tsx`/`EmptyCheckoutCart.tsx`.
+
+**QA/dogfood note (qa-dogfood-engineer, 2026-08-24):** `tests/test16-checkout-ui.test.ts`'s
+17 tests (pure `checkoutDraft.ts` tier + spawned-`next dev`+Playwright tier)
+were re-read and confirmed to genuinely prove the 5 checklist items above —
+no changes made there, none were needed. `scripts/agents/dogfood.mjs` DID
+need extending: every existing leg stopped at `/cart`, never reaching
+`/checkout` at all. Added `dogfoodCheckout()`: real register/login -> real
+"Add to Cart" -> `/checkout` (redirects to `/checkout/address`) -> fill +
+save a new address (asserts a real +1 `Address` row) -> pick Stripe on
+`/checkout/payment` -> `/checkout/review` (asserts the real, server-
+reverified address/payment are shown) -> click "Place order" (asserts the
+honest "not yet available" message AND zero `Order`/`InventoryReservation`/
+`PaymentTransaction` rows created). Unlike every prior leg in that file
+(HTTP-only), this one drives a real Playwright browser — the checkout
+draft's cross-page selection lives ONLY in the browser's own
+`sessionStorage` (no server-side mirror), so a plain `fetch` cannot reach
+the real review state the way a shopper's actual browser does. Proven this
+leg can actually fail: temporarily changed `ReviewStep.tsx`'s "not yet
+available" copy, re-ran `node scripts/agents/dogfood.mjs`, watched it fail
+with a clear, specific error (`Expected an honest "not yet available"
+message on Place order, got: Order placement is coming soon...`) at exactly
+that assertion, restored the original copy, re-ran and confirmed green
+again. Manually queried the DB after both the failing and passing runs and
+confirmed zero leftover fixture rows either time (fixture cleanup runs in a
+`finally` and is not swallowed). Full verification: `npm test` → 192
+passed / 2 skipped, 0 failed; `bash scripts/agents/local-check.sh` (build +
+lint + full test) → exit 0; `node scripts/agents/dogfood.mjs` → ALL PASS
+including the new leg. No changes made to `src/app/checkout/` application
+code or to F1–F5 from the security sign-off — those remain out of this
+dispatch's scope, tracked separately above.
+
+**Explicitly out of scope for M3-3a** (do not build here): creating any
+`Order`/`InventoryReservation`/`PaymentTransaction` row (M3-2 + M3-3
+proper); real Stripe/M-Pesa provider calls or the `PaymentMethod`
+saved-card feature (M4); server-side authoritative price/tax
+recomputation beyond what M3-1's `toCartView` already does (still M3-3
+proper, once M3-2 exists); address-region vs. cart-region mismatch
+handling beyond what M1-3 already allows (each deployment is
+single-region by construction per `src/lib/region.ts`'s `resolveRegion()`,
+so this is a pre-existing, not new, edge case — not solved here).
+
+**Design review complete (platform-architect, 2026-08-24):** the cross-page
+checkout-draft persistence mechanism is decided in
+`docs/agents/arch-decisions/M3-3a-checkout-draft-state.md` — checkout-scoped
+React Context at `src/app/checkout/layout.tsx`, backed by `sessionStorage`
+(key `hurbad_checkout_draft_v1`, versioned payload, 60-minute staleness
+discard, cleared on login and on logout). Server-side draft storage was
+rejected: it would be a shadow `Address` table for guests, defeating this
+item's own "ad-hoc guest addresses are never persisted" test, and it would
+mean touching `ShoppingCart`'s drift-sensitive `expiresAt` default. URL
+params were rejected (address PII in history/logs/`Referer`); a cookie was
+rejected (transmits PII the server has no use for until M3-3). Guards are
+client-side: a missing draft redirects to the earliest incomplete step,
+never errors. storefront-admin-engineer implements against that ADR; no
+further architectural judgment calls remain in this item. Confirmed against
+`prisma/schema.prisma`: no schema change and no new model is needed.
+
+**Dependencies verified:** M1-3 (Address CRUD) `verified` — `FEATURES.md`
+line 141. M3-1 (cart, tax, `CartSummary.tsx`) `verified` — `FEATURES.md`
+line 872. Neither requires M3-2.
+
+**Blocks:** nothing new — M3-3 proper (order creation) was already
+blocked on M3-2 independent of this split.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M3-3a.md`,
+2026-08-24) — no blocking findings; cross-user address access, guest-
+persistence discipline, XSS, the inert-button guarantee, and auth handling
+were all independently verified by reading the actual route/component
+code, not taken on the builder's report. 5 non-blocking findings tracked:
+- **F1 (LOW):** `checkoutDraft.ts` stores `region` in the draft payload
+  despite its own comment and the ADR's Decision 4 asserting it never
+  does — the ADR contradicts itself between its rules section and its
+  payload shape (Decision 3). Not exploitable today (pricing region still
+  only comes from `resolveRegion()`), but ADR Decision 3 tells M3-3 to
+  pass `newAddress` straight to `validateAddressBody`, which would make
+  the destination region client-controlled at `Address` creation time.
+  **Binding on M3-3:** whoever builds M3-3 must resolve this
+  contradiction (server-derive region rather than trusting the draft's
+  copy) before wiring real address persistence. Route to
+  storefront-admin-engineer + platform-architect.
+- **F2 (LOW):** `ReviewStep.tsx` interpolates the attacker-writable
+  `savedAddressId` unencoded into a fetch URL path — a `../`-bearing
+  value could normalize to a different same-origin endpoint (exploitation
+  presupposes a separate XSS to write the value, but defense-in-depth
+  still wants `encodeURIComponent`). Route to storefront-admin-engineer.
+- **F3 (LOW):** No submit idempotency on the "save new address" form — a
+  double-click or retry-after-error can create duplicate `Address` rows
+  with the same PII. Hygiene, not authz. Route to
+  storefront-admin-engineer.
+- **F4 (LOW, pre-existing since M1-3):** `address/page.tsx` serializes
+  full Prisma `Address` rows (including `userId`) into the RSC payload —
+  same pattern already present in `profile/page.tsx` since M1-3, not new
+  to this item, own-data-only so not currently exploitable. Noted for
+  whoever next touches either page.
+- **F5 (MEDIUM, carried forward from M3-1, NOT triggered by M3-3a but a
+  hard blocker for M3-3):** M3-1's F8 (`cartService.ts`'s
+  `findActiveCart` sessionId lookup missing `userId: null`) is still
+  open and is now also reachable via this item's `checkoutCart.ts`.
+  M3-3a itself does not trip it — the address lives entirely in
+  per-tab `sessionStorage`, never on `ShoppingCart`, confirmed by the
+  reviewer — but **F8 must be closed before M3-3 attaches a real address
+  to the cart/order**, per M3-1's original security sign-off. Route to
+  catalog-inventory-engineer; do not let M3-3 start without checking F8's
+  status first.
+**Verification note (production-readiness-gate, 2026-08-24):** `scripts/agents/gate-check.sh M3-3a` executed at 2026-08-24T10:47:17Z, exit code 0. All checks GREEN:
+- Build: `next build` compiled successfully (1951ms)
+- Lint: ESLint run clean (pre-existing warning in unrelated test file)
+- Test + coverage threshold: 192 passed / 2 skipped, coverage 95.59% stmts / 83.41% branch / 98.73% funcs / 97.03% lines (all thresholds met)
+- Dogfood entrypoint: all legs PASS including new M3-3a checkout flow (register → login → add to cart → address selection → payment-method selection → review → inert Place order)
+- Security sign-off: `docs/agents/security-signoff/M3-3a.md` STATUS: CLEAR verified
+
+
 ### M3-3: Checkout flow & authoritative pricing
 **Status:** planned · **Owner:** commerce-payments-engineer + storefront-admin-engineer
-- [ ] Address/payment-method UI; tax computed server-side by region (KE 16%, ET 15%, SO variable)
+- [ ] Real `Order`/`InventoryReservation` creation reuses the address +
+      payment-method selection from M3-3a's now-inert `/checkout/review`
+      "Place order" action, wired to M3-2's atomic reservation transaction
+      once it exists (tax already computed server-side by M3-1/M3-3a;
+      no new tax logic here)
 - [ ] Price is always read from `RegionalPrice` server-side, never trusted from the client
 - [ ] Checkout always reads inventory/price from the primary DB, never a replica
 

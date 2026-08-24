@@ -197,6 +197,33 @@ exact reuse (component + prop shape) in the acceptance criteria, and give
 an unhedged yes/no on architect review rather than leaving it as a
 builder's runtime discovery.
 
+## A bundled ledger item can hide a sub-slice that isn't actually blocked
+**Symptom:** M3-3 ("Checkout flow & authoritative pricing") was one
+`planned` item with three bullets, all implicitly gated on M3-2 (atomic
+inventory reservation, still `planned`) just because the item as a whole
+was declared blocked on it. HRH-44's Linear scope (address + payment-
+method selection UI) mapped onto only the item's first bullet.
+**Cause:** The first bullet ("Address/payment-method UI; tax computed
+server-side by region") is pure selection-state UI over already-`verified`
+surfaces (M1-3's `Address` CRUD, M3-1's cart/tax) and creates no DB row;
+the other two bullets ("price always read from `RegionalPrice` server-
+side," "checkout reads primary DB not replica") are properties of the real
+order-creation transaction, which genuinely cannot exist before M3-2 per
+AHD4 (reserve before commit). Treating the whole item as one blocked unit
+would have left real, independently-buildable-and-testable work sitting
+idle for no grounded reason.
+**Rule going forward:** When a ledger item is marked blocked on a future
+milestone item, check each of its bullets individually against what that
+future item actually supplies (a schema row? a transaction? a library
+call?) rather than trusting the item-level block label. If a bullet's
+acceptance can be phrased as "selection/validation state exists" with an
+explicitly inert terminal action (no row created) that doesn't depend on
+the blocking item, split it into its own ledger sub-item (e.g. `M3-3a`)
+with its own dependency list, and leave only the bullets that truly need
+the blocker under the original item — cite the specific schema/transaction
+dependency for each remaining bullet so a future reader doesn't have to
+re-derive why they're still blocked.
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already

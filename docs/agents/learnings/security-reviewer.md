@@ -97,3 +97,27 @@ does not prevent two concurrent unset-then-set flows from both
 committing. Confirm the criterion's intent separately from its letter,
 and note that uniqueness invariants need a DB constraint (e.g. a partial
 unique index) to actually hold.
+
+## A code comment restating an ADR rule can be false against its own file
+**Symptom (M3-3a):** `checkoutDraft.ts`'s comment asserted "no region is
+ever stored here," eleven lines above the type definition that stores
+`region` in the payload — because the ADR itself contradicts its own
+spec (Decision 4 says no region; Decision 3's payload shape includes it).
+**Rule going forward:** When a comment asserts a negative invariant
+("X is never stored/sent/logged here"), check it against the actual
+type/code in that same file, not just against the ADR's prose summary —
+and check the ADR's own rules section against its own payload/shape
+section, since the two can silently disagree with each other.
+
+## Untrusted client-storage values interpolated into relative URL paths
+**Symptom (M3-3a):** A module correctly declared its contents
+attacker-writable (sessionStorage, devtools-editable) and still handed
+one value straight into a template-literal fetch path
+(`` `/api/addresses/${savedAddressId}` ``) with no encoding. A
+`../`-bearing value normalizes to a different same-origin endpoint.
+**Rule going forward:** Grep every consumer of a declared-untrusted
+client-side store for template-literal URL construction and require
+`encodeURIComponent` around the untrusted segment, even when actual
+exploitation would presuppose a separate XSS to write the malicious
+value in the first place — defense in depth, not "unreachable so skip
+it."

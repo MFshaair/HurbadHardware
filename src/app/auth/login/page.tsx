@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { clearCheckoutDraft } from "@/lib/checkoutDraft";
 
 // Real login form (M1-2). Calls better-auth's sign-in endpoint directly.
 //
@@ -43,6 +44,15 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
+
+      // ADR M3-3a Decision 7: the set of selectable saved addresses
+      // changes from "none" to this user's own rows on login, so any
+      // carried-over checkout draft (guest ad-hoc address, savedAddressId
+      // scoped to a different session) is at best stale — clear it rather
+      // than risk showing/using it. checkoutDraft.ts is the sole
+      // sessionStorage accessor; this page calls it directly (not through
+      // CheckoutDraftProvider, which isn't mounted outside /checkout).
+      clearCheckoutDraft();
 
       router.push("/profile");
     } catch {

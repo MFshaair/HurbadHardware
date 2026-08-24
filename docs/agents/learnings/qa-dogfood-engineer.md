@@ -291,6 +291,41 @@ one leg's very first `fetch` hits it, not a downstream page reached only by
 already knowing its URL. Add a new leg starting from `/` rather than
 patching an existing downstream leg to reach backwards into it.
 
+## `dogfood.mjs`'s HTTP-only convention breaks down for client-only (sessionStorage/localStorage) state — use a real Playwright browser there, not a fetch proxy
+
+**Symptom:** Extending `dogfood.mjs` for M3-3a's checkout address/payment/
+review selection flow, the file's established pattern (every prior leg is a
+plain `fetch` standing in for a "click," justified by reading the
+component to confirm the click IS just that one HTTP request) did not
+apply: the checkout draft's cross-page selection
+(`src/lib/checkoutDraft.ts`, `docs/agents/arch-decisions/
+M3-3a-checkout-draft-state.md`) lives ONLY in the browser's own
+`sessionStorage`, written/read by a client-side React Context after
+hydration — there is no server-side session, cookie, or query-param mirror
+of it at all. A plain `fetch(BASE_URL + "/checkout/review")` has no
+sessionStorage to read from and would only ever see the pre-selection
+empty/redirect state, never the real review page a shopper actually lands
+on.
+
+**Cause:** The HTTP-only convention's own justification (`dogfoodCatalogSearch`'s
+header comment: "all search/filter state lives in the URL... so a plain
+fetch is a faithful proxy") is a claim about THAT feature's specific state
+model, not a blanket rule — it doesn't transfer to any feature whose state
+model is deliberately client-storage-only instead of URL/cookie-driven.
+
+**Rule going forward:** Before adding a new `dogfood.mjs` leg, check where
+the interaction's state actually lives (grep the relevant page/component,
+or check its arch-decision doc) before assuming a `fetch` can proxy a
+"click": if state is server-mirrored (URL params, cookies, DB), a raw HTTP
+request is a faithful, cheap proxy per this file's established style; if
+state is genuinely client-only (`sessionStorage`/`localStorage`/in-memory
+React state with no server mirror), only a real browser (Playwright,
+`chromium.launch()`, already a repo dependency) can faithfully reach the
+real end state — don't force the HTTP-only style there just for
+consistency with the rest of the file; document the deviation inline (see
+`dogfoodCheckout()`'s header comment) so a future reader isn't confused by
+the inconsistency.
+
 ## Existing pre-M0 vitest failures were environment, not implementation bugs
 
 **Context (not yet a lesson):** `tests/test4-stripe.test.ts` and

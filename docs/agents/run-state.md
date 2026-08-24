@@ -118,6 +118,40 @@ integration checkpoint goes red and can't be cheaply fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-24 — HRH-44 ("Checkout Address & Payment Method UI") split out as new M3-3a, ahead of M3-2
+`product-planner` was dispatched, properly scoped this time (only
+`FEATURES.md`/`run-state.md` touched — no `src/`/`tests/` writes, per the
+dispatch's explicit guardrail following the earlier M2-4-session incident
+below in OPEN RISKS), to frame HRH-44. Question asked: can address +
+payment-method selection UI be meaningfully built/tested before M3-2
+(atomic inventory reservation) exists? **Decision: yes**, scoped narrowly
+as "selection state exists and is valid" with an explicitly inert submit
+(no `Order`/`InventoryReservation`/`PaymentTransaction` row created) until
+M3-2 lands. Grounded in: M1-3's `Address` CRUD is `verified` and its own
+scope note already names checkout-time address selection as a future
+consumer, not a redo; M3-1's cart/tax/`CartSummary.tsx` is `verified` and
+documented reusable by `/checkout` as-is; `Order.shippingAddressId`
+(`prisma/schema.prisma:209`) is required but only constrains *creating* an
+`Order`, which this item never does. Real order/reservation creation (the
+rest of the old M3-3) stays correctly blocked on M3-2 (AHD4: reserve
+before commit).
+
+Added `M3-3a` to `FEATURES.md`'s M3 section, between M3-2 and M3-3, moving
+the address/payment-UI bullet out of M3-3's three original bullets
+(renamed M3-3's remaining bullets to make clear it now depends on M3-3a's
+inert review-page action rather than duplicating it). One real open design
+question flagged, not silently resolved: the three checkout pages
+(`app/checkout/{address,payment,review}/page.tsx`) are separate Next.js
+routes, so plain React state won't survive navigation between them and no
+existing cross-page "draft" mechanism exists in this repo — `platform-
+architect` review is required, narrowly scoped to naming that persistence
+mechanism only (same precedent as M3-1's guest-cart-cookie call), not a
+full redesign.
+
+**Not done, deliberately, per dispatch guardrail:** no code written, no
+`src/`/`tests/` files touched — verified via this session's own edit
+history (only `FEATURES.md` and this file were opened for writing).
+
 ### 2026-08-24 — HRH-43 ("Real-Time Stock Validation on Add") closed as duplicate of M3-1, no dispatch
 `product-planner` was dispatched to frame HRH-43. No Linear MCP tool was
 actually available in that session (contrary to the dispatch prompt's

@@ -12,7 +12,11 @@
 // M2-4's land-on-/ -> click-category-card -> search leg (real HTTP requests
 // against /, added 2026-08-24 for M2-4 — closes the gap where every leg in
 // this file previously started at /products directly, never actually
-// exercising the real homepage entry point a shopper lands on first).
+// exercising the real homepage entry point a shopper lands on first) PLUS
+// M3-3a's add-to-cart -> checkout address -> payment -> review -> inert
+// Place-order leg (REAL BROWSER via Playwright, not HTTP-only like the legs
+// above — added 2026-08-24 for M3-3a; see dogfoodCheckout()'s own header
+// comment for why this leg breaks from the file's usual HTTP-only style).
 //
 // KNOWN GAP (flagged, not silently ignored): M1-2 (forgot-password/reset
 // UI) and M1-3 (profile/address management) both shipped and were marked
@@ -53,11 +57,20 @@
 //   M5 — admin mark-shipped -> email queued -> customer sees status update
 //   M6 — PRD "Customer Journey 1" end to end (browse/search/cart/checkout/
 //        M-Pesa/confirmation/admin-ship), run against a fresh seeded DB
+//
+// M3-3a NOTE: the "checkout -> reservation created" half of the M3 bullet
+// above is NOT yet coverable — real order/reservation creation is M3-2/
+// M3-3 proper, still `planned`. dogfoodCheckout() below covers exactly what
+// M3-3a actually shipped: the address/payment/review SELECTION UI, ending at
+// an honest "not yet available" state on Place order with ZERO Order/
+// InventoryReservation/PaymentTransaction rows created — this leg must be
+// revisited (extended past Place order, not replaced) once M3-2/M3-3 land.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
+import { chromium } from "playwright";
 
 // This script runs as a plain `node` invocation (not through vitest, which
 // has its own env-loading setup file — see M0-5), so it must load
@@ -912,14 +925,284 @@ async function dogfoodCart() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// M3-3a — add to cart -> /checkout/address (select/save address) ->
+// /checkout/payment (pick provider) -> /checkout/review (real address +
+// payment shown, server-reverified) -> click "Place order" -> honest
+// "not yet available" state, with ZERO Order/InventoryReservation/
+// PaymentTransaction rows created.
+//
+// UNLIKE every other leg in this file, this one drives a REAL BROWSER
+// (Playwright), not a plain fetch. Every prior leg's "click" was faithfully
+// proxied by a raw HTTP request because the underlying interaction was
+// either a plain <a href> link (dogfoodHomepage) or a client handler that
+// does nothing but fire one fetch (dogfoodCart's Add to Cart). Checkout's
+// cross-page selection persistence is fundamentally different: per
+// docs/agents/arch-decisions/M3-3a-checkout-draft-state.md, the selected
+// address/payment provider lives ONLY in the browser's own
+// `sessionStorage` (key `hurbad_checkout_draft_v1`), written and read by a
+// React Context (`CheckoutDraftContext.tsx`) that runs client-side after
+// hydration — there is no server-side session/cookie/query-param mirror of
+// it at all. A plain fetch of `/checkout/review` has no sessionStorage to
+// read from, so it cannot reach the real review state the way a shopper's
+// actual browser does; the only faithful proxy is an actual browser
+// executing the actual client JS, same reasoning tests/test16-checkout-ui
+// .test.ts's tier B already uses. Matches this file's charter: prefer real
+// HTTP where a raw request is a faithful proxy, but don't force one where
+// the real interaction genuinely requires a browser.
+// ---------------------------------------------------------------------------
+async function dogfoodCheckout() {
+  const PORT = process.env.DOGFOOD_CHECKOUT_PORT ?? "3107";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const AUTH_ORIGIN = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? BASE_URL;
+  const BOOT_TIMEOUT_MS = 60_000;
+
+  console.log(
+    "[dogfood] add to cart -> checkout address -> payment -> review -> inert Place order, via a real browser...",
+  );
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  const uniq = Date.now();
+  const email = `dogfood-m3-3a-${uniq}@example.test`;
+  const password = "correct-horse-battery-staple-dogfood-3-3a";
+  let productId;
+  let browser;
+
+  async function cleanup() {
+    try {
+      // Same FK-ordering discipline as dogfoodCart()'s cleanup (learned the
+      // hard way there — see docs/agents/learnings/qa-dogfood-engineer.md):
+      // delete the user's cart/addresses BEFORE the product/variant they
+      // reference, and never swallow a real deletion failure.
+      const user = await db.user.findUnique({ where: { email } });
+      if (user) {
+        await db.address.deleteMany({ where: { userId: user.id } });
+        await db.shoppingCart.deleteMany({ where: { userId: user.id } });
+        await db.session.deleteMany({ where: { userId: user.id } });
+        await db.account.deleteMany({ where: { userId: user.id } });
+        await db.user.delete({ where: { id: user.id } });
+      }
+      if (productId) {
+        await db.product.delete({ where: { id: productId } });
+      }
+    } catch (err) {
+      console.error(`[dogfood] WARN: fixture cleanup failed: ${err.message}`);
+      throw err;
+    }
+    if (browser) await browser.close();
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    const product = await db.product.create({
+      data: {
+        slug: `dogfood-m3-3a-checkout-${uniq}`,
+        name: `Dogfood M3-3a Checkout Fixture ${uniq}`,
+        category: "test",
+        brand: "DogfoodBrand",
+        images: ["https://example.com/img.png"],
+        specs: {},
+      },
+    });
+    productId = product.id;
+    const variant = await db.productVariant.create({
+      data: {
+        productId,
+        sku: `DOGFOOD-M3-3A-SKU-${uniq}`,
+        name: "Dogfood M3-3a Fixture Variant",
+        attributes: { Color: "Black" },
+        images: [],
+      },
+    });
+    await db.regionalPrice.create({
+      data: { variantId: variant.id, region: "KE", price: "500.00", currency: "KES" },
+    });
+    await db.regionalInventory.create({
+      data: { variantId: variant.id, region: "KE", onHand: 10, reserved: 0, safetyBuffer: 0 },
+    });
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // Real register + login (same as dogfoodRegisterLogin(), independent
+    // fixture user) so this leg has a real authenticated saved-address path.
+    const signUpRes = await fetch(`${BASE_URL}/api/auth/sign-up/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email, password, name: "Dogfood M3-3a User" }),
+    });
+    if (signUpRes.status !== 200) {
+      throw new Error(`sign-up returned ${signUpRes.status}, expected 200`);
+    }
+    const signInRes = await fetch(`${BASE_URL}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email, password }),
+    });
+    if (signInRes.status !== 200) {
+      throw new Error(`sign-in returned ${signInRes.status}, expected 200`);
+    }
+    const authCookieHeader = signInRes.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0].trim())
+      .join("; ");
+
+    // Real "click Add to Cart" (POST /api/cart/add — same faithful-proxy
+    // reasoning as dogfoodCart()).
+    const addRes = await fetch(`${BASE_URL}/api/cart/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookieHeader },
+      body: JSON.stringify({ variantId: variant.id, quantity: 1 }),
+    });
+    if (addRes.status !== 200) {
+      throw new Error(`POST /api/cart/add returned ${addRes.status}, expected 200`);
+    }
+    const cartCookie = addRes.headers.getSetCookie().find((c) => c.startsWith("hurbad_cart="));
+    const fullCookieHeader = cartCookie
+      ? `${authCookieHeader}; ${cartCookie.split(";")[0]}`
+      : authCookieHeader;
+
+    browser = await chromium.launch();
+    const page = await browser.newPage();
+    await page.context().addCookies(
+      fullCookieHeader
+        .split("; ")
+        .filter(Boolean)
+        .map((pair) => {
+          const [n, ...r] = pair.split("=");
+          return { name: n, value: r.join("="), url: BASE_URL };
+        }),
+    );
+
+    const ordersBefore = await db.order.count();
+    const reservationsBefore = await db.inventoryReservation.count();
+    const transactionsBefore = await db.paymentTransaction.count();
+    const addressesBefore = await db.address.count();
+
+    // 1. /checkout redirects to /checkout/address; fill + save a new
+    // address; POST /api/addresses actually persists it (real click, real
+    // browser, real DB row — not a fetch proxy, since the "save" checkbox
+    // + submit is a client interaction gated on the checked box).
+    await page.goto(`${BASE_URL}/checkout`, { waitUntil: "networkidle" });
+    if (!page.url().includes("/checkout/address")) {
+      throw new Error(`/checkout did not redirect to /checkout/address (landed on ${page.url()})`);
+    }
+    await page.fill("#co-fullName", "Dogfood Checkout Buyer");
+    await page.fill("#co-phone", "0700000001");
+    await page.fill("#co-city", "Nairobi");
+    await page.fill("#co-postalCode", "00100");
+    await page.fill("#co-street", "Dogfood Avenue");
+    await page.locator('[data-testid="save-address-checkbox"]').check();
+    await page.locator('[data-testid="address-continue"]').click();
+    await page.waitForURL(/\/checkout\/payment/, { timeout: 10_000 });
+
+    const addressesAfter = await db.address.count();
+    if (addressesAfter !== addressesBefore + 1) {
+      throw new Error(
+        `Expected exactly +1 Address row after checking "save address" and continuing, got ${addressesBefore} -> ${addressesAfter}`,
+      );
+    }
+
+    // 2. Pick Stripe on /checkout/payment -> continue to /checkout/review.
+    if ((await page.locator('[data-testid="payment-option-stripe"]').count()) !== 1) {
+      throw new Error('/checkout/payment did not render a Stripe option');
+    }
+    await page.locator('[data-testid="payment-option-stripe"]').click();
+    await page.locator('[data-testid="payment-continue"]').click();
+    await page.waitForURL(/\/checkout\/review/, { timeout: 10_000 });
+
+    // 3. Review shows the real (server-reverified) address + payment
+    // choice — sessionStorage-driven selection actually resolved.
+    await page.waitForSelector('[data-testid="review-address"] p.font-medium', { timeout: 10_000 });
+    const addressText = await page.locator('[data-testid="review-address"]').textContent();
+    if (!addressText || !addressText.includes("Dogfood Checkout Buyer")) {
+      throw new Error(`/checkout/review did not show the selected address. Got: ${addressText}`);
+    }
+    const paymentText = await page.locator('[data-testid="review-payment"]').textContent();
+    if (!paymentText || !paymentText.includes("Stripe")) {
+      throw new Error(`/checkout/review did not show the selected payment provider. Got: ${paymentText}`);
+    }
+
+    // 4. Click "Place order" -> honest "not yet available" message, and
+    // ZERO Order/InventoryReservation/PaymentTransaction rows created —
+    // this is the actual money-path invariant this leg exists to guard:
+    // an inert checkout button must never silently create real records.
+    await page.locator('[data-testid="place-order"]').click();
+    await page.waitForSelector('[data-testid="place-order-not-available"]', { timeout: 5_000 });
+    const message = await page.locator('[data-testid="place-order-not-available"]').textContent();
+    if (!message || !/not yet available/i.test(message)) {
+      throw new Error(`Expected an honest "not yet available" message on Place order, got: ${message}`);
+    }
+
+    const ordersAfter = await db.order.count();
+    const reservationsAfter = await db.inventoryReservation.count();
+    const transactionsAfter = await db.paymentTransaction.count();
+    if (ordersAfter !== ordersBefore || reservationsAfter !== reservationsBefore || transactionsAfter !== transactionsBefore) {
+      throw new Error(
+        `Place order created real rows despite being inert: Order ${ordersBefore}->${ordersAfter}, ` +
+          `InventoryReservation ${reservationsBefore}->${reservationsAfter}, PaymentTransaction ${transactionsBefore}->${transactionsAfter}`,
+      );
+    }
+
+    await page.close();
+    console.log(
+      "[dogfood] PASS: add to cart -> checkout address -> payment -> review -> inert Place order",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
 await dogfoodRegisterLogin();
 await dogfoodHomepage();
 await dogfoodCatalogSearch();
 await dogfoodCart();
+await dogfoodCheckout();
 
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
     "search-entry + M2-2 browse/search/filter + M3 cart add/view/update/remove/409/" +
-    "logout-rotation covered; M1-2/M1-3 legs and M2-1 detail/variant-select leg still " +
-    "pending — see header comment)",
+    "logout-rotation + M3-3a checkout address/payment/review/inert-Place-order covered; " +
+    "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

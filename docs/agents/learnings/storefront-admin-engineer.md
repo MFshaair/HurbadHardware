@@ -121,6 +121,62 @@ measurement-gap-not-testing-gap justification already documented there.
 Re-run `npx vitest run --coverage` after adding new such routes, before
 assuming the existing exclude list still covers everything.
 
+## `vitest.config.mts`'s coverage-exclude list can itself go stale/wrong before a feature is even built
+**Symptom (M3-3a):** before writing any checkout code, `vitest.config.mts`
+already had exclude entries for `src/app/checkout/page.tsx` AND
+`src/app/checkout/CheckoutClient.tsx`, with a comment describing a
+single-page-with-one-client-component architecture — but `git log --all
+-- src/app/checkout* tests/test16*` showed zero commits ever touching
+either path. It was speculative leftover from an earlier, different,
+reverted checkout attempt (see this repo's OPEN RISKS note on undisclosed
+out-of-scope work getting caught/reverted before commit) that had been
+committed into the shared config file even though the actual code was
+reverted.
+**Cause:** the coverage-exclude list is edited by whichever agent
+implements a feature, but nothing enforces that a reverted implementation
+also reverts its own config-file footprint — a stale entry naming files
+that don't exist causes no visible error (minimatch just never matches
+anything), so it silently sits there looking authoritative to the next
+reader.
+**Rule going forward:** before trusting an existing `vitest.config.mts`
+exclude-list comment as a description of "the planned architecture," grep
+`git log --all` for the exact file paths it names — if they were never
+actually committed, treat the comment as untrustworthy leftover, implement
+against the current ADR/ledger instead, and replace the stale entry with
+the real file list once built (don't just add alongside it).
+
+## Draft/session-scoped client state that must "clear on logout" may have no logout UI to attach to yet
+**Symptom (M3-3a):** ADR M3-3a Decision 7 required clearing the checkout
+draft on both login and logout. Login had an obvious call site
+(`src/app/auth/login/page.tsx`'s successful sign-in branch). A repo-wide
+grep for `sign-out`/`signOut` found zero UI call sites anywhere — only
+`src/lib/auth.ts`'s better-auth `hooks.after` references the `/sign-out`
+path server-side; no page/button triggers it.
+**Rule going forward:** don't invent a logout feature just to satisfy an
+ADR's "clear on X" requirement when X's UI doesn't exist yet — that's
+scope creep into a different, unbuilt feature. Instead: (1) implement the
+side effect as an exported function on the same accessor module used
+elsewhere (here, `clearCheckoutDraft()` in `src/lib/checkoutDraft.ts`, not
+buried inside a component only reachable from the missing UI), (2) wire
+every call site that DOES already exist, (3) leave an explicit, greppable
+comment at the function definition AND a "Known limit" note in the
+ledger's item entry naming exactly which future call site must invoke it,
+so the gap is a documented TODO with a landing spot, not a silently
+dropped requirement.
+
+## Guard/redirect logic shared by multiple client steps belongs in one exported predicate, not copy-pasted per page
+**Symptom (M3-3a):** `/checkout/payment` and `/checkout/review` both need
+to answer "does the draft have a usable address selected yet?" to decide
+whether to redirect. Writing that check inline in each component risks
+the two definitions silently drifting (e.g. one checks `savedAddressId`
+truthiness, the other checks `addressMode !== null`).
+**Rule going forward:** for any guard condition read by more than one
+route/component off the same shared Context/draft shape, export a single
+named predicate from the Context module itself (here, `draftHasAddress()`
+alongside `useCheckoutDraft()` in `CheckoutDraftContext.tsx`) and have
+every consumer import it — never let two call sites reimplement "is this
+complete" against the same underlying state independently.
+
 ## Coverage-exclude the route, never the pure lib it imports — and a `Promise.all([fetch, fetch])` race test is not automatically a real race
 **Symptom (F1, M1-3 security review):** `src/lib/addressValidation.ts`
 was added to the same coverage-exclude list as the route files that call
