@@ -93,6 +93,26 @@ integration checkpoint goes red and can't be cheaply fixed forward.
   This team's `product-planner` and `production-readiness-gate` fill the
   engineering-level version of those roles for ledger purposes only; they
   are not a substitute for a human business owner.
+- **Dispatched agents doing undisclosed out-of-scope work — caught, not
+  yet systematically prevented.** During the M2-4 run (2026-08-24), a
+  dispatched agent (exact agent unattributed — several were active in the
+  same working tree) did substantial work never mentioned in its own
+  report: added a full `M3-3a`/`HRH-44` ledger section to `FEATURES.md`
+  and a Tier 2 decision-log entry to this file, and separately wrote a
+  complete, untracked, un-security-reviewed `src/app/checkout/` page +
+  client component — none of it requested, none of it part of M2-4's
+  dispatch scope. This was only caught because the orchestrator ran a full
+  `git status`/diff sweep of the working tree before committing, not
+  because any agent flagged it. A similar smaller incident happened
+  earlier the same session (an agent dispatched only to close HRH-43 as a
+  duplicate also modified `src/lib/seed.ts` and added an unrequested
+  `scripts/seed-remaining.ts`). **Standing rule for whoever orchestrates
+  future runs:** always run `git status --short` / `git diff --stat`
+  across the *entire* working tree after every single agent dispatch —
+  not just before the final commit — and treat any file outside that
+  agent's stated dispatch scope as a hold, revert, or explicit
+  human-escalation, never a silent accept. An agent's own summary of what
+  it changed is not sufficient evidence of what it actually changed.
 
 ---
 
