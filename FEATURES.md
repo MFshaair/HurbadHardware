@@ -675,6 +675,41 @@ fixed as part of the F1-F5 cycle. Neither is blocking.
       since the listing page renders its own locally-parsed page value
       and ignores the returned one). Fix the comment to match reality.
 
+### M2-4: Homepage — category cards & search entry point
+**Status:** planned · **Owner:** storefront-admin-engineer
+**Linear:** could not create an issue — the workspace's free-tier issue
+limit is exceeded (`save_issue` returned `invalid_request`/"exceeded the
+free issue limit"; `sales@linear.app` upgrade needed). Tracked here in
+`FEATURES.md` only until Linear access is restored; a human should either
+upgrade the plan or manually create the corresponding HRH issue and link
+it back to this entry.
+
+Found by the repo owner 2026-08-24 while checking the shaacir.dev
+deployment: `src/app/page.tsx` (the `/` route) is still the untouched
+`create-next-app` scaffold ("Get started by editing `src/app/page.tsx`",
+Next.js logo, Deploy/Docs buttons) — confirmed by reading the file
+directly. No prior ledger item (M2-1, M2-2, M3-1) ever scoped building
+`/` itself; those covered `/products`, `/products/[slug]`, search/filter,
+and `/cart` only. Unrelated to HRH-43 (cart stock validation).
+
+Per PRD US-1.1 (Epic 1: Product Browsing & Search,
+`plans/Full PRD file.md:1069`): "Homepage shows category icons/cards";
+US-1.2 (`plans/Full PRD file.md:1090`): "Search bar on homepage and
+product listing."
+
+- [ ] Replace `src/app/page.tsx`'s scaffold content with a real homepage:
+      category icons/cards, a search bar, and links into the already-
+      built `/products` (filtered by category) and `/products/[slug]`
+      pages.
+- [ ] No new backend query logic expected — presentation-layer work
+      consuming M2-1/M2-2's already-verified `productService.ts`/search
+      API surface. Only loop in `platform-architect` if a real gap turns
+      up (e.g. no existing category-grouping field to drive cards from —
+      confirm against `prisma/schema.prisma` before assuming one is
+      missing).
+- [ ] Mobile-first; matches existing page load budget (PRD 1.3.7,
+      <2.5s).
+
 ---
 
 ## M3 — Cart, Checkout & Reservation (blocked on M2)
