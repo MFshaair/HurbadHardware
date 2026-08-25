@@ -121,3 +121,34 @@ client-side store for template-literal URL construction and require
 exploitation would presuppose a separate XSS to write the malicious
 value in the first place — defense in depth, not "unreachable so skip
 it."
+
+## A timezone/cast bug fixed in the new file usually has siblings in the old one
+**Symptom (M3-2):** A builder correctly diagnosed that raw-SQL `now()`
+implicitly cast to a `timestamp without time zone` column adopts the DB
+session's timezone, and fixed every site in the new file they were
+writing (`reservationService.ts`) — while the same predicate survived
+untouched in the older file the new mechanism depends on
+(`cartService.ts:267`) and in `schema.prisma`'s own `dbgenerated()`
+default.
+**Cause:** The fix is scoped to "files I touched," but the invariant is
+global to the schema's column types.
+**Rule going forward:** When a diff fixes a SQL-semantics bug class, grep
+the *whole repo* for the pattern — including `schema.prisma`'s
+`dbgenerated()` defaults, which are raw SQL nobody thinks to grep — and
+check the sign of the skew: an offset that shortens a TTL in dev may
+lengthen it in production, turning a UX bug into a control weakening.
+
+## Ownership checks land on the parameter that was asked about, not the one that wasn't
+**Symptom (M3-2):** A money-path function ownership-checked
+`shippingAddressId` flawlessly (because the ADR named it explicitly) while
+consuming a `cartId` three lines earlier with no ownership check at all,
+despite already having the owning `userId`/`sessionId` in hand from the
+locked row.
+**Cause:** The ADR enumerated the check for one id; a reviewer verifies
+the enumerated ones and the unenumerated sibling parameter is never asked
+about.
+**Rule going forward:** For every id-shaped parameter on a money or
+inventory function, ask independently of the ADR: who can supply this,
+and what does the function itself verify about it? Treat "the route layer
+will pass a trusted value" as an unenforced contract, not a control —
+record it as binding on whichever item builds that route.

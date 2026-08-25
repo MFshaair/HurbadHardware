@@ -118,6 +118,52 @@ integration checkpoint goes red and can't be cheaply fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-25 — M3-2 ("Atomic Inventory Reservation", HRH-45) acceptance criteria sharpened
+`product-planner` sharpened M3-2's three sparse bullets into six concrete,
+machine-checkable criteria plus an explicit hard co-requisite. Grounded in:
+`prisma/schema.prisma`'s actual `InventoryReservation`/`Order`/`OrderEvent`/
+`RegionalInventory` column shapes (read directly, not assumed — e.g.
+`Order.shippingAddressId` is required, non-nullable, confirming M3-2's
+transaction must accept an already-resolved address id rather than resolve
+one itself), and `src/lib/cartService.ts`'s existing `onHand - reserved -
+safetyBuffer` formula (`:208-209`) and `InsufficientStockError` pattern,
+which M3-2 must reuse, not reinvent.
+
+**Hard co-requisite added:** security-reviewer's M3-1 finding F8
+(`findActiveCart`'s guest-cookie branch missing `userId: null`, letting a
+leaked cart cookie read/mutate a user-owned cart) was re-flagged as still
+open and blocking by M3-3a's own review (F5). Confirmed still present by
+reading `src/lib/cartService.ts:294-299` directly (unchanged since M3-1's
+sign-off). M3-2 is the point M3-1's sign-off itself named as the deadline
+for closing it, since this item is what actually attaches guest cart
+contents to a real `Order`. Made non-optional and scoped to
+catalog-inventory-engineer (same owner as the rest of M3-2), same PR, with
+its own regression test required — not left as a hopeful "should probably
+also fix this" note.
+
+**Architect review: explicit YES**, unlike M2-4/M3-3a's UI-only items. Three
+concrete unresolved design questions named rather than left to the builder:
+(1) `SELECT FOR UPDATE` row-lock shape (raw SQL — Prisma has no declarative
+form) and lock-acquisition ordering across multi-item carts to avoid
+cross-cart deadlock; (2) the background-expiry mechanism, given Vercel has
+no long-running process for a literal "every 5 minutes" job (leading
+candidate: Vercel Cron hitting an internal secret-gated route); (3) the
+typed-error-to-409 contract a future M3-3 route handler and M4 webhook both
+need to agree on. None of these are copy-an-existing-pattern calls the way
+M3-1's guest-cookie mechanism or M3-3a's sessionStorage-draft mechanism
+were once framed.
+
+Confirmed the M3-3/M3-2 boundary already recorded in `FEATURES.md` is still
+correct (re-read M3-3's current entry): M3-2 delivers the
+reservation/order-creation transaction and the cron-job target only; wiring
+the already-inert `/checkout/review` "Place order" button, resolving the
+checkout draft into a real `Address` row, and any Stripe/M-Pesa call remain
+M3-3/M4 scope, not duplicated here.
+
+**Not done, deliberately, per this dispatch's scope guardrail:** no code
+written; only `FEATURES.md`'s M3-2 section and this file were edited (no
+`src/`/`tests/` touched, verified via this session's own edit history).
+
 ### 2026-08-24 — HRH-44 ("Checkout Address & Payment Method UI") split out as new M3-3a, ahead of M3-2
 `product-planner` was dispatched, properly scoped this time (only
 `FEATURES.md`/`run-state.md` touched — no `src/`/`tests/` writes, per the

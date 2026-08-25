@@ -326,6 +326,47 @@ consistency with the rest of the file; document the deviation inline (see
 `dogfoodCheckout()`'s header comment) so a future reader isn't confused by
 the inconsistency.
 
+## A seed-count discrepancy in a shared dev DB is not always a test-cleanup bug — check for manual/ad-hoc leftovers before blaming a committed test's `afterAll`
+
+**Symptom:** M3-2's independent `local-check.sh` seed step reported `203
+products / 403 variants` instead of the expected `200/400` — 3 extra of
+each. The natural first hypothesis (a test's fixture creation not matched by
+cleanup, or cleanup scoped too narrowly) turned out to be wrong: every
+recent test file's `afterAll` (`tests/test17-reservation.test.ts`,
+`test14-cart-ui.test.ts`, `test14-cart-api.test.ts`, `test16-checkout-ui
+.test.ts`) was correctly scoped and FK-ordered on direct read. The real
+source was 3 rows (`Product.slug = "debug-<uuid>"`, `onHand: 1`, 2 `Order`s
+each) matching the exact shape of a manual, ad-hoc reproduction of the
+last-unit-oversell race — almost certainly run directly against the shared
+dev Postgres via a throwaway `node -e`/psql session (no matching script
+anywhere in the repo, confirmed via `grep -rn "debug-"` across `tests/`,
+`scripts/`, `src/`) while manually verifying the concurrency test could fail
+before trusting it (this domain's own "prove it can fail" discipline,
+applied without the matching cleanup discipline).
+
+**Cause:** A shared, persistent dev database means ANY ad-hoc manual
+verification (a quick `node -e` reproduction, a psql session to eyeball a
+race) leaves durable rows exactly like a leaked test fixture would — there
+is no process boundary or vitest `afterAll` to catch it, because it never
+ran through vitest at all.
+
+**Rule going forward:** Before assuming a product/variant (or any seeded-
+table) count discrepancy comes from a committed test's cleanup bug: (1) read
+every recent test file's `afterAll`/cleanup logic directly first (cheap, and
+often exonerates the test suite immediately); (2) query the actual leaked
+rows directly (`slug`/`sku`/`createdAt`) and look for a pattern that does
+NOT match any committed test's fixture-tag convention (`test17-reservation-
+*`, `dogfood-m3-*`, etc.) — a mismatched or ad-hoc-looking tag (e.g. a bare
+`debug-<uuid>`) is a strong signal of a manual reproduction session, not a
+test bug; (3) `grep` the whole repo for the observed tag/prefix before
+concluding a script is the source — if nothing matches, it almost certainly
+never went through a committed script at all. When doing manual ad-hoc
+verification against the shared dev DB yourself (e.g. confirming a
+concurrency test can actually fail, per this domain's own required
+discipline), clean up those rows immediately after observing the result —
+don't rely on a vitest `afterAll` that never runs for a session that never
+went through vitest.
+
 ## Existing pre-M0 vitest failures were environment, not implementation bugs
 
 **Context (not yet a lesson):** `tests/test4-stripe.test.ts` and

@@ -63,7 +63,13 @@ export class CartItemNotFoundError extends Error {
 }
 
 export class InsufficientStockError extends Error {
-  constructor(public readonly availableForSale: number) {
+  constructor(
+    public readonly availableForSale: number,
+    // Optional — added for M3-2's reservation path so the UI can mark the
+    // offending cart/order line. Existing cart-mutation call sites (which
+    // never passed a second arg) are unaffected.
+    public readonly variantId?: string,
+  ) {
     super(`Requested quantity exceeds available stock (${availableForSale} available)`);
     this.name = "InsufficientStockError";
   }
@@ -292,8 +298,13 @@ export async function findActiveCart(input: FindActiveCartInput): Promise<CartDe
   }
 
   if (sessionId) {
+    // Security-reviewer M3-1 finding F8 (re-confirmed still open by M3-3a's
+    // review): without `userId: null` here, a leaked/copied `hurbad_cart`
+    // cookie could still resolve — and, once M3-2 exists, mutate/checkout —
+    // a cart already bound to a real user. A guest lookup by `sessionId`
+    // must NEVER return a row a real user already owns.
     const cart = await db.shoppingCart.findFirst({
-      where: { sessionId, expiresAt: { gt: now } },
+      where: { sessionId, userId: null, expiresAt: { gt: now } },
     });
     return cart ? loadCartDetail(db, cart.id) : null;
   }

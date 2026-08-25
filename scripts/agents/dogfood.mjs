@@ -65,6 +65,27 @@
 // an honest "not yet available" state on Place order with ZERO Order/
 // InventoryReservation/PaymentTransaction rows created — this leg must be
 // revisited (extended past Place order, not replaced) once M3-2/M3-3 land.
+//
+// M3-2 STATUS (checked 2026-08-25, qa-dogfood-engineer): `createReservation
+// AndOrder`/`releaseExpiredReservationsBatch`/the cron route landed
+// (src/lib/reservationService.ts, src/app/api/cron/release-expired-
+// reservations/route.ts) but per M3-2's own explicit scope note in
+// FEATURES.md, NOTHING routes to it yet — `/checkout/review`'s "Place
+// order" button (dogfoodCheckout() above) is still deliberately inert, and
+// there is no other HTTP/browser entry point a real shopper could hit that
+// reaches this code. Deliberately NOT adding a dogfood leg that calls
+// `createReservationAndOrder` directly (bypassing HTTP/browser entirely):
+// this file's whole premise is exercising a REAL USER JOURNEY, i.e. a click
+// a shopper could actually make — a bare service-function call proxies
+// nothing a user does and would just be a duplicate of
+// tests/test17-reservation.test.ts's own 22 tests (including the two real-
+// Postgres concurrency tests) under a different filename, which is exactly
+// the kind of theater this domain's charter warns against ("a test that
+// passes trivially is worse than no test"). The right fix is wiring
+// `/checkout/review`'s Place-order click to this service (M3-3), at which
+// point dogfoodCheckout() gets EXTENDED past its current inert-button
+// assertion to prove a real click creates a real Order/InventoryReservation
+// with correct totals — do not add a parallel service-level leg instead.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";

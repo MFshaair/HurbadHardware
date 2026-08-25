@@ -415,3 +415,61 @@ what this agent had built, visible via the `<system-reminder>` file-
 changed-on-disk notices), but do not assume that outcome — verify by
 re-reading the actual current file content on disk immediately before
 finalizing, not from memory of what you last wrote or read.
+
+## Raw-SQL `now()` written into/compared against a `timestamp without time zone` column silently corrupts by the session's UTC offset
+
+**Symptom (M3-2):** the very first version of the last-unit concurrency test
+for `reservationService.ts` failed in a confusing way: a freshly-created,
+15-minute-TTL `ACTIVE` `InventoryReservation` was found `EXPIRED` moments
+later by the SAME transaction's own lazy-expiry check, and a two-cart
+concurrent-checkout test on a 1-unit variant let BOTH calls succeed while
+`RegionalInventory.reserved` ended at `1`, not `2` — i.e. one order's
+reservation silently vanished (self-expired) instead of ever blocking the
+second buyer.
+
+**Cause:** every `InventoryReservation`/`RegionalInventory`
+`expiresAt`/`updatedAt` column is Prisma's default Postgres mapping for
+`DateTime` with no `@db.Timestamptz` — i.e. `timestamp(3) WITHOUT time
+zone`. Postgres's `now()` returns `timestamptz` (an absolute instant).
+Casting `timestamptz -> timestamp` (which happens implicitly whenever raw
+SQL writes `now()` into, or compares `now()` against, one of these naive
+columns) uses the CURRENT SESSION's `TimeZone` GUC to render the value —
+it does NOT normalize to UTC. This repo's local dev Postgres has session
+`TimeZone = Africa/Mogadishu` (+03), confirmed directly: `select
+now()::timestamp` returns the raw LOCAL wall-clock digits (3 hours ahead
+of the correct UTC instant), and Prisma's own driver then reads that naive
+value back and labels it with a `Z` (UTC) suffix — because a naive
+timestamp carries no timezone information to correct for. The net effect:
+a reservation's `expiresAt`, written via ORM-managed `Prisma.Decimal`-free
+JS-`Date`-based `tx.inventoryReservation.create()`, is correct (Prisma's
+client-side JS `Date` -> naive-column write path IS UTC-correct — verified
+directly, not assumed); but a raw-SQL `"updatedAt" = now()` or `"expiresAt"
+< now()` written by hand is corrupted by the full session-timezone offset,
+in this case landing ~3 hours in the future — catastrophic for a
+15-minute TTL, even though the SAME bug pattern on `cartService.ts`'s
+7-day cart TTL (`lockCart`'s `WHERE "expiresAt" > now()`) is invisible in
+practice because a few hours of skew is negligible against 7 days. Not
+fixed there (out of this item's file scope — `lockCart`'s filter is
+explicitly load-bearing and not to be touched per the M3-2 ADR) but
+flagged here for whoever next touches TTL-sensitive raw SQL in that file.
+
+**Rule going forward:** NEVER write a bare `now()` in raw SQL that writes
+to or compares against a Prisma-default (`timestamp without time zone`)
+column. Always use `(now() AT TIME ZONE 'UTC')`, which explicitly
+normalizes to naive UTC before the write/comparison, regardless of the
+session's `TimeZone` GUC — this makes the code correct independent of
+which timezone the Postgres server/session happens to be configured with
+(dev box, CI runner, and production RDS may all differ). This is invisible
+in code review (`now()` reads as obviously correct) and only surfaces as a
+real bug under a non-UTC session timezone with a short-enough TTL to
+notice — which is exactly why the two REQUIRED real-Postgres concurrency
+tests (last-unit race, reversed-lock-order) caught it immediately, while a
+purely-reasoned-about or mocked version of the same code would have shipped
+this straight to production. Confirmed the fix directly:
+`select now() AT TIME ZONE 'UTC'` under the same +03 session returns the
+correct UTC instant; re-ran the full concurrency/expiry test suite 3x after
+the fix with stable, correct results each time. If a future item adds
+`@db.Timestamptz` to any of these columns instead (a legitimate
+alternative fix), that would be a schema change requiring the
+migrate-dev-twice drift check — not attempted here since the ADR explicitly
+forbade any schema change for M3-2.

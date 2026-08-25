@@ -1,6 +1,18 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Mirrors tsconfig.json's `"@/*": ["./src/*"]` path alias. Needed so a
+  // test can import a route/module that uses `@/...` imports (this repo's
+  // own convention, e.g. `@/lib/reservationService`) directly in-process,
+  // without going through Next.js's own webpack alias resolution (i.e.
+  // without a spawned `next dev` server) — see M3-2's cron route test in
+  // tests/test17-reservation.test.ts.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     setupFiles: ["./tests/setup.ts"],
     // test6-auth.test.ts and test7-auth-ui.test.ts (M1-2) each spawn a

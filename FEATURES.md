@@ -19,7 +19,7 @@ orchestrator dispatches these items and the loop/escalation contract.
 all exit 0 on a clean working tree; first tagged known-good commit exists.
 
 ### M0-1: Rewrite Prisma schema to v3 shape
-**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer (design review: platform-architect)
+**Status:** verified (gate-check.sh M3-2 exit 0 — 2026-08-25) · **Owner:** catalog-inventory-engineer (design review: platform-architect)
 - [x] `Product`/`ProductVariant` split implemented; `CartItem`/`OrderItem` reference `variantId`
 - [x] `RegionalPrice`, `RegionalInventory` relational, one row per (variantId, region)
 - [x] `InventoryReservation` model exists (ACTIVE/CONFIRMED/RELEASED/EXPIRED, `expiresAt` TTL)
@@ -29,19 +29,19 @@ all exit 0 on a clean working tree; first tagged known-good commit exists.
 - [x] All region/status fields use Prisma enums, not raw strings; money fields are `Decimal(12,2)` (`Decimal(14,2)` for `DailySalesMetric.revenue`)
 
 ### M0-2: better-auth schema merge
-**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer
+**Status:** verified (gate-check.sh M3-2 exit 0 — 2026-08-25) · **Owner:** catalog-inventory-engineer
 - [x] `better-auth generate` run (via `@better-auth/cli`); `session`/`account`/`verification` tables merged into `prisma/schema.prisma`
 - [x] `User.passwordHash` hand-rolled field removed; `User.id` is the join key (credentials live in `Account.password`)
 - [x] `prisma migrate dev` succeeds cleanly from a reset state (local dev DB dropped/recreated directly via psql, not `prisma migrate reset` — see run-state.md)
 
 ### M0-3: Rebuild seed script for variants
-**Status:** built (gate not yet run) · **Owner:** catalog-inventory-engineer
+**Status:** verified (gate-check.sh M3-2 exit 0 — 2026-08-25) · **Owner:** catalog-inventory-engineer
 - [x] `src/lib/seed.ts` seeds 200 products, each with 2 `ProductVariant` rows (400 total)
 - [x] Each variant has `RegionalPrice` and `RegionalInventory` rows for KE/ET/SO
 - [x] Seed is idempotent — run twice, stable at 200 products / 400 variants both times
 
 ### M0-4: Update schema-touching test scripts
-**Status:** built (gate not yet run) · **Owner:** qa-dogfood-engineer
+**Status:** verified (gate-check.sh M3-2 exit 0 — 2026-08-25) · **Owner:** qa-dogfood-engineer
 - [x] `scripts/test-prisma-migrate.mjs` and `scripts/test-db-scenarios.mjs` updated for the v3 models
 - [x] `prisma migrate dev` re-run 3x against the same DB, confirmed "Already in sync" every time after the first — `test-prisma-migrate.mjs` now asserts this itself (fails if run 2 isn't a no-op)
 
@@ -957,13 +957,179 @@ wants merge-on-login later, track it as a new item — don't let a builder
 invent it here. Also out of scope: any `InventoryReservation` creation
 (M3-2 only) and the checkout flow itself (M3-3).
 
-### M3-2: Atomic inventory reservation
-**Status:** planned · **Owner:** catalog-inventory-engineer
-- [ ] `SELECT FOR UPDATE` + `Prisma.$transaction` reserves stock, creates `InventoryReservation` (15-min TTL) + `Order` (PENDING) + `OrderEvent`, atomically
-- [ ] Two concurrent checkouts for the last unit: one succeeds, one returns 409 (proven by an actual concurrency test, not reasoned about)
-- [ ] Background job releases expired ACTIVE reservations every 5 minutes; a late webhook cannot confirm an expired reservation
+### M3-2: Atomic inventory reservation (HRH-45)
+**Status:** verified (gate-check.sh M3-2 exit 0 — 2026-08-25) · **Owner:** catalog-inventory-engineer · **Design review: platform-architect, DONE — binding design is `docs/agents/arch-decisions/M3-2-inventory-reservation.md`; build against it, do not improvise**
 
-### M3-3a: Checkout address & payment-method selection UI (HRH-44)
+**Implementation note (catalog-inventory-engineer, 2026-08-25):** built exactly
+against the ADR's 13 decisions — `src/lib/reservationService.ts` (new,
+framework-free, imports `db` from `src/lib/db.ts` directly, no injectable
+client param) exports `createReservationAndOrder`, `confirmReservationsForOrder`,
+`releaseReservationsForOrder`, `releaseExpiredReservationsBatch`, and
+`reservationErrorResponse` (+ re-exports `CartNotFoundError`/
+`InsufficientStockError` from `cartService.ts` rather than redefining them, per
+Decision 11). `src/app/api/cron/release-expired-reservations/route.ts` (new)
+exports `GET`, `force-dynamic`, `CRON_SECRET`-gated via `crypto.timingSafeEqual`
+over equal-length buffers, fails closed (401) when the env var is unset.
+`vercel.json` gained the `*/5 * * * *` crons entry; `.env.example` and
+`.env.development` gained `CRON_SECRET` placeholders. All 13 checklist items
+below proven by `tests/test17-reservation.test.ts` (22 tests, all in-process
+against real local Postgres, no mocking) — full run: `npx vitest run
+tests/test17-reservation.test.ts` → 22 passed, stable across 3 repeat runs.
+Full suite (`npm test`): 214 passed / 2 skipped, 0 failed. `npm run
+build`/`npm run lint` clean (1 pre-existing unrelated warning in
+`test13-product-search.test.ts`, not touched here). `prisma migrate dev`
+re-run twice against the same DB: "Already in sync, no schema change or
+pending migration was found" both times — no migration, per the ADR's
+explicit "no schema change" boundary. `vitest.config.mts` gained a
+`resolve.alias` (`"@" -> "./src"`, mirroring `tsconfig.json`'s own path alias)
+so the cron route's `@/lib/reservationService` import is testable directly
+in-process without a spawned `next dev` server — a small, scoped config
+addition, not a new dependency.
+
+**Real bug caught and fixed during this build, not merely asserted:** this
+repo's local dev Postgres has session `TimeZone = Africa/Mogadishu` (+03), not
+UTC. Every `InventoryReservation`/`RegionalInventory` timestamp column is
+Prisma's default `timestamp(3) without time zone` mapping. A bare raw-SQL
+`now()` written into or compared against one of those columns gets implicitly
+cast from `timestamptz` to `timestamp` using the SESSION timezone — silently
+keeping the LOCAL wall-clock digits and re-labelling them as UTC on read-back.
+The first version of the concurrency test caught this directly: a
+freshly-created 15-minute-TTL `ACTIVE` reservation was immediately treated as
+already-expired by the very next lazy-expiry check in the SAME transaction
+(reproduced and confirmed via `psql`: `now()::timestamp` returns the raw local
+wall-clock reading, 3 hours ahead of the correct UTC instant, under this
+session's timezone). Fixed by using `(now() AT TIME ZONE 'UTC')` for every
+raw-SQL `now()` in `reservationService.ts` instead of a bare `now()`. This is
+a repo-wide latent risk (`cartService.ts`'s `lockCart` has the same bare
+`now()` pattern, masked there only because the cart TTL is 7 days, not 15
+minutes) — flagged, not fixed outside this item's file scope; see this
+agent's learnings file.
+
+**Known limit, as scoped by the ADR:** no `/checkout/review` wiring, no
+`Address`-row resolution from the M3-3a draft, no Stripe/M-Pesa call — all
+explicitly M3-3/M4, per the ADR's own boundary. `confirmReservationsForOrder`/
+`releaseReservationsForOrder` are the seams M4's webhook calls; not called
+from any route yet (nothing in this item is reachable by a real user).
+
+**Hard co-requisite (not optional, not deferrable to M3-3):** close security-reviewer's M3-1 finding F8, re-flagged as a still-open blocker by M3-3a's review (`docs/agents/security-signoff/M3-1.md` F8, `docs/agents/security-signoff/M3-3a.md` F5). Confirmed still present by reading `src/lib/cartService.ts:294-299` directly: `findActiveCart`'s guest-cookie (`sessionId`) branch has no `userId: null` filter, so a leaked/copied `hurbad_cart` cookie still resolves and can mutate a cart already bound to a real user. M3-2 is exactly the point M3-1's own sign-off named as the deadline ("must be closed before M3-2/M3-3 attach guest email + shipping address to the cart") — this item reads cart contents to create a real, money-bearing `Order`. Fix (add `userId: null` to that `where` clause) must ship in the same PR as the reservation/order transaction below, with a regression test proving a cookie bound to another user's cart can no longer read or mutate it.
+
+- [x] `reservationService.ts`/`orderService.ts` expose one function (e.g. `createReservationAndOrder`) that takes an already-resolved cart (via M3-1's `findActiveCart`, F8-fixed), a real, already-existing `shippingAddressId` (resolving the M3-3a draft into a concrete `Address` row is M3-3's job, not built here — this function only accepts the id and 404s/errors if it doesn't resolve to a real row), and a chosen payment provider. It does NOT read `sessionStorage`/the checkout draft itself.
+- [x] Inside one `Prisma.$transaction`, for every cart line: `SELECT ... FOR UPDATE` (raw SQL — Prisma has no declarative row-lock API) on that variant's `RegionalInventory` row for the cart's region, re-check `onHand - reserved - safetyBuffer >= quantity` (same formula `cartService.ts:208-209` already uses — reused, not reinvented) under the lock, then atomically: increment `RegionalInventory.reserved` by `quantity` (never touch `onHand` — that only decrements on payment confirmation, M4), create one `InventoryReservation` per line (`status: ACTIVE`, `expiresAt: now + 15min`), one `Order` (`paymentStatus: PENDING`, `fulfillmentStatus: PLACED` — schema defaults, `prisma/schema.prisma:214-215`), and one `OrderEvent` (`eventType: "CREATED"`). If any line fails the re-check, the whole transaction rolls back — zero partial reservations, zero orphaned Orders.
+- [x] Two concurrent checkouts against a variant with exactly 1 unit of `availableForSale` remaining: a real test that fires two concurrent calls to this function (`Promise.all`, real Postgres, real row lock — not mocked, not sequential-and-reasoned-about) and asserts exactly one resolves with a created `Order` + `ACTIVE` `InventoryReservation`, and the other throws a typed error (e.g. `InsufficientStockError`, same pattern as M3-1's cart-side error) that a route handler maps to HTTP 409.
+- [x] Background expiry is **both** mechanisms, per ADR Decisions 6/7 (decided, not builder's choice): (a) **lock-scoped lazy expiry** — inside the reservation transaction, while already holding `FOR UPDATE` on a `RegionalInventory` row, expire that row's `ACTIVE`+`expiresAt < now()` reservations before the availability re-check, so availability is never wrong at the moment of purchase; and (b) **Vercel Cron** — a `crons` entry in `vercel.json` (`*/5 * * * *`) hitting `src/app/api/cron/release-expired-reservations/route.ts`, which exports **`GET`** (Vercel Cron invokes with GET — a POST-only handler 405s on every run) with `export const dynamic = "force-dynamic"`, gated on `CRON_SECRET` compared timing-safely against Vercel's auto-sent `Authorization: Bearer` header and **failing closed when the env var is unset**; `.env.example` gains a `CRON_SECRET` placeholder. Every release, in both paths, is the compare-and-swap of ADR Decision 7 (`UPDATE ... WHERE status = 'ACTIVE'` + `rowsAffected === 1` guard, then `reserved = GREATEST(0, reserved - quantity)`) so a cron sweep and a lazy expiry racing on the same reservation decrement exactly once. The sweeper processes **one reservation per transaction** (candidates selected with `FOR UPDATE SKIP LOCKED`, `LIMIT 200`) — a single-lock transaction cannot deadlock. No new index: the existing `@@index([expiresAt])`/`@@index([status])` suffice, and a hand-authored raw-SQL index would be silently dropped by the next `migrate dev` diff.
+- [x] A reservation-confirmation guard function (the seam M4's webhook will call, not built by M4 from scratch) rejects confirming any reservation that isn't currently `ACTIVE` — proven by a test that force-sets a reservation's `expiresAt` into the past, runs the expiry job/logic, then calls the confirm guard and asserts it throws/no-ops rather than transitioning an `EXPIRED` reservation to `CONFIRMED`. This is the concrete form of "a late webhook cannot confirm an expired reservation."
+- [x] **Deterministic lock ordering, proven by test** (ADR Decisions 2/3): inventory rows are locked in **one** statement with `ORDER BY "variantId" ASC ... FOR UPDATE` (Postgres does the ordering — not a JS sort issuing N sequential locks), after the cart row lock. A three-variant/two-cart reversed-overlap test (cart A `[v1,v2,v3]`, cart B `[v3,v2,v1]`, ample stock) asserts both succeed with no deadlock error — without this test a builder can silently drop the `ORDER BY` and nothing fails. Raw SQL must use `Prisma.join()` for the `IN` list and an explicit `${region}::"Region"` cast (Prisma binds enums as `text`; `cartService.ts:258`'s `lockCart` has no enum param to copy from).
+- [x] **`reservationErrorResponse(err)`** exported with the same signature/conventions as `cartService.ts`'s `cartErrorResponse` (`{status, body}` or `null`-and-caller-rethrows), implementing ADR Decision 11's table: `InsufficientStockError` (imported and re-exported from `cartService.ts`, **not** redefined, so `instanceof` works across layers; gains an optional `variantId` ctor param), `ReservationConflictError`, `ReservationNotActiveError`, `EmptyCartError`, `PriceUnavailableError` → **409**; `CartNotFoundError`/`AddressNotFoundError` → 404 with a **generic** client message and the id-bearing detail logged server-side only (security-reviewer M3-1 F6); `InvalidPaymentProviderError` → 400; anything else → `null` → re-thrown. No 409 in this table means "retry the identical request and it will work."
+- [x] **Double-submit is idempotent, not an error** (ADR Decision 9, no schema change): the transaction locks the cart row first, the winner writes `OrderEvent {eventType:"CREATED", payload:{cartId, sessionId}}` and consumes the cart (`expiresAt = now()`, which every `cartService.ts` read already filters out); a second concurrent/repeat submit finds the consumed cart, looks up that `OrderEvent` by `payload.path(['cartId'])` and **returns the existing `Order`**. Only a consumed cart with no such event is `CartNotFoundError`. Needs a local `lockCartForOrder` **without** `lockCart`'s `expiresAt > now()` filter — do not change `lockCart`, whose filter is load-bearing for the cart mutation paths. Payment idempotency stays M4's (`PaymentTransaction.idempotencyKey`) and must not be consumed or generated here. Proven by a `Promise.all` double-submit test asserting exactly one `Order` row.
+- [x] **All money is recomputed server-side inside the transaction from the primary DB** (ADR Decisions 1/5): `RegionalPrice` for `(variantId, cart.region)` + `getTaxRate(region)` (`src/lib/tax.ts`) with `cartView.ts`'s integer-cents math — no amount, currency, tax rate or region accepted from the caller. `reservationService.ts` imports `db` from `src/lib/db.ts` (the `DATABASE_URL` writer) and **must not accept an injectable client parameter**, so no future replica client can be threaded into a price or stock read. `orderNumber` has no schema default and must be generated (`HH-<region>-<base36 time>-<6 crypto chars>`); a `P2002` on it, and `P2034` write-conflict/deadlock, are retried **once** as a whole new transaction with 25-150ms jitter, then surface as `ReservationConflictError` → 409. `shippingAddressId` is resolved with a server-side ownership check (`WHERE id = ? AND (userId = <session userId> OR userId IS NULL)`), never trusting a client-supplied user id.
+
+**Explicitly out of scope for M3-2** (do not build here): the `/checkout/review` "Place order" button's actual wiring, resolving the checkout draft (`sessionStorage`) into a real `Address` row, and any Stripe/M-Pesa call — all M3-3/M4. This item delivers the transaction/service layer M3-3 wires to, and the cron route target itself, nothing UI-facing.
+
+**Architect review: DONE (platform-architect, 2026-08-25).** All three open design questions are resolved in `docs/agents/arch-decisions/M3-2-inventory-reservation.md`: (1) row-lock shape and ordering — Decisions 2/3, single-statement `ORDER BY "variantId" ASC ... FOR UPDATE` after the cart lock, with the enum-cast and `Prisma.join` gotchas named; (2) background expiry — Decision 6, **both** lock-scoped lazy expiry (correctness) and Vercel Cron `GET` + `CRON_SECRET` (liveness), with the rejected alternatives recorded; (3) the 409 contract — Decision 11's table, which M3-3's route handler and M4's webhook both code against. Decision 8 specifies all four reservation transitions (confirm / fail / TTL expiry / late webhook after expiry). The ADR requires **no schema change and no migration** — if an implementer finds themselves writing one, stop and re-open the ADR rather than improvising.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M3-2.md`,
+2026-08-25) — no blocking findings. Both required concurrency tests
+independently verified (F8 fix confirmed genuinely enforced, not just
+present; raw SQL confirmed parameterized throughout; cron auth confirmed
+fails closed with the length-check-before-`timingSafeEqual` guard in
+place; `confirmReservationsForOrder`/`releaseReservationsForOrder`
+confirmed unreachable by any route today). 5 findings tracked, 2 of them
+**binding on M3-3, not optional**:
+- **F1 (MEDIUM, pre-existing, binding on M3-3):** `cartService.ts:267`'s
+  `lockCart` still uses bare `now()` against `"expiresAt"` (same
+  timezone-cast bug class this item fixed in `reservationService.ts`,
+  and `prisma/schema.prisma:164`'s `dbgenerated()` default has the same
+  issue). This now matters concretely: M3-2's double-submit idempotency
+  consumes a cart via `expiresAt = now()` and depends on every
+  `cartService` read correctly filtering it out afterward. On a DB
+  session behind UTC, `lockCart` could treat an already-consumed cart as
+  still live. **Must be fixed before/alongside M3-3** wires the real
+  checkout submission through `lockCart`. Route to catalog-inventory-engineer.
+- **F2 (MEDIUM-advisory, binding on M3-3):** `createReservationAndOrder`
+  locks and consumes a cart by `cartId` alone — it reads `cart.userId`/
+  `cart.sessionId` but never compares them against the caller's own
+  identity. The ADR specified ownership-checking for `shippingAddressId`
+  but was silent on `cartId` itself. Not exploitable today (the function
+  has zero route callers), but **M3-3's route handler must derive
+  `cartId` from its own `findActiveCart({userId, sessionId})` call —
+  never accept a client-supplied `cartId` directly** — and
+  `reservationService.ts` should assert ownership locally rather than
+  relying on that being an unenforced contract. Route to
+  catalog-inventory-engineer + storefront-admin-engineer/commerce-payments-engineer
+  (whoever builds M3-3's route).
+- **F3 (LOW):** the idempotent-resubmit branch returns full order money
+  detail keyed on `cartId` alone — same root cause as F2, closes with it.
+- **F4 (LOW):** `ReservationNotActiveError` returns internal
+  `reservationId`/`status` to the client (acceptable per ADR Decision 11 —
+  the user's own order state — but worth a second look once M4 exists);
+  `.env.development` commits a placeholder `CRON_SECRET` value (harmless,
+  dev-only, but should be rotated/removed once real cron testing begins).
+- **F5 (LOW):** the cron sweeper's `FOR UPDATE SKIP LOCKED` candidate
+  query runs outside a transaction, so it provides none of the
+  cross-invocation exclusion its own comment claims — harmless today
+  (the per-reservation CAS in the actual release is the real guard), but
+  the comment should be corrected so a future editor doesn't mistake it
+  for load-bearing and remove the CAS.
+
+**QA (qa-dogfood-engineer, 2026-08-25):** investigated the orchestrator's
+independent `local-check.sh` seed discrepancy (`203 products, 403 variants`
+vs. the expected `200/400`). Root cause **confirmed, and it is NOT a bug in
+any committed test's fixture cleanup**: 3 leftover `Product`/`ProductVariant`
+rows (slug `debug-<uuid>`, sku `DBG-<uuid>`, name `d`/brand `b`, `onHand: 1`
+each, each with 2 real `Order`/`OrderItem`/`InventoryReservation` rows
+attached, `createdAt` all 2026-08-25 06:08-06:09) were found directly in the
+shared dev Postgres — the shape (single-unit inventory, exactly 2 orders per
+variant) matches a manual, ad-hoc reproduction of the last-unit-oversell race
+run directly against the dev DB (outside vitest, no matching script anywhere
+in the repo — `grep -rn "debug-"` across `tests/`, `scripts/`, `src/` found
+nothing), most likely a one-off `node -e`/psql session used to manually watch
+the race before trusting `test17-reservation.test.ts`'s own concurrency test
+(this domain's own "prove it can fail" discipline) and never cleaned up
+afterward. Read `tests/test17-reservation.test.ts`,
+`tests/test14-cart-ui.test.ts`, `tests/test14-cart-api.test.ts`, and
+`tests/test16-checkout-ui.test.ts` in full — every one of their `afterAll`
+cleanups is correctly scoped and FK-ordered (Order deleted before its
+cart/address per `InventoryReservation`/`OrderItem`'s lack of `onDelete:
+Cascade` to `ProductVariant`, product deleted last with cascade to variant/
+price/inventory). Deleted the 3 leaked rows manually (FK-safe order: `Order`
+→ `ShoppingCart`/`Address` → `Product` cascade) and verified stability by
+running `npx prisma db seed` **twice in a row**: both runs report `Done. 200
+products / 400 variants upserted this run. Total in DB: 200 products, 400
+variants` — confirmed non-accumulating. Re-ran the full `scripts/agents/
+local-check.sh` (build + lint + `npm test`) after the cleanup: `214 passed |
+2 skipped`, same as the orchestrator's original run, and the DB is back to
+exactly 200 products / 400 variants post-suite (test17's own cleanup does
+not leak). **Action for future agents: never leave ad-hoc manual-reproduction
+fixture data in the shared dev DB — use a disposable script under
+`scripts/agents/` scratch invocation or clean up inline immediately after
+observing the result, the same discipline this file's own tests already
+follow.**
+
+**Dogfood (qa-dogfood-engineer, 2026-08-25): NOT extended, deliberately.**
+`scripts/agents/dogfood.mjs` was NOT given a new M3-2 leg. Reasoning (also
+recorded inline in `dogfood.mjs`'s own header comment): M3-2 is genuinely
+money/inventory-bearing, but per its own explicit out-of-scope note above,
+there is still no HTTP route or UI click that reaches
+`createReservationAndOrder` — `/checkout/review`'s "Place order" button
+(`dogfoodCheckout()`) remains deliberately inert pending M3-3. Adding a
+dogfood leg that calls `createReservationAndOrder` directly, bypassing HTTP/
+browser entirely, would not proxy any action a real shopper can take — it
+would just be `tests/test17-reservation.test.ts`'s own 22 tests (including
+its two real-Postgres concurrency tests) reimplemented under a different
+filename, exactly the "passes trivially, means nothing" failure mode this
+domain's charter warns against. Correct next step: once M3-3 wires Place-
+order to this service, EXTEND `dogfoodCheckout()` past its current
+inert-button assertion to prove a real click creates a real Order/
+InventoryReservation with correct totals, rather than adding a parallel
+service-level leg.
+**Production-readiness gate (production-readiness-gate agent, 2026-08-25):** `scripts/agents/gate-check.sh M3-2` executed once, exit code 0. All checks GREEN:
+- Build: `next build` compiled successfully in 2.4s
+- Lint: ESLint clean (1 pre-existing warning in test13)
+- Test + coverage: 214 passed, 2 skipped; statements 93.95%, branches 82.1%, functions 97.24%, lines 95.32%
+- Dogfood entrypoint: all flows GREEN (server boot → schema migrate → register/login → homepage/search/filter → cart → checkout-inert-Place-order)
+- Security sign-off: `docs/agents/security-signoff/M3-2.md` STATUS: CLEAR verified
+
+
 **Status:** verified · **Owner:** storefront-admin-engineer · **Design review: platform-architect, scoped to the cross-page checkout-selection persistence mechanism only — see note below**
 
 **Implementation note (storefront-admin-engineer, 2026-08-24):** built
