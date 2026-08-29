@@ -1959,22 +1959,375 @@ requested: temporarily delete the guest-ownership branch in
 **Verified:** `scripts/agents/gate-check.sh M4-1` exit 0 on 2026-08-29. All checks GREEN: build, lint, test+coverage (93.71% statements/lines, 82.36% branches, 96.89% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login→browse→search→checkout full flow, M3/M3-3a cart→order→201→Order/InventoryReservation/OrderEvent rows confirmed), and security sign-off STATUS: CLEAR (`docs/agents/security-signoff/M4-1.md`). F4 (coverage-exclude glob) and stranger-cookie test addressed by qa-dogfood-engineer and reconfirmed by gate.
 
 ### M4-1b: Stripe webhook handler & idempotency (HRH-48)
-**Status:** planned · **Owner:** commerce-payments-engineer
-Scope: `app/api/webhooks/stripe/route.ts` only. Split out of the original
-bundled M4-1 (2026-08-29) — depends on M4-1 existing first (needs a real
-`PaymentTransaction`/`idempotencyKey` row to reconcile against). **Not
-dispatched yet** — acceptance criteria intentionally left at the PRD's
-existing granularity (verify HMAC signature; handle `charge.succeeded`/
-`charge.failed`; idempotent on duplicate delivery via `idempotencyKey`;
-PRD U7 Test 2-6) until M4-1/HRH-47 is actually built and this item is
-picked up in its own right — no premature detail invented now that could
-drift from what M4-1 actually ships.
-- [ ] Verifies Stripe webhook HMAC signature; invalid signature → 400
-- [ ] `charge.succeeded` → `PaymentTransaction` CONFIRMED, `Order`
-  CONFIRMED, `InventoryReservation` CONFIRMED, `onHand` decremented
-- [ ] `charge.failed` → `PaymentTransaction` FAILED, reservation released
-- [ ] Duplicate webhook delivery for the same `idempotencyKey` → 200 no-op,
-  no double-confirmation
+**Status:** verified (gate-check.sh M4-1b exit 0 — 2026-08-29) · **Owner:** commerce-payments-engineer
+Scope: **`src/app/api/webhooks/stripe/route.ts`** (correcting Linear's
+literal `app/api/webhooks/stripe/route.ts` — every other route in this repo
+lives under `src/app/`, e.g. M4-1's
+`src/app/api/checkout/create-stripe-session/route.ts`; no `app/` dir exists
+at repo root), calling into the existing, `verified`
+`reservationService.ts::confirmReservationsForOrder`/
+`releaseReservationsForOrder` (M3-2) — this item wires the webhook to them,
+it does not reimplement reservation logic. M4-1 is now `verified`
+(2026-08-29), so this item is sharpened for real; superseding the prior
+PRD-granularity placeholder.
+
+**Money-taken-but-stock-gone (ADR M4-1 Known limits / ADR M3-2 Decision 8's
+late-webhook row): confirmed real by direct read, but NOT a hard blocker for
+this item — scoped around, not answered.** Read
+`reservationService.ts::confirmReservationsForOrder` directly (`:575-617`):
+when any of an order's `InventoryReservation` rows is no longer `ACTIVE`
+(TTL-expired, per the 15-min-reservation-vs-30-min-Stripe-session mismatch),
+the **whole transaction rolls back** and throws `ReservationNotActiveError`
+— `Order.paymentStatus` is never touched (stays `PENDING`), no
+`OrderEvent` is written by that function on this path. Today, calling it
+naively from a webhook would leave a customer who was genuinely charged
+with **zero durable record** that money was taken — exactly the silent
+failure this session was asked not to duck.
+
+**The scoping call:** this item detects the case, records it durably and
+honestly, and stops — it does NOT decide or build auto-refund vs.
+ops-escalation. That remediation *action* is a genuine, still-open human
+product decision (named explicitly in both ADRs) and is deferred to a
+future ledger item once a human answers it; do not invent that answer here.
+What this item DOES do safely without that answer: (a) `PaymentTransaction`
+reflects the objective fact Stripe reported (charge succeeded) — that is
+not a business judgment call, it's recording reality; (b) `Order.paymentStatus`
+is never advanced to `CONFIRMED` when stock is gone, so no customer-facing
+surface (M5, not yet built) can ever claim fulfillment succeeded; (c) a
+distinctly-named `OrderEvent` makes the conflict queryable/actionable by a
+future ops view, rather than being indistinguishable from "nothing happened
+yet." **What is explicitly NOT built here:** any Stripe refund API call, any
+customer-facing messaging about the conflict, any ops queue/dashboard UI —
+all deferred, all flagged.
+
+- [x] **HMAC verification.** New export in `src/lib/stripe.ts` (extending it,
+  not duplicating — same "check the wrapper's actual call shape before
+  assuming reuse" discipline as M4-1) wrapping `stripe.webhooks.constructEvent`
+  against `process.env.STRIPE_WEBHOOK_SECRET` and the **raw request body
+  bytes** (`await req.text()` — Next.js App Router route handlers must read
+  the raw stream for Stripe signature verification; calling `req.json()`
+  first destroys the exact byte sequence the signature was computed over
+  and verification will always fail). Missing/invalid `stripe-signature`
+  header or verification failure → 400, generic body, **zero DB writes of
+  any kind** (no `PaymentTransaction`/`OrderEvent` row, not even a failed
+  attempt log) — an unverified payload must never touch data, since it may
+  not be from Stripe at all. Implemented as `constructStripeWebhookEvent`/
+  `WebhookSignatureError` in `src/lib/stripe.ts`, called from the thin
+  `src/app/api/webhooks/stripe/route.ts` (`await request.text()` is the
+  FIRST and ONLY body read; `runtime = "nodejs"` pinned per the ADR). Proven
+  by `tests/test22-stripe-webhook.test.ts`'s Tier A: a correctly-signed
+  payload (via the real `stripe` SDK's own `generateTestHeaderString`, pure
+  local HMAC, no network call) verifies and processes; a
+  `JSON.stringify(await req.json())`-reserialized payload fails verification
+  (proves the `req.text()` ordering is load-bearing); wrong secret, tampered
+  body, missing header, and a stale (>300s) timestamp all return a
+  byte-identical `{ "error": "Invalid signature" }` 400 with the seeded
+  `PaymentTransaction` row confirmed untouched in each case.
+- [x] **Idempotency gate is a compare-and-swap on `PaymentTransaction.status`,
+  NOT `idempotencyKey`.** Correcting the PRD/Linear wording, grounded in
+  `prisma/schema.prisma:268`: `PaymentTransaction.idempotencyKey` is the key
+  *this repo sends to Stripe* on outbound session-creation calls (M4-1 ADR
+  Decision 1-3); Stripe does not echo it back on webhook event payloads, so
+  a builder searching for it there will find nothing. The actual dedup
+  mechanism, consistent with every other CAS in this repo
+  (`reservationService.ts` Decision 7, `paymentService.ts` Phase C): resolve
+  the target row via `event.data.object.metadata.paymentTransactionId` (the
+  `Charge` object inherits this from `payment_intent_data.metadata`, set at
+  session-creation time per M4-1 ADR Decision 4 — a direct primary-key
+  lookup, no fuzzy matching) and gate on
+  `UPDATE "PaymentTransaction" SET status = 'CONFIRMED' ... WHERE id = ...
+  AND status = 'PENDING'`. If 0 rows affected because the row is **already
+  `CONFIRMED`**, this is either a duplicate delivery of an already-processed
+  event, or a crash-gap resume (this is the FIRST of two mechanisms
+  separating a duplicate delivery from the money-taken-but-stock-gone case;
+  the second — required, not redundant — is the `err.status` switch below,
+  because the resume path deliberately re-enters `confirmReservationsForOrder`
+  from an already-`CONFIRMED` row and so can legitimately observe
+  `ReservationNotActiveError(status: "CONFIRMED")` from a concurrent sibling
+  delivery). Any other pre-CAS state (`INITIATED`, `FAILED`, `CANCELLED`) is
+  an anomaly — log server-side with the full event id and return 500 (lets
+  Stripe's own retry schedule re-deliver) rather than silently accepting or
+  silently dropping it. Note: the actual resolution mechanism ended up
+  keying off `providerTxId`/`session.id` rather than
+  `metadata.paymentTransactionId` directly (ADR M4-1b Decision 3 supersedes
+  this bullet's literal wording, same "resolve via the `@unique` column,
+  metadata as assertion-only" pattern — see the next bullet). Implemented in
+  `src/lib/paymentWebhookService.ts::confirmRow`. Proven by
+  `tests/test22-stripe-webhook.test.ts`'s duplicate-delivery test (confirms
+  once, one `PAYMENT_CONFIRMED` `OrderEvent`, `onHand` decremented once) and
+  the anomalous-pre-CAS-status test (`FAILED` on a confirm event → throws).
+- [x] **Event set is `checkout.session.*`, NOT `charge.*` — correcting the
+  Linear ticket.** Subscribe to exactly `checkout.session.completed` (act
+  only when `payment_status === 'paid'`),
+  `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`, and `checkout.session.expired`;
+  every other event type → 200, zero writes. **`charge.failed` must NOT be
+  wired to `releaseReservationsForOrder`**: in Embedded Checkout a declined
+  card fires `charge.failed` while the session stays OPEN and the customer
+  retries with another card, so releasing there would destroy stock under a
+  customer who is actively paying and write `Order.paymentStatus = 'FAILED'`
+  on an order seconds from succeeding. See ADR M4-1b Decision 1. Implemented
+  in `src/lib/paymentWebhookService.ts::handleStripeWebhookEvent`'s switch
+  (exactly `checkout.session.completed`/`async_payment_succeeded`/
+  `async_payment_failed`/`expired`; `default` → `{ outcome: "ignored" }`,
+  zero writes). Proven by `tests/test22-stripe-webhook.test.ts`'s
+  `charge.failed` inert test (200, reservations still `ACTIVE`,
+  `Order.paymentStatus` still `PENDING`) — empirically verified during
+  build to genuinely catch the Linear-ticket bug: temporarily wiring
+  `charge.failed` to the fail path made this exact test fail with
+  `outcome: "released"` (reservations destroyed), confirming the test is
+  load-bearing, not decorative.
+- [x] **Row resolution keys off `session.id`, not metadata.**
+  `PaymentTransaction.providerTxId` is `@unique` and holds the `cs_...`
+  Checkout Session id (M4-1 Decision 8), so
+  `findUnique({ where: { providerTxId: session.id } })` is a primary-key-grade
+  lookup. `session.metadata.paymentTransactionId` and
+  `client_reference_id` are used only as assertions — a mismatch is an
+  anomaly (log, zero writes, 500), and no row found is 200 + log. This
+  removes any dependence on the undocumented PaymentIntent→Charge metadata
+  copy (`Charges.d.ts` declares `metadata: Metadata` with no inheritance
+  language). ADR M4-1b Decision 3. Implemented in
+  `src/lib/paymentWebhookService.ts::resolveRow`. Proven by
+  `tests/test22-stripe-webhook.test.ts`: unknown session id → 200
+  `unknown_session`, zero writes; `metadata.paymentTransactionId` pointing
+  at a different row → throws (500 via the route), both rows confirmed
+  untouched; a separate `client_reference_id` mismatch test covers the
+  second assertion independently.
+- [x] **Confirm path is a RESUMABLE state machine, not a one-shot CAS.** The
+  CAS and `confirmReservationsForOrder` are separate transactions; a crash
+  between them leaves `PaymentTransaction = CONFIRMED` + reservations still
+  `ACTIVE` + `Order.paymentStatus = PENDING`, and a blind
+  "already-CONFIRMED → 200 no-op" would absorb every redelivery forever and
+  never confirm the order (money taken, stock held, no alarm). On
+  `status = 'PENDING'`: CAS `PENDING → CONFIRMED`, then call
+  `confirmReservationsForOrder(orderId)`. On `status = 'CONFIRMED'`: resume
+  check — `Order.paymentStatus === 'CONFIRMED'` → 200 no-op; else an existing
+  `PAYMENT_CONFIRMED_STOCK_UNAVAILABLE` `OrderEvent` for this
+  `paymentTransactionId` → 200 no-op; **else call
+  `confirmReservationsForOrder` again** (crash-gap resume). `INITIATED` /
+  `FAILED` / `CANCELLED` → log + 500. ADR M4-1b Decision 4. Implemented in
+  `src/lib/paymentWebhookService.ts::confirmRow`/`runConfirm`. Proven by
+  `tests/test22-stripe-webhook.test.ts`'s crash-gap-resume test: seeds
+  `PaymentTransaction.status = 'CONFIRMED'` with reservations still `ACTIVE`
+  and `Order.paymentStatus = 'PENDING'` (exactly the state a process crash
+  between the CAS and `confirmReservationsForOrder` produces), delivers the
+  event, and asserts the order genuinely reaches `CONFIRMED` — empirically
+  proven load-bearing during build: temporarily replacing the resume branch
+  with an unconditional `{ outcome: "duplicate" }` (the naive
+  "already-CONFIRMED → no-op" implementation FEATURES.md originally
+  described) made this exact test fail (`expected 'duplicate' to be
+  'confirmed'`), confirming it genuinely catches the bug, not just
+  exercising code.
+- [x] **`confirmReservationsForOrder` returning silently is NOT proof of
+  success.** It early-returns at `reservationService.ts:581` when the order
+  has zero `InventoryReservation` rows, and on that path never sets
+  `Order.paymentStatus`. Re-read `Order.paymentStatus` after every successful
+  call; anything other than `CONFIRMED` is a loud log + 500. Implemented in
+  `runConfirm`'s post-condition assert. Proven by a dedicated test: an order
+  with zero `InventoryReservation` rows → `confirmReservationsForOrder`
+  returns silently → the post-condition re-read finds `Order.paymentStatus`
+  still `PENDING` → throws (never a false `"confirmed"`); the
+  `PaymentTransaction` CAS itself is still confirmed as committed (Stripe
+  took the money — that fact survives independently).
+- [x] **`ReservationNotActiveError` is disambiguated by `err.status`, ALWAYS —
+  the CAS gate alone does not exclude the `CONFIRMED` case once the resume
+  path above exists.** `EXPIRED` / `RELEASED` → money-taken-but-stock-gone
+  (below). `CONFIRMED` → a concurrent sibling delivery won the
+  `RegionalInventory FOR UPDATE` race: re-read `Order.paymentStatus`, 200 if
+  `CONFIRMED`, else 500. Any other status → 500, never guess. Implemented in
+  `runConfirm`'s `catch` block. Proven two ways: (a) a real `Promise.all`
+  concurrent-delivery test against real Postgres (exactly one confirm
+  succeeds, `onHand` decremented exactly once, zero
+  `PAYMENT_CONFIRMED_STOCK_UNAVAILABLE` events); (b) two deterministic tests
+  that manufacture the exact race state directly (reservation already
+  `CONFIRMED`, this row still `PENDING`) to force this specific branch
+  regardless of scheduler timing — one with `Order.paymentStatus` already
+  `CONFIRMED` (→ `duplicate`), one with it still `PENDING` (→ throws
+  "Concurrent confirm still in flight").
+- [x] **Money-taken-but-stock-gone path.** On `EXPIRED` / `RELEASED`: leave
+  the `PaymentTransaction` CAS to `CONFIRMED` **committed** (Stripe took the
+  money; that fact must survive). Write one `OrderEvent` with
+  `eventType: "PAYMENT_CONFIRMED_STOCK_UNAVAILABLE"` and payload
+  `{ paymentTransactionId, reservationId, reservationStatus, stripeSessionId,
+  stripePaymentIntentId, stripeEventId }`. `Order.paymentStatus` is **neither**
+  advanced to `CONFIRMED` **nor** set to `FAILED`, and
+  `releaseReservationsForOrder` is **not** called (the payment did not fail —
+  calling release would write `FAILED` on an order the customer was genuinely
+  charged for). Respond 200. Implemented in
+  `runConfirm`/`recordStockUnavailable`. Proven by a dedicated test: a
+  reservation forced to `EXPIRED`, deliver `checkout.session.completed` →
+  200 `stock_unavailable`, `PaymentTransaction` stays `CONFIRMED`,
+  `Order.paymentStatus` stays `PENDING`, exactly one
+  `PAYMENT_CONFIRMED_STOCK_UNAVAILABLE` `OrderEvent` with the full payload,
+  `onHand` unchanged; redelivered → still exactly one such event
+  (`already_flagged`); a further `Promise.all` concurrent-redelivery test
+  proves the dedup guard inside `recordStockUnavailable` itself (not just
+  `confirmRow`'s outer check) also holds under a real race.
+- [x] **Fail path (`async_payment_failed` → `FAILED`, `session.expired` →
+  `CANCELLED`).** CAS `PENDING → nextStatus` with
+  `failureCode = event.type` and a truncated (500-char, same convention as
+  `paymentService.ts:437`) `failureMessage` — do **not** fabricate a decline
+  code; `session.payment_intent` is an unexpanded id string in webhook
+  payloads so `last_payment_error` is unavailable. Then
+  `releaseReservationsForOrder(orderId, "PAYMENT_FAILED")` — **guarded**: skip
+  the release entirely if any `PaymentTransaction` for the order is
+  `CONFIRMED` or `Order.paymentStatus === 'CONFIRMED'`. Pre-CAS status
+  `CONFIRMED` → 200 + log, never release. That function is already idempotent
+  (M3-2 Decision 7/8), so no extra double-delivery handling is needed.
+  Implemented in `src/lib/paymentWebhookService.ts::failRow`/
+  `releaseGuarded`. Proven by `tests/test22-stripe-webhook.test.ts`:
+  `checkout.session.expired` → row `CANCELLED`, reservations `RELEASED`,
+  `Order.paymentStatus = FAILED`; the guard test (a sibling
+  `PaymentTransaction` on the same order already `CONFIRMED` → `skipped`,
+  no release); a resume test (row already `FAILED`/`CANCELLED` with
+  reservations still `ACTIVE` — the crash gap between the CAS and the
+  release call — redelivery completes the release); a "row's own status
+  already `CONFIRMED`" test (not a sibling — never release); an
+  `INITIATED`-on-a-fail-event anomaly test (throws); a defensive
+  `releaseGuarded`-without-a-CONFIRMED-sibling-row test
+  (`Order.paymentStatus` alone already `CONFIRMED` → still skips); and a
+  `Promise.all` concurrent-fail-delivery test against real Postgres
+  (`reserved` decremented exactly once, not double-released).
+- [x] **No amount/currency is re-derived or trusted from the Stripe event
+  payload for any write** — `confirmReservationsForOrder`/
+  `releaseReservationsForOrder` take only `orderId`; the money was already
+  reconciled once, server-side, at M4-1 session-creation time (ADR Decision
+  5). HMAC verification is this route's entire trust boundary; there is no
+  second amount check to build here. Confirmed by direct read of
+  `src/lib/paymentWebhookService.ts`: every call site into
+  `confirmReservationsForOrder(orderId)`/`releaseReservationsForOrder(orderId,
+  reason)` passes only the `orderId` string — no `amount`, `currency`, or
+  Stripe-event-derived value is ever threaded through.
+
+**Architect review: DONE (platform-architect, 2026-08-29). Build: DONE
+(commerce-payments-engineer, 2026-08-29).** Binding design is
+`docs/agents/arch-decisions/M4-1b-stripe-webhook-idempotency.md` — 8
+decisions covering the event set (a genuine correctness catch: the Linear
+ticket's `charge.failed` would have released stock out from under an
+actively-paying customer — rejected in favor of `checkout.session.*`
+events), raw-body HMAC verification, `session.id`-keyed row resolution, a
+resumable (not one-shot) confirm state machine that survives a crash
+between the CAS and the reservation-confirm transaction, the
+money-taken-but-stock-gone recording path, and the guarded fail path. Built
+against it, no improvisation. New files:
+`src/lib/paymentWebhookService.ts`, `src/app/api/webhooks/stripe/route.ts`,
+`tests/test22-stripe-webhook.test.ts`. Extended: `src/lib/stripe.ts`
+(`constructStripeWebhookEvent`/`WebhookSignatureError`). Full suite:
+`npm run build` clean, `npm run lint` clean (0 errors, 1 pre-existing
+unrelated warning in `tests/test13-product-search.test.ts`), `npm test`
+21 test files / 297 passed / 2 skipped / 0 failed, `npm run test:coverage`
+94.35% statements / 83.57% branches / 97.2% functions / 95.38% lines (all
+above the 80/60/60/80 thresholds); `paymentWebhookService.ts` itself is at
+96.96% statements / 92.06% branches / 100% functions / 96.9% lines, the
+only uncovered lines being a defensively-unreachable "unrecognized
+reservation status" branch (the `ReservationStatus` enum has exactly
+`ACTIVE`/`CONFIRMED`/`EXPIRED`/`RELEASED`, and `ACTIVE` is excluded by the
+error's own precondition, so only the three already-handled values are
+reachable in practice). Two of the required tests were empirically proven
+load-bearing during build, not just written: temporarily replacing the
+crash-gap-resume branch with a naive unconditional "already-CONFIRMED →
+`duplicate`" made the crash-gap-resume test fail exactly as predicted, and
+temporarily wiring `charge.failed` to the fail path (the literal
+Linear-ticket bug) made the `charge.failed`-inert test fail with
+`outcome: "released"` (reservations destroyed) — both reverted before
+final commit. Ships mocked-only — `.env.development`'s
+`STRIPE_WEBHOOK_SECRET` is still `whsec_REPLACE_ME`, same standing OPEN
+RISKS note as M4-1; HMAC verification itself needed no mocking (pure local
+crypto via the real `stripe` SDK's `constructEvent`/
+`generateTestHeaderString`), only the never-run-for-real live Stripe
+sandbox delivery remains unverified. Not self-verified — per this domain's
+separation-of-duties rule, `production-readiness-gate` marks this
+`verified`, not the builder.
+
+**Explicitly deferred, not built here (flag to orchestrator/human, do not
+invent):** the actual remediation action for
+`PAYMENT_CONFIRMED_STOCK_UNAVAILABLE` orders (auto-refund via Stripe's
+refund API vs. an ops-escalation queue/runbook) is unanswered in both ADRs
+and remains unanswered after this pass — it is a business decision (refund
+timing, customer communication, support-team process), not an engineering
+one, and no ledger item should be dispatched to build the remediation itself
+until a human decides between the two. A future ledger item (M5 territory —
+admin/ops surface) should be opened once that decision is made, scoped to
+actually querying/actioning `PAYMENT_CONFIRMED_STOCK_UNAVAILABLE`
+`OrderEvent` rows.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M4-1b.md`,
+2026-08-29) — no blocking findings. Signature verification as the sole
+trust boundary, the `charge.failed`-is-inert fix, the resumable confirm
+state machine, `session.id`-keyed row resolution, and money-integrity
+were all independently re-verified by tracing code, not accepted on
+report. 3 advisories tracked:
+- **A1 (LOW):** a missing `STRIPE_SECRET_KEY` is currently re-wrapped by
+  the `try/catch` into the same `WebhookSignatureError` as a genuine bad
+  signature, so it surfaces as a 400 rather than the ADR-mandated 500
+  startup-class error — misdiagnosis risk in production, not an
+  exploitable gap (the response body stays identical either way, no
+  oracle). Fix: hoist `getStripeClient()` above the `try` block, since
+  HMAC verification doesn't need a live API key. Route to
+  commerce-payments-engineer.
+- **A2 (LOW, cross-owner):** the FAIL path's release guard
+  (`releaseGuarded`) is check-then-act outside any transaction — a
+  sibling confirm committing in that exact window could let
+  `releaseReservationsForOrder` write `Order.paymentStatus = 'FAILED'`
+  on an order that was, in fact, genuinely paid a moment earlier. Stock
+  itself stays safe (the reservation release is still CAS-guarded), so
+  this is an order-status correctness gap, not an oversell risk. The
+  durable fix belongs in `reservationService.ts` (a conditional order
+  update), not this file — route to catalog-inventory-engineer, flagged
+  not silently reassigned.
+- **A3 (INFO):** unbounded self-recursion on a lost CAS race in
+  `confirmRow`/`failRow`, safe today only because
+  `PaymentTransaction.status` transitions are monotone repo-wide (a
+  global invariant that a future M4-2 retry feature could break); and a
+  `metadata` field overwrite where the ADR specified a JSON merge —
+  harmless today since nothing else writes that column first, but worth
+  fixing before a second writer exists. Route to commerce-payments-engineer.
+
+**QA/dogfood: DONE (qa-dogfood-engineer, 2026-08-29).** `scripts/agents/
+dogfood.mjs` gained `dogfoodStripeWebhook()`: seeds a fixture Order/
+PaymentTransaction/InventoryReservation via Prisma, signs a real
+`checkout.session.completed` event with the real `stripe` SDK's own
+`generateTestHeaderString` (pure local HMAC, no network call), POSTs it
+over real HTTP to a real spawned `next dev` server, confirms
+`Order.paymentStatus` → `CONFIRMED`, the reservation → `CONFIRMED`, and
+`onHand` decremented correctly — then redelivers the identical event and
+confirms idempotency (`outcome: "duplicate"`, `onHand` unchanged). This
+closes the "the whole route wiring, not just the service function in
+isolation, actually works" gap a unit-level-only test suite would leave
+open. Red/green spot-check performed on the post-condition assert
+(Decision 4, `runConfirm`, `paymentWebhookService.ts:209-222`): temporarily
+replaced the re-read-`Order.paymentStatus`-and-throw-if-not-`CONFIRMED`
+block with an unconditional `return { outcome: "confirmed" }`, reran
+`tests/test22-stripe-webhook.test.ts`'s zero-`InventoryReservation`-rows
+test — went RED with a specific, non-generic assertion failure
+(`AssertionError: promise resolved "{ outcome: 'confirmed' }" instead of
+rejecting`), restored the code verbatim, `git diff --stat` on the file
+confirmed zero residual diff, reran the same test — GREEN again. Proves
+the assert is load-bearing, not decorative.
+**A1 test-impact finding (for whoever picks up A1):** grepped
+`tests/test22-stripe-webhook.test.ts` for every 400-body assertion and
+read the two tests at `:989-1013` in full. **No existing test asserts a
+400 for a missing `STRIPE_SECRET_KEY`.** The two tests at that location
+cover the sibling, correctly-handled case — missing
+`STRIPE_WEBHOOK_SECRET` — and both already assert the ADR-mandated 500
+behavior (`toThrow`, `err` not instanceof `WebhookSignatureError`, route
+rejects rather than resolving 400), not a 400. So fixing A1 (hoisting
+`getStripeClient()` above the `try` in `constructStripeWebhookEvent`) will
+not break any currently-passing test in this file. Whoever fixes A1 should
+still add a new dedicated test asserting missing-`STRIPE_SECRET_KEY` → 500
+(none exists today, positive or negative), which was out of scope for this
+QA pass (does not touch application code and is properly the fixing
+engineer's own regression test for their change, same convention as every
+other bullet in this item).
+**Full suite:** `npm test` — 21 test files, 297 passed / 2 skipped / 0
+failed. (One incidental run of `test21-checkout-stripe-session-route.test.ts`
+hit a single 20s timeout on an unrelated real-spawned-server test during
+this QA session with zero code changes in flight; an immediate rerun of
+the full suite passed clean — treated as environmental flakiness of that
+pre-existing M4-1 test, not a regression introduced by this item; not
+in scope to fix here.)
+
+**Verified:** `scripts/agents/gate-check.sh M4-1b` exit 0 on 2026-08-29. All checks GREEN: build, lint, test+coverage (94.35% statements/lines, 83.57% branches, 97.2% functions, all thresholds met), dogfood entrypoint (real signed Stripe webhook delivery over HTTP → Order.paymentStatus CONFIRMED → onHand decremented → redelivery idempotent), and security sign-off STATUS: CLEAR (`docs/agents/security-signoff/M4-1b.md`). All 10 ADR-required tests pass, with two critical branches empirically proven load-bearing during build: crash-gap-resume (naive "already-CONFIRMED → duplicate" made the test fail), and charge.failed-inert (wiring it to the fail path made the test fail). Dogfood webhook leg successfully extended `scripts/agents/dogfood.mjs` with real signed-webhook-delivery-over-HTTP proof.
 
 ### M4-2: M-Pesa Daraja integration
 **Status:** planned · **Owner:** commerce-payments-engineer

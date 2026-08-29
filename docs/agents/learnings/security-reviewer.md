@@ -207,3 +207,21 @@ entry for a region/currency the ledger says is out of scope as a finding
 (fail-safe default = ship the in-scope value only), even when no code path
 can reach it yet — reachability changes silently, allowlists don't get
 re-reviewed.
+
+## A misconfiguration error wrapped into a security-typed error becomes the wrong HTTP status
+**Symptom (M4-1b):** An ADR bound "missing secret -> 500, never 400". The
+builder implemented that check for the env var the ADR named, above the
+`try` block, and tested it — while a *sibling* env var read by a helper
+called *inside* the same `try` threw a plain `Error` that the `catch`
+re-wrapped as the security-typed error, producing the 400 the rule
+forbade.
+**Cause:** Reviews check the named env var; a broad `catch` that
+normalizes everything into one error type silently reclassifies unrelated
+failure modes, and the passing test for the named var reads as coverage
+for the rule.
+**Rule going forward:** For any `catch` that re-wraps into a
+security-meaningful error type, enumerate every call inside the `try`
+that can throw for a NON-security reason (client construction, env
+reads, JSON parsing) and confirm each still maps to its intended status.
+Hoist config/constructor calls above the `try` rather than trusting the
+wrapper.

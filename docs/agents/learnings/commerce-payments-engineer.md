@@ -14,6 +14,121 @@ Merge into existing entries rather than duplicating. Only durable,
 reusable lessons — not task-specific trivia. Never record secrets, API
 keys, or customer payment data.
 
+## A "resume" branch needs a test that FAILS against the naive "already-done → no-op" version, and you must prove it fails, not assume it
+
+**Symptom:** M4-1b's confirm-path state machine has a `PaymentTransaction`
+already-`CONFIRMED` branch that must NOT be an unconditional 200 no-op — it
+has to distinguish a genuine duplicate delivery from a crash-gap resume
+(process died between the CAS and `confirmReservationsForOrder`) and, only
+in the resume case, actually re-run the confirm. It would have been easy to
+write the test, watch it pass against the correct implementation, and move
+on — which proves nothing about whether the test would have caught the
+bug it exists to catch.
+
+**Cause:** A resumable-state-machine test's entire value is differential:
+it must fail against the wrong (simpler, more obvious) implementation and
+pass against the right one. Passing against only the right implementation
+is consistent with a test that's actually checking something unrelated, or
+with an implementation that's accidentally correct for reasons the test
+didn't intend.
+
+**Rule going forward:** for any "on-second-look ambiguous state, disambiguate
+and possibly resume" branch (not just first-time-through), after the real
+implementation is done and tests are green, temporarily revert that
+specific branch to the naive/wrong version (e.g. an unconditional early
+return) IN THE SOURCE FILE, rerun the specific test, confirm it fails with
+the expected assertion mismatch, then revert the source file back via `cp`
+of a pre-edit backup (never hand-retype it — a typo while "reverting"
+silently ships the wrong code). Same discipline for a security-relevant
+"must stay inert" branch (M4-1b's `charge.failed` case): temporarily wire
+it to the dangerous path, confirm the regression test catches the resulting
+bad DB state (e.g. stock actually released), then revert. Do this
+empirically every time a test's whole job is to prove a specific branch
+exists and is reachable — don't trust the docstring/comment claiming it
+does.
+
+## Stripe webhook HMAC verification is pure local crypto — no mocking, no real sandbox account needed
+
+**Symptom:** Early instinct for M4-1b was to mock the `"stripe"` npm
+package for webhook signature tests too, following the same pattern as
+`tests/test4-stripe.test.ts`/`test19`/`test20` (which mock the SDK because
+those call out to Stripe's actual API). That would have made the
+raw-body-integrity and bad-signature tests weaker — testing that our code
+CALLS `constructEvent` with certain arguments, not that HMAC verification
+actually behaves correctly.
+
+**Cause:** `stripe.webhooks.constructEvent`/`generateTestHeaderString` do
+NOT make a network call — they're synchronous local HMAC-SHA256
+computation against whatever secret string is in `STRIPE_WEBHOOK_SECRET`
+(even a placeholder like the committed `whsec_REPLACE_ME` works fine, since
+signing and verifying both use the same local secret). This is a
+categorically different situation from `checkout.sessions.create`, which
+genuinely needs a real API key and hits Stripe's servers.
+
+**Rule going forward:** for any Stripe webhook/signature-verification test,
+use the REAL `stripe` npm package directly (`new Stripe(anyKeyString, {
+apiVersion })`) to sign fixtures via `webhooks.generateTestHeaderString`,
+and call the REAL (unmocked) `src/lib/stripe.ts` wrapper to verify them —
+this exercises the actual HMAC codepath end-to-end with zero mocking and
+no dependency on a real Stripe sandbox account ever being provisioned.
+Only mock the SDK for calls that are genuinely a network round-trip
+(session creation, refunds, etc.).
+
+## A webhook route with no `next/headers`/`cookies()` call doesn't need a spawned `next dev` server to test
+
+**Symptom:** Every prior route-level test in this repo
+(test6/7/8/12/13/14/15/16/18/21) spawns a real `next dev` child process,
+because those routes call `auth.api.getSession()`/`headers()`/`cookies()`,
+which only work inside a real Next.js request context. Following that
+precedent by default for M4-1b's webhook route would have added ~10s+ of
+spawn overhead and a much heavier test file for no reason.
+
+**Cause:** `src/app/api/webhooks/stripe/route.ts` deliberately has NO auth
+check of any kind (HMAC verification is its entire trust boundary, per the
+ADR) — it only reads `request.text()` and `request.headers.get(...)`, both
+of which work on a plain `new NextRequest(url, { method, headers, body })`
+constructed directly in-process, with no server needed.
+
+**Rule going forward:** before defaulting to a spawned-server test for a
+new route, check whether it actually calls `next/headers`/`cookies()`/
+`auth.api.getSession()`. If it doesn't (webhook endpoints and other
+routes with no session/cookie dependency are the main case), import the
+route's exported `POST`/`GET` handler directly and call it with a
+constructed `NextRequest` — full HTTP-status/body fidelity, in-process, no
+subprocess, and (bonus) v8 coverage instrumentation can actually see the
+route file rather than needing a `vitest.config.mts` coverage-exclude entry
+for it.
+
+## `Promise.all` concurrency tests can miss their target branch on a fast local machine — pair with a deterministic manufactured-state test for the same branch
+
+**Symptom:** M4-1b's concurrent-delivery test (`Promise.all` of the same
+event twice against real Postgres) passed, but coverage showed the
+`err.status === 'CONFIRMED'` disambiguation branch inside
+`runConfirm`'s catch block was NOT actually hit — the "loser" of the CAS
+race was, in practice, usually re-reading the row and finding
+`Order.paymentStatus` already `CONFIRMED` (a plain early return at the top
+of the `CONFIRMED` branch), never reaching the point of re-entering
+`confirmReservationsForOrder` and catching its own
+`ReservationNotActiveError(status: 'CONFIRMED')`.
+
+**Cause:** the real race window between "lost the CAS" and "the winner's
+whole transaction, including the `RegionalInventory FOR UPDATE` lock and
+commit, finishes" is often too narrow on a fast local Postgres for
+`Promise.all` to reliably land the loser BEFORE the winner's transaction
+commits — so the "genuinely racing, both mid-transaction" sub-case is not
+guaranteed to be exercised just because two calls were issued concurrently.
+
+**Rule going forward:** for a disambiguation branch reached only via a
+specific interleaving, write BOTH a `Promise.all` test (proves the
+end-to-end guarantee — exactly one confirm, no data corruption — under
+real concurrency, which is what actually matters) AND a deterministic test
+that manufactures the target intermediate state directly (e.g. seed the
+reservation already `CONFIRMED` while the `PaymentTransaction` row is still
+`PENDING` and `Order.paymentStatus` is still `PENDING`) so the specific
+disambiguation code path is exercised every run, not only when the
+scheduler happens to cooperate. Check the coverage line numbers, not just
+"the concurrency test passed," to confirm which branch actually ran.
+
 ## Sequential resubmit vs. concurrent double-submit are different tests for a cartId-deriving route
 
 **Symptom:** A first attempt at a webhook/double-submit-idempotency test

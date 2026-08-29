@@ -128,6 +128,54 @@ fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-29 — M4-1b (HRH-48, Stripe webhook) acceptance criteria sharpened; money-taken-but-stock-gone scoped around, not answered
+`product-planner` was dispatched to sharpen M4-1b now that M4-1 (HRH-47) is
+`verified`. Confirmed by direct read
+(`src/lib/reservationService.ts::confirmReservationsForOrder`, `:575-617`)
+that the money-taken-but-stock-gone gap both ADRs (`M4-1-stripe-embedded-
+checkout.md`, `M3-2-inventory-reservation.md` Decision 8) flagged is real:
+when a reservation is no longer `ACTIVE` at confirm time, the whole
+transaction rolls back and throws `ReservationNotActiveError` with **zero
+durable record** that a charge succeeded — `Order.paymentStatus` stays
+`PENDING`, no `OrderEvent` is written on that path today.
+
+**Decision: this is NOT a hard blocker requiring human escalation before any
+work proceeds.** The two ADRs' "cannot ship without an answer" language
+refers to the *remediation action* (auto-refund vs. ops escalation), which
+genuinely is an unanswered human/business call and stays deferred. But the
+*detection-and-honest-recording* half is safely scopeable without that
+answer: `PaymentTransaction` is set to `CONFIRMED` (an objective fact Stripe
+reported, not a business judgment), `Order.paymentStatus` is deliberately
+never advanced past `PENDING` on this path (so nothing can claim fulfillment
+succeeded), and a new distinctly-named `OrderEvent`
+(`PAYMENT_CONFIRMED_STOCK_UNAVAILABLE`) makes the conflict durable and
+queryable. No refund call, no customer messaging, no ops UI is built —
+those remain explicitly out of scope, named in the ledger entry as requiring
+a human decision before any future item builds them. This satisfies "never
+silently pretend success, never silently lose the customer's money without
+a record" without inventing the business answer.
+
+A second, distinct grounding finding in the same pass: the PRD/Linear
+phrase "idempotent on duplicate delivery via `idempotencyKey`" is
+imprecise — `PaymentTransaction.idempotencyKey` (`prisma/schema.prisma:268`)
+is the key this repo sends *to* Stripe on outbound calls; Stripe does not
+echo it back on webhook payloads. The actual dedup mechanism (named
+explicitly in the ledger entry) is a CAS on `PaymentTransaction.status`
+gated by a direct `metadata.paymentTransactionId` lookup, run **before**
+`confirmReservationsForOrder` is ever called a second time — otherwise a
+normal duplicate delivery of an already-`CONFIRMED` payment would be
+misidentified as the money-taken-but-stock-gone case (`ReservationNotActiveError`
+fires identically for `status: "CONFIRMED"` as for `EXPIRED`/`RELEASED`).
+
+**Architect review: explicit YES** — raw-body HMAC verification is a
+genuinely new pattern in this repo (no prior webhook route to copy from,
+and `req.text()`-before-`req.json()` ordering is an easy silent-failure
+trap), and the CAS-gate-before-confirm ordering above is load-bearing
+enough to warrant a design pass rather than a builder's own judgment call.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M4-1b
+section and this file were edited (no `src/`/`tests/` touched).
+
 ### 2026-08-29 — M4-1 split into M4-1 (HRH-47, session creation) + M4-1b (HRH-48, webhook), acceptance criteria sharpened
 `product-planner` was dispatched on HRH-47 ("Stripe Embedded Checkout
 Session Creation"). Confirmed via `get_issue` that HRH-47's real scope

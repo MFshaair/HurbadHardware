@@ -224,6 +224,33 @@ the blocker under the original item — cite the specific schema/transaction
 dependency for each remaining bullet so a future reader doesn't have to
 re-derive why they're still blocked.
 
+## An ADR's "cannot ship without X" can bundle a safely-scopeable detection half with a genuinely-blocked decision half
+**Symptom:** Two ADRs (M4-1, M3-2) both said HRH-48 "cannot ship without an
+answer" to the money-taken-but-stock-gone question (auto-refund vs. ops
+escalation) — read at face value, that phrasing looks like a hard blocker
+requiring human escalation before any acceptance criteria could be written
+at all, the same as the Somalia/Phase-2 iron-rule holds.
+**Cause:** "Cannot ship without an answer" was true of the *remediation
+action* (what a human should decide: refund automatically, or route to ops)
+but not of *detecting and durably recording* the conflict — reading the
+actual code (`reservationService.ts::confirmReservationsForOrder`) showed
+the current behavior on this path is silent (rolls back with zero record),
+which is strictly worse than a scoped item that honestly records the fact
+(payment confirmed, order not advanced to CONFIRMED, a distinctly-named
+`OrderEvent`) without deciding what to do about it. The blocking language
+in the ADR was about the *action*, not the *visibility*.
+**Rule going forward:** When an ADR/prior item's "Known limits" flags a
+question as blocking a future item, check whether the blocked thing is
+genuinely one indivisible decision, or whether it splits into (a) an
+engineering-safe "detect + record honestly, take no remediation action" half
+and (b) a real human/business "what action follows" half — the same
+"sub-slice isn't actually blocked" pattern as the bundled-ledger-item lesson
+below, but applied within one item's *own* Known-limits blocker rather than
+across a ledger split. If (a) is buildable without inventing the business
+answer (no silent success, no silently-dropped money, no auto-remediation
+implied), scope the item to (a) only, name (b) explicitly as still deferred
+to a human, and do not let an agent building (a) quietly also build (b).
+
 ## A prior item's security sign-off can hand the next item binding fixes that live in a third agent's files
 **Symptom:** M3-2's security sign-off named two findings (F1, F2) as
 "binding prerequisites on M3-3," but both fixes are in `cartService.ts`/

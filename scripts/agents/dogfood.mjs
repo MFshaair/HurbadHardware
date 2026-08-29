@@ -105,12 +105,47 @@
 // /checkout/review AND the webhook exists to complete the round trip, not
 // before. Until then this remains an explicit, documented gap, not a
 // silently-stale file.
+//
+// M4-1b STATUS (checked 2026-08-29, qa-dogfood-engineer, M4-1b/HRH-48):
+// StripeCheckout.tsx is STILL not mounted anywhere (grep -rn
+// "StripeCheckout\|create-stripe-session" src/app -- no page calls it), so
+// there is still no real BROWSER-CLICKED journey through
+// POST /api/checkout/create-stripe-session or the webhook -- the M4-1
+// reasoning above ("dogfooding an unwired code path is theater") still
+// applies to that half.
+//
+// BUT: POST /api/webhooks/stripe is triggered by STRIPE'S SERVERS, never by
+// a browser click -- it has no UI leg to wait for, and it is the first real
+// "money confirms, stock decrements" transition to exist anywhere in this
+// app. tests/test22-stripe-webhook.test.ts's own Tier A deliberately calls
+// the route's exported POST function IN-PROCESS (see that file's own header
+// comment: "no spawned next dev server needed") -- which means NOTHING in
+// this repo, before this leg, had ever proven the route is actually wired
+// up and reachable over real HTTP against a genuinely running `next dev`
+// server (route registration, the real STRIPE_WEBHOOK_SECRET loaded from
+// .env.development rather than vitest's own env, and src/middleware.ts's
+// matcher genuinely not intercepting this path -- all things an in-process
+// import cannot catch). dogfoodStripeWebhook() below closes exactly that
+// specific gap: it seeds a fixture Order/PaymentTransaction/
+// InventoryReservation directly via Prisma (standing in for what a real
+// checkout session would have produced -- no UI to click yet), signs a real
+// checkout.session.completed event with the real "stripe" SDK's own
+// generateTestHeaderString (same helper test22 uses, pure local HMAC, no
+// network call), and POSTs it over real HTTP to a real spawned `next dev`
+// server -- then re-delivers the identical event a second time to prove
+// idempotency (Decision 4's resumable state machine) holds over real HTTP,
+// not just in-process. This is a deliberate, narrower "webhook-only" leg,
+// not a full user-journey leg -- the full click-through leg (add to cart ->
+// checkout -> pay with Stripe -> webhook confirms -> order CONFIRMED) still
+// requires StripeCheckout.tsx to be mounted first and remains the open M4
+// checkpoint bullet above.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
+import Stripe from "stripe";
 
 // This script runs as a plain `node` invocation (not through vitest, which
 // has its own env-loading setup file — see M0-5), so it must load
@@ -1332,17 +1367,307 @@ async function dogfoodCheckout() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// M4-1b — webhook-only leg: POST /api/webhooks/stripe, real signed HTTP
+// delivery against a real spawned `next dev` server (see the "M4-1b STATUS"
+// header comment above for why this is a deliberate narrower leg, not the
+// full click-through user journey, which still requires StripeCheckout.tsx
+// to be mounted). Seeds a fixture Order/PaymentTransaction/
+// InventoryReservation directly via Prisma (standing in for what a real
+// checkout session hand-off would have produced), signs a real
+// checkout.session.completed event with the real "stripe" SDK, delivers it
+// twice over real HTTP, and asserts the full confirm/onHand-decrement/
+// idempotency chain against real Postgres.
+// ---------------------------------------------------------------------------
+async function dogfoodStripeWebhook() {
+  const PORT = process.env.DOGFOOD_WEBHOOK_PORT ?? "3108";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const BOOT_TIMEOUT_MS = 60_000;
+
+  console.log(
+    "[dogfood] real signed Stripe webhook delivery -> order CONFIRMED -> onHand decremented -> " +
+      "redelivery idempotent, via real HTTP against a real running server...",
+  );
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  const uniq = Date.now();
+  let productId;
+  let addressId;
+
+  async function cleanup() {
+    try {
+      // Order cascades OrderItem/InventoryReservation/PaymentTransaction/
+      // OrderEvent (all onDelete: Cascade on Order, prisma/schema.prisma) —
+      // delete the Order before the Address it points at (Order ->
+      // Address has NO cascade), same FK-ordering discipline as
+      // dogfoodCheckout()'s cleanup.
+      if (addressId) {
+        await db.order.deleteMany({ where: { shippingAddressId: addressId } });
+        await db.address.delete({ where: { id: addressId } });
+      }
+      if (productId) {
+        await db.product.delete({ where: { id: productId } });
+      }
+    } catch (err) {
+      console.error(`[dogfood] WARN: fixture cleanup failed: ${err.message}`);
+      throw err;
+    }
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error(
+        "STRIPE_WEBHOOK_SECRET is unset — cannot sign a webhook payload at all. Note: a REPLACE_ME " +
+          "placeholder value is fine here (HMAC signing/verification is pure local crypto, symmetric " +
+          "between this script and the server it spawns, and never calls Stripe's real API), same as " +
+          "tests/test22-stripe-webhook.test.ts's own real-sandbox-independent design — only a genuinely " +
+          "MISSING value is a real problem for this leg.",
+      );
+    }
+
+    const product = await db.product.create({
+      data: {
+        slug: `dogfood-m4-1b-webhook-${uniq}`,
+        name: `Dogfood M4-1b Webhook Fixture ${uniq}`,
+        category: "test",
+        brand: "DogfoodBrand",
+        images: [],
+        specs: {},
+      },
+    });
+    productId = product.id;
+    const variant = await db.productVariant.create({
+      data: {
+        productId,
+        sku: `DOGFOOD-M4-1B-SKU-${uniq}`,
+        name: "Dogfood M4-1b Webhook Fixture Variant",
+        attributes: { Color: "Black" },
+        images: [],
+      },
+    });
+    const quantity = 2;
+    const inventory = await db.regionalInventory.create({
+      data: { variantId: variant.id, region: "KE", onHand: 10, reserved: quantity, safetyBuffer: 0 },
+    });
+    const address = await db.address.create({
+      data: {
+        fullName: "Dogfood M4-1b Webhook Buyer",
+        phone: "+254700000002",
+        region: "KE",
+        city: "Nairobi",
+        postalCode: "00100",
+        street: "1 Dogfood Webhook Street",
+      },
+    });
+    addressId = address.id;
+    const unitPrice = "1000.00";
+    const order = await db.order.create({
+      data: {
+        orderNumber: `HH-TEST-DOGFOOD-M4-1B-${uniq}`,
+        region: "KE",
+        currency: "KES",
+        subtotalAmount: "2000.00",
+        taxAmount: "0",
+        shippingAmount: "0",
+        totalAmount: "2000.00",
+        shippingAddressId: address.id,
+        paymentStatus: "PENDING",
+      },
+    });
+    await db.orderItem.create({
+      data: { orderId: order.id, variantId: variant.id, quantity, unitPrice, totalPrice: "2000.00" },
+    });
+    await db.inventoryReservation.create({
+      data: {
+        orderId: order.id,
+        inventoryId: inventory.id,
+        variantId: variant.id,
+        quantity,
+        status: "ACTIVE",
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    const sessionId = `cs_test_dogfood_${uniq}`;
+    const paymentTransaction = await db.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: "stripe",
+        idempotencyKey: `dogfood-idem-${uniq}`,
+        providerTxId: sessionId,
+        amount: "2000.00",
+        currency: "KES",
+        status: "PENDING",
+      },
+    });
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // Build + sign a real checkout.session.completed event, same shape and
+    // signing helper as tests/test22-stripe-webhook.test.ts (real "stripe"
+    // SDK, pure local HMAC — no network call, no real Stripe account
+    // needed).
+    const session = {
+      id: sessionId,
+      object: "checkout.session",
+      payment_status: "paid",
+      client_reference_id: order.id,
+      metadata: { orderId: order.id, paymentTransactionId: paymentTransaction.id },
+      payment_intent: `pi_test_dogfood_${uniq}`,
+    };
+    const event = {
+      id: `evt_dogfood_m4_1b_${uniq}`,
+      object: "event",
+      api_version: "2026-07-29.dahlia",
+      created: Math.floor(Date.now() / 1000),
+      livemode: false,
+      pending_webhooks: 0,
+      request: { id: null, idempotency_key: null },
+      type: "checkout.session.completed",
+      data: { object: session },
+    };
+    const payload = JSON.stringify(event);
+    const signingClient = new Stripe("sk_test_not_used_for_signing", {
+      apiVersion: "2026-07-29.dahlia",
+    });
+    const signature = signingClient.webhooks.generateTestHeaderString({
+      payload,
+      secret: process.env.STRIPE_WEBHOOK_SECRET,
+    });
+
+    // First delivery: real HTTP POST to a real running server.
+    const firstRes = await fetch(`${BASE_URL}/api/webhooks/stripe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": signature },
+      body: payload,
+    });
+    if (firstRes.status !== 200 || !(firstRes.headers.get("content-type") ?? "").includes("application/json")) {
+      const body = await firstRes.text().catch(() => "<unreadable>");
+      throw new Error(
+        `First webhook delivery returned ${firstRes.status} (redirected: ${firstRes.redirected}, final url: ` +
+          `${firstRes.url}), expected a real 200 JSON response from the webhook route. This can happen if ` +
+          `something intercepts /api/webhooks/stripe before it reaches the route handler (e.g. ` +
+          `src/middleware.ts's matcher widening to cover it, which fetch's default redirect-follow behavior ` +
+          `would silently turn into a 200-with-HTML rather than a visible redirect status). Body (truncated): ` +
+          `${body.slice(0, 300)}`,
+      );
+    }
+    const firstBody = await firstRes.json();
+    if (firstBody.outcome !== "confirmed") {
+      throw new Error(`Expected outcome "confirmed" on first delivery, got: ${JSON.stringify(firstBody)}`);
+    }
+
+    const orderAfterFirst = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    if (orderAfterFirst.paymentStatus !== "CONFIRMED") {
+      throw new Error(
+        `Expected Order.paymentStatus === "CONFIRMED" after a real webhook delivery, got: ${orderAfterFirst.paymentStatus}`,
+      );
+    }
+    const reservationAfterFirst = await db.inventoryReservation.findFirstOrThrow({ where: { orderId: order.id } });
+    if (reservationAfterFirst.status !== "CONFIRMED") {
+      throw new Error(
+        `Expected InventoryReservation.status === "CONFIRMED", got: ${reservationAfterFirst.status}`,
+      );
+    }
+    const inventoryAfterFirst = await db.regionalInventory.findUniqueOrThrow({ where: { id: inventory.id } });
+    if (inventoryAfterFirst.onHand !== 8 || inventoryAfterFirst.reserved !== 0) {
+      throw new Error(
+        `Expected onHand 10 -> 8 and reserved ${quantity} -> 0 after a real webhook confirm, got onHand=${inventoryAfterFirst.onHand} reserved=${inventoryAfterFirst.reserved}`,
+      );
+    }
+
+    // Second, identical delivery (Stripe redelivers 2-5x in practice) — must
+    // be a real, byte-identical HTTP redelivery, not an in-process re-call,
+    // to actually prove idempotency holds over the real route, not just the
+    // service function.
+    const secondRes = await fetch(`${BASE_URL}/api/webhooks/stripe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": signature },
+      body: payload,
+    });
+    if (secondRes.status !== 200 || !(secondRes.headers.get("content-type") ?? "").includes("application/json")) {
+      const body = await secondRes.text().catch(() => "<unreadable>");
+      throw new Error(
+        `Second (duplicate) webhook delivery returned ${secondRes.status} (redirected: ${secondRes.redirected}), ` +
+          `expected a real 200 JSON response. Body (truncated): ${body.slice(0, 300)}`,
+      );
+    }
+    const secondBody = await secondRes.json();
+    if (secondBody.outcome !== "duplicate") {
+      throw new Error(`Expected outcome "duplicate" on redelivery, got: ${JSON.stringify(secondBody)}`);
+    }
+    const inventoryAfterSecond = await db.regionalInventory.findUniqueOrThrow({ where: { id: inventory.id } });
+    if (inventoryAfterSecond.onHand !== 8 || inventoryAfterSecond.reserved !== 0) {
+      throw new Error(
+        `Expected onHand/reserved UNCHANGED after a duplicate redelivery (idempotency), got onHand=${inventoryAfterSecond.onHand} reserved=${inventoryAfterSecond.reserved}`,
+      );
+    }
+
+    console.log(
+      "[dogfood] PASS: real signed Stripe webhook delivery -> Order.paymentStatus CONFIRMED -> " +
+        "InventoryReservation CONFIRMED -> onHand 10->8 -> redelivery outcome 'duplicate', onHand unchanged",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
 await dogfoodRegisterLogin();
 await dogfoodHomepage();
 await dogfoodCatalogSearch();
 await dogfoodCart();
 await dogfoodCheckout();
+await dogfoodStripeWebhook();
 
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
     "search-entry + M2-2 browse/search/filter + M3 cart add/view/update/remove/409/" +
     "logout-rotation + M3-3/M3-3a full cart->checkout->REAL Place order->201->Order/" +
     "InventoryReservation/OrderEvent rows confirmed->cart consumed->draft cleared covered " +
-    "(M3 milestone integration checkpoint: full cart->reservation dogfood exits 0 — MET); " +
-    "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
+    "(M3 milestone integration checkpoint: full cart->reservation dogfood exits 0 — MET) + " +
+    "M4-1b real signed webhook delivery->CONFIRMED->onHand decremented->idempotent redelivery " +
+    "(webhook-only leg; full click-through Stripe-payment journey still pending StripeCheckout.tsx " +
+    "mounting); M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

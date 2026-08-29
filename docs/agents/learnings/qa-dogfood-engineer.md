@@ -466,6 +466,50 @@ hit by whatever test the old comment points to (or a new one), THEN either
 split the wildcard into explicit filenames (preferred) or add a fresh
 comment explicitly extending the old justification to the new file.
 
+## A resumed QA task should re-read the current file state before assuming the prior (interrupted) session's summary is still accurate
+
+**Symptom:** Picked up an interrupted M4-1b QA dispatch where the handoff
+message described `dogfood.mjs`'s new `dogfoodStripeWebhook()` leg and
+`local-check.sh`'s green run in detail. Before trusting that description,
+re-reading `dogfood.mjs` directly (grep for the function name + its call
+site at the bottom of the file) took under a minute and confirmed the
+described leg actually exists, matches the description, and is wired into
+the script's execution — cheap insurance against building a report on a
+stale or partially-applied summary from a session that was cut off
+mid-work by a host sleep event.
+
+**Rule going forward:** When resuming any interrupted QA/dogfood dispatch,
+always re-verify the specific claims in the handoff message against the
+actual current file contents (not just trust the prose) before treating
+prior work as a given — this is cheap and has already once mattered (see
+the fixture-cleanup and seed-count-discrepancy entries above, both cases
+where a script "passing" didn't mean what it appeared to mean).
+
+## `npm test`/vitest against a real spawned `next dev` server can throw a single one-off 20s timeout with zero code changes in flight — always rerun once before treating it as a regression
+
+**Symptom:** A clean `npm test` run (no application-code changes since the
+last known-green run) failed with exactly one test timeout
+(`tests/test21-checkout-stripe-session-route.test.ts`'s guest-cookie
+ownership test, `Error: Test timed out in 20000ms`) while every other test
+in the same file and suite passed. An immediate rerun of the full suite,
+still with zero code changes, passed clean (297/297, 0 failed).
+
+**Cause:** Not conclusively isolated — consistent with occasional
+resource contention (Postgres connection pool, a real `next dev` server's
+cold-compile latency) rather than a real regression, since the exact same
+test, same code, same DB state passed cleanly moments later with no
+intervening change.
+
+**Rule going forward:** A single, isolated timeout (not an assertion
+failure with a specific wrong-value message) on a real-spawned-server test,
+with no application-code diff since the last green run, should be treated
+as a candidate flake and confirmed via one immediate full-suite rerun
+before reporting a regression — but always report the flake's exact
+symptom and the rerun result explicitly rather than silently omitting it;
+a specific assertion-failure message (e.g. `expected 'duplicate' to be
+'confirmed'`) is a different, non-flake class of failure and should never
+be waved off with a rerun.
+
 ## Proving a "break it and watch it fail" test is genuinely fast and cheap — do it inline, don't skip it under time pressure
 
 **Symptom (verification, not a bug):** Asked to confirm

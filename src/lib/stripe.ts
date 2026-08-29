@@ -127,3 +127,48 @@ export async function createEmbeddedCheckoutSession(
   }
   return { sessionId: session.id, clientSecret: session.client_secret };
 }
+
+// ---------------------------------------------------------------------------
+// Webhook verification (M4-1b, HRH-48). Binding design:
+// docs/agents/arch-decisions/M4-1b-stripe-webhook-idempotency.md Decision 2.
+// Do not improvise a different mechanism.
+
+export class WebhookSignatureError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WebhookSignatureError";
+  }
+}
+
+/**
+ * Verifies a Stripe webhook and returns the parsed event.
+ *
+ * `rawBody` MUST be the exact bytes Stripe POSTed. In a Next.js App Router
+ * route handler that means `await request.text()` as the FIRST and ONLY
+ * read of the body — `request.json()` (or any read at all before this)
+ * consumes the stream, and even a re-`JSON.stringify` of the parsed object
+ * produces different bytes (key order, whitespace, unicode escaping), so
+ * the HMAC will fail 100% of the time in a way that looks like a bad
+ * secret. This is the single easiest way to get this route silently wrong.
+ */
+export function constructStripeWebhookEvent(
+  rawBody: string,
+  signatureHeader: string | null,
+): Stripe.Event {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET is not set");
+  if (!signatureHeader) throw new WebhookSignatureError("Missing stripe-signature header");
+  try {
+    // Signature: (payload, header, secret, tolerance?, cryptoProvider?, receivedAt?)
+    // node_modules/stripe/esm/Webhooks.d.ts. Default tolerance is
+    // Webhooks.DEFAULT_TOLERANCE (300s) — left at the default deliberately;
+    // it is the replay-window guard and must not be widened.
+    return getStripeClient().webhooks.constructEvent(rawBody, signatureHeader, secret);
+  } catch (err) {
+    // Wrapped so the route never has to inspect a Stripe error type, and so
+    // the underlying message (which can echo header fragments) cannot leak.
+    throw new WebhookSignatureError(
+      err instanceof Error ? err.message : "Signature verification failed",
+    );
+  }
+}
