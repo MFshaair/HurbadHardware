@@ -24,19 +24,21 @@ expansion (Ethiopia/Somalia) and Phase 2 features are explicitly out of
 scope for autonomous execution — see OPEN RISKS.
 
 ### MILESTONE PLAN + current position
-Current milestone: **M1 — Auth & Identity**. M1-1 (better-auth routes &
-middleware) is `verified` (gate GREEN, 2026-08-20, via `/hurbad-team`).
-M0-6 (coverage threshold) got pulled forward and completed as a side-quest
-to unblock M1-1's gate run — also verified. Next: M1-2 (registration/
-login/reset UI).
+Current milestone: **M4 — Payments (Stripe & M-Pesa)**, just started
+2026-08-29 via `/hurbad-team` on HRH-47 (M4-1, Stripe Embedded Checkout
+session creation). M0-M3 are all `verified`/checkpoint-tagged — see the
+table below and `checkpoint/m3` (this milestone's own predecessor). M2-3
+(non-blocking M2-1 security advisories) and M3-2's/M3-3's tracked
+non-blocking follow-ups (see security-signoff files) remain open but do
+not block M4.
 
 | # | Milestone | Status |
 |---|---|---|
-| M0 | Repo Hygiene & v3 Schema Adoption | checkpoint tagged; only M0-7's full-test-in-CI half still open |
-| M1 | Auth & Identity (U3, better-auth) | M1-1 verified; M1-2, M1-3 next |
-| M2 | Catalog, Variants & Search (U4) | blocked on M1 |
-| M3 | Cart, Checkout & Reservation (U5/U6/U12) | blocked on M2 |
-| M4 | Payments — Stripe & M-Pesa (U7/U8) | blocked on M3 |
+| M0 | Repo Hygiene & v3 Schema Adoption | checkpoint tagged (`checkpoint/m0`); only M0-7's full-test-in-CI half still open |
+| M1 | Auth & Identity (U3, better-auth) | M1-1/M1-2/M1-3 verified; M1-4/M1-5 deferred lower-priority findings, still `planned` |
+| M2 | Catalog, Variants & Search (U4) | M2-1/M2-2/M2-4 verified; M2-3 (non-blocking advisories backlog) still `planned` |
+| M3 | Cart, Checkout & Reservation (U5/U6/U12) | **verified, checkpoint tagged** (`checkpoint/m3`, commit `274c813`, 2026-08-29) — M3-1/M3-2/M3-3a/M3-3 all verified; integration checkpoint (concurrent-last-unit test + full cart→reservation dogfood) confirmed MET and re-run GREEN by the orchestrator before tagging |
+| M4 | Payments — Stripe & M-Pesa (U7/U8) | **in progress** — HRH-47/M4-1 started 2026-08-29 |
 | M5 | Orders, Admin & Notifications (U9/U10/U11/U13) | blocked on M4 |
 | M6 | Hardening & Launch Readiness (U15/U16 + DoD) | blocked on M5 |
 
@@ -51,9 +53,10 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
   top level). `hurbad-ecommerce/` no longer exists — deleted 2026-08-20
   after its one useful asset (`docs/DEPLOYMENT.md`, Cloudflare Images
   config) was salvaged into the canonical root files. See Tier 2.
-- **Coverage threshold: not yet set.** M0-6 must configure one (in
-  `vitest.config.mts`, which now exists for env-loading — see M0-5) before
-  `npm run test:coverage` can gate anything.
+- **Coverage threshold: 80% statements/lines, 60% branches/functions**
+  (`vitest.config.mts`), set by M0-6 (verified alongside M1-1). Every
+  gate-checked item since has met this; do not lower it to unblock a
+  weak test — fix the coverage gap instead.
 - **Auth: better-auth only.** No hand-rolled credential fields on `User`
   (AHD8). Implemented 2026-08-20 — `User.passwordHash` is gone,
   credentials live in the generated `Account.password`.
@@ -69,11 +72,18 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
   not the PRD, for this one fact.
 
 ### LAST KNOWN-GOOD CHECKPOINT
-`checkpoint/m0` tag, commit `3f26673` (2026-08-20). `npm run build && npm
-run lint && npm test` all green at this commit: v3 schema, better-auth,
-200-product/400-variant seed, vitest env fix, hurbad-ecommerce/ removed,
-Kenya/Somalia on eu-west-2 (London). Roll back here if a later milestone's
-integration checkpoint goes red and can't be cheaply fixed forward.
+`checkpoint/m3` tag, commit `274c813` (2026-08-29). M3's integration
+checkpoint (full-system dogfood: server boot → schema migrate → register/
+login → homepage/category-cards/search → browse/search/filter → cart
+add/view/update/remove/409/logout-rotation → real checkout address→
+payment→review→**REAL Place order**→201→`Order`/`InventoryReservation`/
+`OrderEvent` rows confirmed→cart consumed→checkout draft cleared) was
+re-run independently by the orchestrator (not just trusted from
+`qa-dogfood-engineer`'s report) and exited 0 before this tag was created.
+`checkpoint/m0` (commit `3f26673`, 2026-08-20) is the next fallback if
+this one needs to be rolled back past. Roll back to `checkpoint/m3` if a
+later milestone's integration checkpoint goes red and can't be cheaply
+fixed forward.
 
 ### OPEN RISKS / ESCALATIONS
 - **PRD (`eu-west-1`/Dublin) vs. repo (`eu-west-2`/London) region mismatch**
