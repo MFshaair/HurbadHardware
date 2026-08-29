@@ -438,3 +438,57 @@ vitest doesn't load `.env.development` automatically — an M0 ledger item
 (M0-5) fixes this with a vitest setup file. If you see similar
 env-var-not-set failures elsewhere, check whether vitest's env loading is
 configured before assuming the underlying code is broken.
+
+## Coverage-exclude globs silently inherit new files dropped under them — audit on every new file, not just on creation
+
+**Symptom:** A pre-existing broad exclude glob (`"src/app/api/checkout/**"`
+in `vitest.config.mts`, added in M3-3 for one specific route file) silently
+also swallowed a brand-new route file (M4-1's `create-stripe-session/
+route.ts`) from coverage measurement, with no comment anywhere justifying
+the exclusion for that specific new file. The underlying exclusion turned
+out to be substantively correct (the new route is a real spawned-server-
+only measurement gap, genuinely exercised by `tests/test21-...test.ts`,
+not a coverage-dodge) — but that correctness was accidental, not verified
+at the time the file was added.
+
+**Cause:** Directory-wildcard excludes (`dir/**`) are convenient but mean
+every future file dropped into that directory inherits an exclusion
+decision nobody re-reviewed for that specific file — the silent-inheritance
+pattern security-reviewer flagged as M2-1 F3 and again here as M4-1 F4.
+
+**Rule going forward:** Prefer explicit per-file entries in
+`vitest.config.mts`'s coverage exclude list over directory wildcards,
+each with its own inline justification comment (measurement-gap class,
+which test file actually proves it's exercised, date). When a wildcard
+already exists and a new file lands under it, don't just trust the old
+justification — verify the new file's meaningful branches are actually
+hit by whatever test the old comment points to (or a new one), THEN either
+split the wildcard into explicit filenames (preferred) or add a fresh
+comment explicitly extending the old justification to the new file.
+
+## Proving a "break it and watch it fail" test is genuinely fast and cheap — do it inline, don't skip it under time pressure
+
+**Symptom (verification, not a bug):** Asked to confirm
+`tests/test21-checkout-stripe-session-route.test.ts`'s stranger-cookie
+ownership test wasn't a false-positive-green (hardcoded cookie name
+instead of a derived one). Temporarily commented out the guest-ownership
+branch in `src/lib/paymentService.ts` (`prepareAttempt`'s `else` branch,
+the `sessionId`/`OrderEvent` lookup), reran just that one test file
+(~8-10s via real spawned `next dev` server), got a clean, specific
+assertion failure (`expected 502 to be 404`) proving the test is a real
+gate, then restored the exact original code and reran to confirm green
+again (`git diff --stat` on the file showed zero diff before the rerun,
+confirming full restoration).
+
+**Rule going forward:** This red/green round-trip on a single test file
+took under a minute end-to-end and is the single highest-value check in
+this domain's QA loop — do it for every new concurrency/idempotency/
+ownership test, every time, even under time pressure, rather than trusting
+the test's *shape* (sends a wrong-but-plausible cookie value) as a proxy
+for it actually being wired to the code path it claims to test. Also:
+before concluding a hardcoded literal (e.g. a cookie name) is a latent bug,
+check whether the specific test environment it runs under (here,
+`NODE_ENV: "development"` explicitly set by the spawned server) makes that
+literal currently accurate — a hardcoded value that's accurate-for-now but
+would silently drift later is a real residual risk worth documenting, but
+it is a different (lower) severity than a test that is *already* wrong.

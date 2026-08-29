@@ -266,6 +266,29 @@ somewhere durable. If it isn't, name the exact zero-migration destination
 rather than leaving "recorded" as an assumption for the builder to satisfy
 however they see fit.
 
+## An existing library wrapper's presence doesn't mean its API shape matches a new item's needs
+**Symptom:** M4-1 (Stripe Embedded Checkout session creation) could have
+been treated as "the Stripe wrapper already exists (`src/lib/stripe.ts`),
+just call it" — the file's presence alone looks like reusable prior work,
+the same shape as the "check before assuming a new page needs new
+plumbing" lesson below.
+**Cause:** Reading `src/lib/stripe.ts` in full showed it wraps Stripe's
+*classic hosted* Checkout (`mode: "payment"`, `success_url`/`cancel_url`)
+for a one-off M0/U1 infrastructure smoke test — not Embedded Checkout
+(`ui_mode: "embedded"`, `client_secret`, `return_url`), which is what U7/
+HRH-47 actually needs. Same SDK, same file, genuinely different API call
+shape; the wrapper needs extending, not just reuse, and that's a real
+(if narrow) design question, not a copy-paste.
+**Rule going forward:** "A wrapper for this SDK/library already exists" is
+not the same claim as "this wrapper already does what the new item needs."
+Read the actual call inside the existing wrapper (not just its exported
+function names) and compare its exact mode/parameters against what the
+new item's PRD/Linear description asks for before declaring it reusable
+as-is. If the shape differs, name the specific mismatch (mode, params,
+return shape) in the acceptance criteria and flag it as a reason
+platform-architect review may still be warranted, rather than assuming
+reuse makes the item automatically UI-wiring-shaped.
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already

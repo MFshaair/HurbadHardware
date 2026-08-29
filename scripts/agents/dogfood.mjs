@@ -82,6 +82,29 @@
 // ("full cart->reservation dogfood exits 0") — see FEATURES.md's M3
 // heading and this leg's own header comment above dogfoodCheckout() for
 // the full account, including how this was proven able to fail.
+//
+// M4-1 STATUS (checked 2026-08-29, qa-dogfood-engineer, M4-1/HRH-47):
+// deliberately NOT adding a dogfood leg for this item. Confirmed by grep
+// (`grep -rn "StripeCheckout\|create-stripe-session" src/app/checkout`)
+// that `StripeCheckout.tsx` is not mounted by any page yet and
+// `/checkout/review`'s "Place order" flow still stops at the M3-3 201
+// (ReviewStep.tsx's own header comment: "M3-3 wires the real 'Place order'
+// submit"; POST /api/checkout/create-stripe-session is not called from
+// anywhere in src/app). There is no real user journey to click through —
+// same reasoning as M3-2 (service/transaction layer built and unit/
+// integration tested, nothing routes to it from a page yet) and as M3-1's
+// unwired mergeGuestCartOnLogin note above: dogfooding an unwired code path
+// is theater, not verification. Also no real STRIPE_SECRET_KEY exists yet
+// (.env.development still REPLACE_ME), so even a wired-up leg could not
+// exercise a real Stripe response, only the mocked-SDK boundary this
+// repo's own test suite (test19/test20) already covers in-process. The M4
+// bullet above ("mocked Stripe/M-Pesa payment -> order CONFIRMED -> webhook
+// idempotent") is the actual milestone checkpoint and requires M4-1b's
+// webhook (HRH-48, not yet built) to move an order to CONFIRMED at all —
+// add the dogfood leg once StripeCheckout.tsx is actually mounted on
+// /checkout/review AND the webhook exists to complete the round trip, not
+// before. Until then this remains an explicit, documented gap, not a
+// silently-stale file.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";

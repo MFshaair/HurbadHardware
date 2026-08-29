@@ -183,3 +183,27 @@ documented body shape. Any field the validator returns that the route's
 comment does not list is mass assignment — and check whether the other
 callers of that validator wrap the field in extra logic (a transaction, an
 index-violation catch) that the new caller skipped.
+
+## A row-selection predicate scoped by parent id but not by provider/type
+**Symptom (M4-1):** A payment module's crash-recovery branch selected
+`findMany({ where: { orderId } })` and adopted any INITIATED row's id and
+idempotency key — correct while only one provider exists, silently
+cross-provider-hijacking the moment a second one lands.
+**Cause:** The ADR enumerated the scoping key the reviewer would ask about
+(orderId) and never mentioned `provider`; a single-provider test suite
+cannot distinguish the two.
+**Rule going forward:** For any "find the existing attempt row" query on a
+money path, check it is scoped by every discriminator the table carries
+(provider/type/kind), not just the parent id — and check the branch that
+*writes back* (does it stamp a provider-specific id into a row whose
+provider column says something else?).
+
+## Allowlists that pre-open explicitly out-of-scope regions
+**Symptom (M4-1):** A currency allowlist included the two regions the run
+state declares out of scope and whose data-residency legal opinion is an
+open escalation, justified as "wiring the mechanism testably."
+**Rule going forward:** An allowlist entry is itself the control. Treat any
+entry for a region/currency the ledger says is out of scope as a finding
+(fail-safe default = ship the in-scope value only), even when no code path
+can reach it yet — reachability changes silently, allowlists don't get
+re-reviewed.

@@ -44,6 +44,64 @@ sequential resubmit after a resource is already consumed 404ing is
 correct, distinct behavior, not a bug — don't force it to also mean
 "idempotent."
 
+## A route/module pair with two DIFFERENT SDK mocking needs must live in separate test files
+
+**Symptom:** While building M4-1 (Stripe Embedded Checkout session
+creation), I needed two genuinely different tests of the Stripe SDK
+boundary in the same feature: (a) `stripe.ts`'s own request-shape
+correctness (the `ui_mode: "embedded_page"` vs. the docs' `"embedded"`
+trap) — which requires exercising the REAL `stripe.ts` code against a
+mocked `"stripe"` npm package, same as `tests/test4-stripe.test.ts`; and
+(b) `paymentService.ts`'s transactional/concurrency/CAS behavior — which
+requires `stripe.ts` itself to be fully replaced with a controllable mock
+(`vi.mock("../src/lib/stripe")`) so tests can inject delays/rejections
+without fighting the real SDK wrapper.
+
+**Cause:** A single `vi.mock("../src/lib/stripe", ...)` at the top of a
+test file replaces the WHOLE module for every test in that file. There is
+no way, in the same file, to also import the real (unmocked) `stripe.ts`
+to test its own internal request-shape logic — the two needs are mutually
+exclusive at the module-mock level.
+
+**Rule going forward:** when a feature has both "does the low-level SDK
+wrapper build the right request" and "does the higher-level service that
+CALLS that wrapper behave correctly under concurrency/failure," split
+these into two test files: one that mocks the underlying npm SDK package
+directly and imports the real wrapper module (`tests/test19-stripe-
+embedded-checkout.test.ts`), and one that mocks the wrapper module itself
+wholesale and imports the real higher-level service
+(`tests/test20-payment-service.test.ts`). Don't try to force both into one
+file with `vi.doMock`/`vi.unmock` gymnastics — the failure mode is subtle
+module-cache bleed between describe blocks, not a clean error.
+
+## A route using `next/headers` cannot be tested end-to-end with a mocked SDK
+
+**Symptom:** M4-1's route (`POST /api/checkout/create-stripe-session`)
+calls `auth.api.getSession()`/`getCartSessionId()`, both of which use
+`next/headers` and only work inside a real Next.js request context (a
+spawned `next dev` server, not a direct in-process module import — see the
+existing "Existing mocked-SDK fallback pattern" entry below and
+`tests/test18-checkout.test.ts`'s precedent). But `vi.mock` for the Stripe
+SDK boundary only affects the CURRENT vitest process, not a separately
+spawned `next dev` child process — so a spawned-server test of this route
+can never reach a successful (mocked) Stripe call.
+
+**Rule going forward:** for a route that BOTH needs `next/headers` (so
+must be tested via a spawned dev server) AND calls out to a
+mockable-only-in-process SDK, split the required tests by which side of
+Phase B (the actual external call) they fall on: everything that resolves
+BEFORE the SDK call (body validation, ownership 404s, payability/
+predicate 409s) can and should be proven through the real spawned-server
+route (`tests/test21-checkout-stripe-session-route.test.ts` for M4-1);
+everything that depends on the SDK call's outcome (success, failure,
+concurrency, idempotency races) has to be proven one layer down, against
+the framework-free service function directly in-process with the SDK
+wrapper mocked (`tests/test20-payment-service.test.ts`). Do not try to get
+a spawned-server test to exercise a "successful mocked Stripe session" —
+it structurally cannot, and reaching for an env-flag to fake it in
+production code would violate the "no NODE_ENV branch swaps in fake SDK
+behavior at runtime" rule this domain is bound by.
+
 ## Existing mocked-SDK fallback pattern (context, not yet a lesson)
 
 `tests/test4-stripe.test.ts` already establishes the pattern for this

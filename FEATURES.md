@@ -1694,11 +1694,287 @@ code, not accepted on report. 4 findings tracked:
 **Integration checkpoint:** mocked E2E payment dogfood green; webhook
 delivered twice results in exactly one confirmation.
 
-### M4-1: Stripe Embedded Checkout + webhook
+### M4-1: Stripe Embedded Checkout session creation (HRH-47)
+**Status:** verified (gate-check.sh M4-1 exit 0 — 2026-08-29) · **Owner:** commerce-payments-engineer
+Scope: `app/api/checkout/create-stripe-session/route.ts` + `StripeCheckout.tsx`
++ `src/lib/paymentService.ts` (new, framework-free — required for the real-
+Postgres concurrency test, same reasoning as M3-2 ADR Decision 12). Split
+out of the original bundled M4-1 (2026-08-29) so this half can be built/
+verified without HRH-48's webhook existing yet — see M4-1b below and
+`docs/agents/run-state.md` Tier 2 for the split rationale (same pattern
+as M3-3/M3-3a).
+
+**Design review: DONE (platform-architect, 2026-08-29).** Binding design
+is `docs/agents/arch-decisions/M4-1-stripe-embedded-checkout.md` — 10
+decisions covering the three-phase ordering (DB transaction → Stripe call
+outside any transaction → CAS-update transaction), the `Order`-row-lock +
+durable-status-predicate + 120s-in-flight-window race mechanism, crash
+recovery (reuse the abandoned `INITIATED` row and its idempotency key,
+never create a second one), the exact `stripe.ts` extension (including a
+real, SDK-verified bug catch: `ui_mode: "embedded_page"`, not the docs'
+`"embedded"`, which compiles but fails at runtime against the installed
+`stripe@22.5.0` types), money-in-minor-units with a pre-Stripe-call
+reconciliation assertion, and the full error-to-HTTP-status contract. Build
+against it, do not improvise. Two open product questions flagged as **not
+blocking this item** but binding on HRH-48/launch: the Stripe
+30-minute-minimum-session vs. 15-minute-reservation-TTL mismatch (money-
+taken-but-stock-gone risk), and unverified Stripe currency support for
+ETB/SOS.
+- [x] `POST /api/checkout/create-stripe-session` accepts `{ orderId }` only
+  (request schema rejects any additional/unknown properties — no card
+  fields of any kind); resolves the caller via `auth.api.getSession()`
+  server-side and verifies the order belongs to the caller (`Order.userId`
+  match for a logged-in user; guest-order ownership check for a guest
+  order) — never trusts a client-supplied user id, same non-negotiable
+  pattern M3-2/M3-3's cart-ownership fix established. Implemented in
+  `src/app/api/checkout/create-stripe-session/route.ts` (thin: parse,
+  identity, call `paymentService.ts`, map errors) +
+  `src/lib/paymentService.ts::prepareAttempt`'s ownership check. Proven by
+  `tests/test21-checkout-stripe-session-route.test.ts` (real spawned
+  `next dev` server, real cookies/auth — unknown-key 400s, guest-cookie and
+  authenticated-user ownership 404s byte-identical to a genuinely
+  nonexistent order id) and `tests/test20-payment-service.test.ts` (direct
+  ownership rejection cases against real Postgres).
+- [x] Rejects with 409 if `Order.paymentStatus` is not `PENDING`, or if the
+  order already has a `PaymentTransaction` in `INITIATED` (younger than the
+  120s in-flight grace), `PENDING`, or `CONFIRMED` status (no overlapping/
+  duplicate payment attempts on one order — see ADR M4-1 Decision 2). A
+  prior `FAILED`/`CANCELLED` `PaymentTransaction` on the same order does NOT
+  block a new attempt — retries are expected and each retry gets its own
+  new `idempotencyKey`/row — EXCEPT a crash-recovery retry against an
+  abandoned `INITIATED` row, which reuses that row and its key so at most
+  one Stripe session ever exists per row (ADR M4-1 Decision 3, this is what
+  lets HRH-48's webhook later disambiguate which attempt actually
+  succeeded). Implemented in `src/lib/paymentService.ts::prepareAttempt`'s
+  duplicate-attempt predicate. Proven by
+  `tests/test20-payment-service.test.ts`'s real-concurrency test (two
+  `Promise.all` calls against real Postgres, mocked Stripe call delayed
+  200ms — exactly one `PaymentTransaction` row, Stripe mock called exactly
+  once, loser throws `PaymentAttemptInFlightError`), crash-recovery test
+  (5-minute-old `INITIATED` row reused, same id + `idempotencyKey`, no
+  second row), stale-ceiling test (25-hour-old row CAS'd to `FAILED` with
+  `failureCode: "stale_initiated"`, fresh row created), and the
+  `CONFIRMED`/`PENDING`/`FAILED`-doesn't-block/young-`INITIATED` predicate
+  table tests.
+- [x] Generates `idempotencyKey` via `crypto.randomUUID()` and creates the
+  `PaymentTransaction` row (`orderId`, `provider: "stripe"`,
+  `idempotencyKey`, `amount: Order.totalAmount`, `currency: Order.currency`,
+  `status: INITIATED`, `providerTxId: null`) BEFORE calling the Stripe SDK,
+  so a crash/timeout during the Stripe call still leaves an auditable
+  `INITIATED` row rather than silently losing the attempt. The same
+  `idempotencyKey` is also passed as Stripe's own request-level idempotency
+  key option on `stripe.checkout.sessions.create`, so a client-side network
+  retry of the identical request cannot create two Stripe-side sessions.
+  Implemented per ADR Decision 1's three-phase ordering (Phase A commits
+  before Phase B's Stripe call ever runs). Proven by the happy-path
+  dogfood test and the `idempotency_key_in_use`-maps-to-409-row-stays-
+  `INITIATED` test in `tests/test20-payment-service.test.ts`.
+- [x] Calls Stripe via `getStripeClient()` (`src/lib/stripe.ts`, extended —
+  not duplicated) using Embedded Checkout's actual API shape: `ui_mode:
+  "embedded_page"` (NOT `"embedded"` — the docs' value is not in
+  stripe@22.5.0's `UiMode` union on API version `2026-07-29.dahlia`; it
+  compiles via `OtherString` and fails at runtime), `return_url`, and NO
+  `success_url`/`cancel_url` (not allowed with `embedded_page`) — not the
+  classic hosted-Checkout pair `createSetupCheckSession` currently uses for
+  the U1 smoke test. On success: updates the row's `providerTxId` to the
+  returned session id and returns `{ clientSecret: session.client_secret }`
+  to `StripeCheckout.tsx` (the response body never contains
+  `STRIPE_SECRET_KEY` or any other secret). On a Stripe API error: updates
+  the row to `FAILED` with `failureMessage` populated and returns a 502 —
+  no `PaymentTransaction` is left `INITIATED` with no explanation.
+  `createEmbeddedCheckoutSession` added to `src/lib/stripe.ts` exactly per
+  ADR Decision 4 (`getStripeClient()` also gained `timeout: 20_000,
+  maxNetworkRetries: 1`). The `ui_mode: "embedded_page"` correction is
+  dogfooded directly against a mocked "stripe" SDK package in
+  `tests/test19-stripe-embedded-checkout.test.ts` (asserts the literal
+  request shape sent to `stripe.checkout.sessions.create`: `ui_mode`,
+  absent `success_url`/`cancel_url`, idempotency key as the SDK's second
+  positional `RequestOptions` argument). The Stripe-failure CAS-to-`FAILED`
+  + 502 path is proven in `tests/test20-payment-service.test.ts`.
+- [x] Mocking boundary (binding on both build and security-review, since no
+  real Stripe sandbox key exists yet — `.env.development`'s
+  `STRIPE_SECRET_KEY` is still `REPLACE_ME`, per run-state OPEN RISKS):
+  tests mock the Stripe SDK call itself (`stripe.checkout.sessions.create`,
+  e.g. via `vi.mock` at the test layer) — no real network call to Stripe,
+  no dependency on real credentials. All DB/auth/ownership logic (session
+  lookup, order-ownership check, `PaymentTransaction` create/update) runs
+  for real against the test DB. security-reviewer must confirm the mock is
+  test-only and does not leak into the production code path — no
+  `NODE_ENV`/env-flag branch inside the route or `stripe.ts` that swaps in
+  fake Stripe behavior at runtime. Confirmed: `src/app/api/checkout/
+  create-stripe-session/route.ts`, `src/lib/paymentService.ts`, and
+  `src/lib/stripe.ts` contain zero `NODE_ENV`/env-flag branches; the mock
+  lives entirely at the test layer (`vi.mock("../src/lib/stripe", ...)` in
+  `tests/test20-payment-service.test.ts`; `vi.doMock("stripe", ...)` in
+  `tests/test19-stripe-embedded-checkout.test.ts`, same pattern as
+  `tests/test4-stripe.test.ts`).
+- [x] No card data (number, CVC, expiry, or any other PCI-scoped field) is
+  ever accepted in this route's request body, written to
+  `PaymentTransaction`, or logged — `PaymentTransaction.metadata` may only
+  ever hold a card-data-free subset of the Stripe response (session id,
+  payment_intent id), consistent with the schema's own comment
+  (`prisma/schema.prisma:276`). This item covers session creation only:
+  the embedded checkout UI's actual card-entry surface is Stripe's own
+  hosted iframe (nothing to test here beyond "we never receive card
+  fields"), and confirming/failing the transaction on payment result is
+  HRH-48's webhook, not this item. The route accepts EXACTLY `{ orderId }`
+  — any other key (including `cardNumber`/`cvc`) is rejected with 400
+  before any DB write. Proven by
+  `tests/test21-checkout-stripe-session-route.test.ts`'s dedicated test:
+  posts a body containing `cardNumber`/`cvc`, asserts 400, asserts neither
+  string appears in the response body or in a `console.error` spy, and
+  confirms zero `PaymentTransaction` rows were created for that order.
+
+**Architect review: DONE** — see the resolved-design note at the top of
+this entry, pointing to `docs/agents/arch-decisions/M4-1-stripe-embedded-checkout.md`.
+
+**Build note (commerce-payments-engineer, 2026-08-29):** implemented
+exactly against the ADR's 10 decisions. New files:
+`src/lib/paymentService.ts`,
+`src/app/api/checkout/create-stripe-session/route.ts`,
+`src/components/checkout/StripeCheckout.tsx`. Extended:
+`src/lib/stripe.ts` (added `createEmbeddedCheckoutSession`, extended
+`getStripeClient()`; `createSetupCheckSession` untouched). New production
+dependencies (per ADR Known limits, confirmed not previously installed):
+`@stripe/stripe-js`, `@stripe/react-stripe-js`. New tests:
+`tests/test19-stripe-embedded-checkout.test.ts` (stripe.ts's `ui_mode`
+correction, mocked "stripe" package), `tests/test20-payment-service.test.ts`
+(paymentService.ts, mocked `@/lib/stripe`, real Postgres — all 6 of the
+ADR's mocked-SDK required tests plus the duplicate-attempt predicate/
+payability/currency branches), `tests/test21-checkout-stripe-session-route.test.ts`
+(route contract via a real spawned `next dev` server — ownership + no-
+card-fields, tests 6 and 8 of the ADR's required list; deliberately does
+NOT attempt a real Stripe call from the spawned child process, since a
+separate process cannot share this file's `vi.mock` and no real sandbox
+key exists). `npm run build` / `npm run lint` / `npm test`
+(`scripts/agents/local-check.sh`) all green: 264 tests passed, 2
+pre-existing skips (the real-Stripe-key upgrade paths in test4/test19),
+zero failures. Not built: HRH-48's webhook, any reservation confirm/
+release logic, M-Pesa — all explicitly out of scope per the ADR and this
+item's dispatch.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M4-1.md`,
+2026-08-29) — no blocking findings. Card-data rejection, ownership
+enforcement, the `ui_mode: "embedded_page"` correction, money
+reconciliation, idempotency-key scoping, secret handling, and error-body
+leak-freedom were all independently re-verified by tracing code, not
+accepted on report. 4 findings tracked:
+- **F1 (LOW-MEDIUM, binding on M4-2/M-Pesa):** the crash-recovery
+  attempt-row query (`paymentService.ts`'s `findMany({ where: { orderId }
+  })`) is scoped by `orderId` but not by `provider` — harmless with only
+  one provider live today, but once M4-2 (M-Pesa) exists, an abandoned
+  M-Pesa `INITIATED` row on the same order could be silently hijacked and
+  reused as a Stripe attempt. **Must be fixed when M4-2 is built** — scope
+  the query by `provider` too. Route to commerce-payments-engineer.
+- **F2 (LOW):** `buildReturnUrl` interpolates `orderId` into the
+  `return_url` without `encodeURIComponent` — unreachable today only
+  because ownership resolution happens first, same class as prior
+  unencoded-URL-param findings in this codebase (M3-3a's F2, M3-3's F3,
+  still open). Route to commerce-payments-engineer.
+- **F3 (LOW):** `SUPPORTED_STRIPE_CURRENCIES` pre-opens `ETB`/`SOS` — both
+  explicitly out-of-scope regions per `run-state.md`'s standing Somalia/
+  Ethiopia hold (Somalia's data-residency legal opinion is still an open
+  OPEN RISKS item). Reachability is currently nil (no ET/SO checkout flow
+  exists), but an allowlist entry is itself the control — should be
+  narrowed to `KE`-only until those regions are actually unblocked. Route
+  to commerce-payments-engineer.
+- **F4 (LOW, test-infra):** the pre-existing `vitest.config.mts` coverage
+  exclude glob `src/app/api/checkout/**` silently also swallows the new
+  `create-stripe-session` route from coverage measurement. Route to
+  qa-dogfood-engineer to confirm intentional/adjust.
+
+**Verification request from security-reviewer (routed to
+qa-dogfood-engineer, not yet independently confirmed):** `test21`'s
+stranger-cookie ownership test hardcodes the cart cookie name
+(`hurbad_cart`) rather than deriving it from a live `Set-Cookie` header —
+if `CART_COOKIE_NAME` ever drifts (it's already `__Host-`-prefixed in
+production), this test could silently degrade to testing the weaker
+no-cookie path instead of the actual forged-cookie path. Reproduction
+requested: temporarily delete the guest-ownership branch in
+`paymentService.ts` and confirm `test21`'s stranger-cookie test goes red
+(proving it's non-trivial) before trusting it long-term.
+
+**QA verification (qa-dogfood-engineer, 2026-08-29):** both items closed.
+
+- **F4 (coverage-exclude glob) — fixed, not merely justified-as-is.**
+  Confirmed via `tests/test21-checkout-stripe-session-route.test.ts` that
+  the new `create-stripe-session/route.ts`'s meaningful branches ARE
+  genuinely exercised through the spawned-server tests (malformed/empty/
+  unknown-key body -> 400, guest-cookie/cross-user/nonexistent-order -> 404
+  byte-identical no-oracle body, correct-cookie -> proceeds past ownership),
+  so excluding it from in-process coverage is substantively correct (same
+  measurement-gap class as the M3-3 `/api/checkout` route, not a
+  coverage-dodge). However the exclusion was riding on the pre-existing
+  wildcard `"src/app/api/checkout/**"` (`vitest.config.mts`) without ever
+  being individually documented for this file — exactly the
+  silent-inheritance pattern security-reviewer M2-1 F3 flagged. Fixed:
+  replaced the wildcard with two explicit filenames
+  (`src/app/api/checkout/route.ts` and
+  `src/app/api/checkout/create-stripe-session/route.ts`), each with its own
+  justification comment, so a future new file dropped under
+  `src/app/api/checkout/**` will NOT be silently excluded without review.
+- **Stranger-cookie ownership test — confirmed genuinely non-trivial, RED
+  reproduced and restored.** Temporarily commented out the guest-ownership
+  branch in `src/lib/paymentService.ts:250-259` (the `sessionId`/
+  `OrderEvent` lookup inside the `else` branch of the ownership check),
+  reran `test21` alone: the stranger-cookie test failed exactly as
+  expected — `expected 502 to be 404` (the forged cookie now sailed straight
+  past the (disabled) ownership check into the unconfigured-Stripe-key
+  failure path instead of being rejected at 404) — 1 failed / 8 passed.
+  Restored the branch verbatim (confirmed via `git diff --stat
+  src/lib/paymentService.ts` showing no diff) and reran: 9/9 passed again.
+  This proves the test is a real regression gate today, not a false-positive
+  green. Root-cause check on the hardcoded-cookie-name concern: `test21`
+  spawns its `next dev` server with `NODE_ENV: "development"` explicitly
+  (`:153`), under which `CART_COOKIE_NAME` (`src/lib/cartCookie.ts:24`)
+  resolves to the exact literal `"hurbad_cart"` the test hardcodes — so the
+  hardcoding is currently accurate, not currently a false-positive-green
+  bug, and per the dispatch's own instruction ("if it does NOT go red...
+  fix the test") no test-code change was required since it DID go red.
+  Left as a documented residual risk rather than fixed proactively: if
+  `CART_COOKIE_NAME`'s dev/test-mode literal ever changes, this hardcoded
+  value would silently drift out of sync and this specific test would
+  degrade to the weaker no-cookie path without failing — a future
+  strengthening (derive the name from a live `Set-Cookie` response header,
+  e.g. captured off a real `/api/cart` response earlier in the same test)
+  would remove that residual risk but was not required by this pass's
+  actual finding.
+- **Dogfood (`scripts/agents/dogfood.mjs`) — deliberately NOT extended.**
+  Confirmed via grep that `StripeCheckout.tsx` is not mounted by any page
+  and `/checkout/review` still stops at the M3-3 201 (no call anywhere in
+  `src/app` to `POST /api/checkout/create-stripe-session`) — there is no
+  real user journey to click through yet, same reasoning as M3-2's
+  service-layer-built-nothing-routes-to-it-yet precedent. Documented this
+  decision inline in `dogfood.mjs` (new "M4-1 STATUS" comment block) so it
+  reads as a deliberate, dated decision rather than a stale gap — the leg
+  should be added once `StripeCheckout.tsx` is actually mounted AND M4-1b's
+  webhook exists to complete the CONFIRMED round trip (the file's existing
+  M4 checkpoint bullet), not before.
+- **Full suite:** `scripts/agents/local-check.sh` — build clean, lint clean
+  (1 pre-existing unrelated warning in `tests/test13-product-search.test.ts`,
+  0 errors), `npm test` 264 passed / 2 skipped / 0 failed (20 test files),
+  including `test:2-prisma-migrate`'s double-run drift check passing both
+  times. Same numbers as the builder/orchestrator's independent run, now
+  independently reconfirmed after both fixes above.
+**Verified:** `scripts/agents/gate-check.sh M4-1` exit 0 on 2026-08-29. All checks GREEN: build, lint, test+coverage (93.71% statements/lines, 82.36% branches, 96.89% functions, all thresholds met), dogfood entrypoint (server boot, Prisma migration idempotent, register→login→browse→search→checkout full flow, M3/M3-3a cart→order→201→Order/InventoryReservation/OrderEvent rows confirmed), and security sign-off STATUS: CLEAR (`docs/agents/security-signoff/M4-1.md`). F4 (coverage-exclude glob) and stranger-cookie test addressed by qa-dogfood-engineer and reconfirmed by gate.
+
+### M4-1b: Stripe webhook handler & idempotency (HRH-48)
 **Status:** planned · **Owner:** commerce-payments-engineer
-- [ ] Session creation generates `idempotencyKey`, creates `PaymentTransaction` (INITIATED)
-- [ ] Webhook verifies signature; `charge.succeeded`/`charge.failed` handled; duplicate delivery is a no-op (idempotencyKey enforced)
-- [ ] Card data never reaches the server (Embedded Checkout only)
+Scope: `app/api/webhooks/stripe/route.ts` only. Split out of the original
+bundled M4-1 (2026-08-29) — depends on M4-1 existing first (needs a real
+`PaymentTransaction`/`idempotencyKey` row to reconcile against). **Not
+dispatched yet** — acceptance criteria intentionally left at the PRD's
+existing granularity (verify HMAC signature; handle `charge.succeeded`/
+`charge.failed`; idempotent on duplicate delivery via `idempotencyKey`;
+PRD U7 Test 2-6) until M4-1/HRH-47 is actually built and this item is
+picked up in its own right — no premature detail invented now that could
+drift from what M4-1 actually ships.
+- [ ] Verifies Stripe webhook HMAC signature; invalid signature → 400
+- [ ] `charge.succeeded` → `PaymentTransaction` CONFIRMED, `Order`
+  CONFIRMED, `InventoryReservation` CONFIRMED, `onHand` decremented
+- [ ] `charge.failed` → `PaymentTransaction` FAILED, reservation released
+- [ ] Duplicate webhook delivery for the same `idempotencyKey` → 200 no-op,
+  no double-confirmation
 
 ### M4-2: M-Pesa Daraja integration
 **Status:** planned · **Owner:** commerce-payments-engineer

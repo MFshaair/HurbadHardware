@@ -128,6 +128,68 @@ fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-29 — M4-1 split into M4-1 (HRH-47, session creation) + M4-1b (HRH-48, webhook), acceptance criteria sharpened
+`product-planner` was dispatched on HRH-47 ("Stripe Embedded Checkout
+Session Creation"). Confirmed via `get_issue` that HRH-47's real scope
+(`app/api/checkout/create-stripe-session/route.ts`, `StripeCheckout.tsx`,
+idempotencyKey + `PaymentTransaction` INITIATED) is only the first of the
+original `FEATURES.md` M4-1's three bullets, and that HRH-48 ("Stripe
+Webhook Handler & Idempotency", `app/api/webhooks/stripe/route.ts`) is a
+genuinely separate Linear issue covering the other two bullets — the
+ledger had bundled both under one `M4-1` heading. Same split treatment as
+M3-3/M3-3a (see that entry below): split into `M4-1` (HRH-47, session
+creation, six sharpened criteria) and `M4-1b` (HRH-48, webhook — left
+`planned`, PRD-granularity criteria only, explicitly not dispatched yet).
+
+Grounded in direct reads, not assumed: `prisma/schema.prisma`'s
+`PaymentTransaction` model (`idempotencyKey String @unique`,
+`PaymentTransactionStatus` enum `INITIATED|PENDING|CONFIRMED|FAILED|
+CANCELLED`, `providerTxId String? @unique`, `metadata Json?` commented "no
+raw card data"); `src/lib/stripe.ts` (read in full) — confirmed it wraps
+classic hosted Stripe Checkout (`mode: "payment"`, `success_url`/
+`cancel_url`) for a U1 smoke test only, NOT Embedded Checkout (`ui_mode:
+"embedded"`, `client_secret`, `return_url`) — this is a real, previously
+unflagged gap: M4-1 is the first real use of Stripe's actual Embedded
+Checkout API shape in this repo, `stripe.ts` needs extending, not just
+reuse; `src/lib/reservationService.ts` (read `createReservationAndOrder`
+directly) confirmed `Order` reaches `paymentStatus: PENDING` (schema
+default) with `paymentProvider` recorded only in the `CREATED`
+`OrderEvent.payload` (M3-3/HRH-46's already-verified fix, `:517-521`), so
+M4-1's session-creation route must resolve an existing `Order` by id
+(passed by the client) plus a server-side session-derived `userId` for
+ownership — it does not create the `Order` itself; PRD U7 (`plans/Full PRD
+file.md:1696-1723`), confirming "card data never reaches our server" is a
+real PRD constraint scoped to Embedded Checkout as a whole, narrowed here
+to just this item's actual surface (this route never accepts card fields;
+the card-entry UI itself is Stripe's own hosted iframe, out of scope to
+test further here).
+
+**Mocking boundary made explicit and binding:** per OPEN RISKS
+(`.env.development`'s `STRIPE_SECRET_KEY` is still `REPLACE_ME`), tests
+must mock `stripe.checkout.sessions.create` itself, never touch real
+Stripe network calls or depend on real credentials, while all DB/auth/
+ownership logic runs for real against the test DB — security-reviewer is
+explicitly tasked with confirming the mock is test-layer-only (no
+`NODE_ENV`/env-flag branch inside the route or `stripe.ts` swapping in
+fake behavior at runtime).
+
+**Architect review: explicit YES** (unlike M2-4/M3-3a's UI-wiring shape).
+Three concrete unresolved design questions named, not left to a builder to
+improvise: (1) two-phase `PaymentTransaction`-row-then-Stripe-call
+ordering and crash-safety (a first-pass ordering was proposed in
+`FEATURES.md`'s M4-1 entry but flagged as needing architect confirmation/
+hardening, not treated as final); (2) the actual Embedded Checkout SDK
+call shape, since `stripe.ts` has never made this call before; (3) whether
+the new-attempt-vs-duplicate-attempt 409 check needs its own row lock to
+avoid a race between two near-simultaneous requests for the same order.
+
+**Not done, deliberately, per dispatch guardrail:** no code written; only
+`FEATURES.md`'s M4-1 section and this file were edited (no `src/`/`tests/`
+touched). HRH-48/M4-1b was explicitly NOT built or given detailed
+criteria beyond the PRD's own granularity — deferred to whenever it is
+actually picked up, so its criteria are grounded in what M4-1 actually
+ships rather than invented ahead of that.
+
 ### 2026-08-25 — M3-3 ("Checkout flow & authoritative pricing", HRH-46) acceptance criteria sharpened
 `product-planner` sharpened M3-3's three sparse bullets into seven concrete,
 machine-checkable criteria. Grounded in: `src/lib/reservationService.ts`

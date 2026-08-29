@@ -223,7 +223,45 @@ export default defineConfig({
         // (src/lib/reservationService.ts, src/lib/addressValidation.ts,
         // src/lib/cartService.ts) are deliberately NOT excluded — already
         // unit-tested in-process elsewhere (M3-2, M1-3, M3-1).
-        "src/app/api/checkout/**",
+        "src/app/api/checkout/route.ts",
+        // M4-1 (security review F4, 2026-08-29): this used to be the
+        // wildcard "src/app/api/checkout/**" above, which silently also
+        // swallowed the new create-stripe-session route from coverage
+        // without ever being individually justified for it — exactly the
+        // silent-inheritance pattern security-reviewer M2-1 F3 asked to be
+        // avoided. Confirmed the exclusion is still substantively correct
+        // for this file (not a coverage-dodge): route.ts independently
+        // calls auth.api.getSession()/next/headers's cookie store, so like
+        // its sibling above it is only meaningfully reachable via a real
+        // spawned `next dev` process, invisible to in-process v8
+        // instrumentation. tests/test21-checkout-stripe-session-route.test.ts
+        // proves it's genuinely exercised, not just excluded-and-ignored:
+        // all of the route's own branches (malformed/empty/unknown-key
+        // body -> 400, guest-cookie/cross-user/nonexistent-order -> 404
+        // byte-identical no-oracle body, correct-cookie -> proceeds past
+        // ownership into paymentService.ts) are hit. QA-confirmed 2026-08-29
+        // (FEATURES.md M4-1 F4 note) — split to its own explicit line
+        // rather than folded back into the wildcard, so a future new file
+        // under src/app/api/checkout/** does NOT get silently excluded
+        // without its own review.
+        "src/app/api/checkout/create-stripe-session/route.ts",
+        // M4-1: StripeCheckout.tsx is a "use client" component using
+        // hooks + a real browser `fetch()` + Stripe's own
+        // EmbeddedCheckoutProvider/EmbeddedCheckout (which mounts a real
+        // iframe pointed at Stripe's servers) — same "framework-coupled,
+        // no RTL/jsdom in this repo" justification as CartSummary.tsx
+        // above, compounded by having no real Stripe sandbox key to even
+        // load the iframe against in a spawned-server+Playwright test
+        // (STRIPE_SECRET_KEY is still REPLACE_ME, see run-state OPEN
+        // RISKS). The actual client_secret-fetching logic it depends on
+        // (POST /api/checkout/create-stripe-session ->
+        // src/lib/paymentService.ts) is unit-tested in-process with the
+        // mocked SDK boundary (tests/test20-payment-service.test.ts) and
+        // exercised via a real spawned dev server
+        // (tests/test21-checkout-stripe-session-route.test.ts) — this
+        // exclusion covers only the thin iframe-mounting JSX, not the
+        // logic behind it.
+        "src/components/checkout/StripeCheckout.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at
