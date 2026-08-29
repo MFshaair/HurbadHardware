@@ -224,6 +224,48 @@ the blocker under the original item — cite the specific schema/transaction
 dependency for each remaining bullet so a future reader doesn't have to
 re-derive why they're still blocked.
 
+## A prior item's security sign-off can hand the next item binding fixes that live in a third agent's files
+**Symptom:** M3-2's security sign-off named two findings (F1, F2) as
+"binding prerequisites on M3-3," but both fixes are in `cartService.ts`/
+`reservationService.ts` — files that belong to `catalog-inventory-engineer`
+(M3-1/M3-2's owner), not M3-3's stated owners
+(commerce-payments-engineer + storefront-admin-engineer). Framing these
+purely as M3-3 acceptance criteria without flagging the file mismatch risks
+either the dispatched agents skipping them as "not my file" or silently
+expanding their own scope into another agent's surface unnoticed.
+**Cause:** A security sign-off routes findings by "which future item makes
+this exploitable," not by "which agent owns the file." Those two routings
+frequently diverge once a finding sits in a shared library one item wrote
+and a later item's route handler calls.
+**Rule going forward:** When carrying a binding co-requisite forward from
+a prior item's security sign-off, check which file(s) the fix actually
+touches and compare against the current item's stated owner(s). If they
+diverge, say so explicitly in the ledger entry (owner line + each affected
+criterion) as "coordination required with <agent>" rather than either
+silently assigning it to the current owners or leaving the mismatch
+implicit — this is not a decision to make unilaterally (don't quietly
+reassign ownership), just a fact to surface so the orchestrator dispatches
+the right agent(s) for that criterion.
+
+## A validated-but-discarded field is a silent gap only direct code reading catches
+**Symptom:** The dispatch prompt for M3-3 described "payment provider is
+selected in M3-3a and recorded on the Order by M3-3" as if recording it
+were already a solved detail. Reading `reservationService.ts` directly
+showed `paymentProvider` is validated against an allowlist and then never
+written anywhere — no `Order` column, no existing `OrderEvent.payload`
+key — a real, silent gap the prose description glossed over.
+**Cause:** A function that validates an input but doesn't persist it looks
+identical from the outside (same successful response) to one that does —
+the gap is invisible without reading the actual write statements, not just
+the input type or the acceptance-criteria prose.
+**Rule going forward:** When a criterion says a value is "recorded on"
+some entity, verify by reading the actual create/update statements for
+that entity (not just its schema fields) that the value is written
+somewhere durable. If it isn't, name the exact zero-migration destination
+(e.g. an existing free-form `Json` field already used for sibling data)
+rather than leaving "recorded" as an assumption for the builder to satisfy
+however they see fit.
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already

@@ -637,6 +637,156 @@ describe("createReservationAndOrder — additional error paths", () => {
 });
 
 // ---------------------------------------------------------------------------
+// F2(b)/F3 regression (security-reviewer M3-2 sign-off,
+// docs/agents/security-signoff/M3-2.md): createReservationAndOrder must
+// assert cart ownership itself, at the function level, not rely on every
+// future caller doing it — and the SAME error/status as a genuinely missing
+// cart, so the check creates no cart-existence oracle. Closing F2(b) also
+// closes F3 (the cart-id-keyed order-detail oracle in the idempotent-lookup
+// branch), since the ownership check runs BEFORE that branch.
+
+describe("createReservationAndOrder — cart ownership assertion (F2(b)/F3)", () => {
+  it("throws CartNotFoundError when an authenticated caller supplies ANOTHER user's cart id", async () => {
+    const variantId = await createVariant({ onHand: 5, price: "50.00" });
+    const addressId = await createGuestAddress();
+    const { userId: victimUserId } = await createUserWithAddress();
+    const { userId: attackerUserId } = await createUserWithAddress();
+
+    const cart = await db.shoppingCart.create({
+      data: { sessionId: randomUUID(), userId: victimUserId, region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(cart.id);
+    await db.cartItem.create({ data: { cartId: cart.id, variantId, quantity: 1 } });
+
+    await expect(
+      reservationService.createReservationAndOrder({
+        cartId: cart.id,
+        shippingAddressId: addressId,
+        paymentProvider: "stripe",
+        userId: attackerUserId,
+      }),
+    ).rejects.toBeInstanceOf(reservationService.CartNotFoundError);
+
+    // Prove no order/reservation/stock mutation happened for the rejected
+    // attempt (fails closed, not "creates then errors").
+    const inventory = await db.regionalInventory.findFirstOrThrow({ where: { variantId, region: REGION } });
+    expect(inventory.reserved).toBe(0);
+    const orderCount = await db.order.count({ where: { items: { some: { variantId } } } });
+    expect(orderCount).toBe(0);
+  });
+
+  it("throws CartNotFoundError when a guest's presented sessionId does not match the cart's own sessionId", async () => {
+    const variantId = await createVariant({ onHand: 5, price: "50.00" });
+    const addressId = await createGuestAddress();
+
+    const realSessionId = randomUUID();
+    const cart = await db.shoppingCart.create({
+      data: { sessionId: realSessionId, region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(cart.id);
+    await db.cartItem.create({ data: { cartId: cart.id, variantId, quantity: 1 } });
+
+    await expect(
+      reservationService.createReservationAndOrder({
+        cartId: cart.id,
+        shippingAddressId: addressId,
+        paymentProvider: "stripe",
+        userId: null,
+        sessionId: randomUUID(), // a DIFFERENT guest's session cookie value
+      }),
+    ).rejects.toBeInstanceOf(reservationService.CartNotFoundError);
+  });
+
+  it("succeeds for the genuine owner: authenticated user's own cart, and a guest whose sessionId matches", async () => {
+    const variantId = await createVariant({ onHand: 5, price: "50.00" });
+    const { userId, addressId } = await createUserWithAddress();
+
+    const ownCart = await db.shoppingCart.create({
+      data: { sessionId: randomUUID(), userId, region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(ownCart.id);
+    await db.cartItem.create({ data: { cartId: ownCart.id, variantId, quantity: 1 } });
+
+    const result = await reservationService.createReservationAndOrder({
+      cartId: ownCart.id,
+      shippingAddressId: addressId,
+      paymentProvider: "stripe",
+      userId,
+    });
+    expect(result.orderId).toBeTruthy();
+
+    const guestSessionId = randomUUID();
+    const guestAddressId = await createGuestAddress();
+    const guestVariantId = await createVariant({ onHand: 5, price: "50.00" });
+    const guestCart = await db.shoppingCart.create({
+      data: { sessionId: guestSessionId, region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(guestCart.id);
+    await db.cartItem.create({ data: { cartId: guestCart.id, variantId: guestVariantId, quantity: 1 } });
+
+    const guestResult = await reservationService.createReservationAndOrder({
+      cartId: guestCart.id,
+      shippingAddressId: guestAddressId,
+      paymentProvider: "stripe",
+      userId: null,
+      sessionId: guestSessionId,
+    });
+    expect(guestResult.orderId).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F1 regression (security-reviewer M3-2 sign-off): `cartService.ts`'s
+// `lockCart` must correctly stop treating an already-consumed cart as live
+// under a DB session timezone BEHIND UTC (e.g. `America/New_York`), not
+// just under this repo's local-dev `Africa/Mogadishu` (which happens to
+// skew in the safe direction). Reproduction recipe is the sign-off's own:
+// SET (LOCAL) the session TimeZone, create a cart, consume it
+// (`expiresAt = now`, exactly what M3-2's idempotency does at checkout), and
+// confirm `lockCart` no longer returns/locks that row. Runs through the
+// REAL `lockCart` function (re-exported test-only as `__lockCartForTest`),
+// not a duplicated copy of its SQL, so a future edit that reintroduces a
+// bare `now()` would fail this test.
+
+describe("cartService.lockCart — timezone regression (F1)", () => {
+  it("does not treat an already-consumed cart as live under a session timezone behind UTC", async () => {
+    const cart = await db.shoppingCart.create({
+      data: { sessionId: randomUUID(), region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(cart.id);
+
+    // Consume the cart exactly as reservationService's checkout transaction
+    // does at the end of a successful order creation: expiresAt = now (UTC).
+    await db.shoppingCart.update({ where: { id: cart.id }, data: { expiresAt: new Date() } });
+
+    const locked = await db.$transaction(async (tx) => {
+      // Scoped to just this transaction — reverts automatically at
+      // commit/rollback, so this cannot leak into any other test.
+      await tx.$executeRawUnsafe(`SET LOCAL TIME ZONE 'America/New_York'`);
+      return cartService.__lockCartForTest(tx, cart.id);
+    });
+
+    expect(locked).toBeNull();
+  });
+
+  it("still treats a genuinely live (not yet consumed) cart as lockable under the same skewed timezone", async () => {
+    const cart = await db.shoppingCart.create({
+      data: { sessionId: randomUUID(), region: REGION, currency: "KES" },
+    });
+    cleanupCartIds.push(cart.id);
+    // Default `expiresAt` (7 days out) — never touched, so it's live.
+
+    const locked = await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL TIME ZONE 'America/New_York'`);
+      return cartService.__lockCartForTest(tx, cart.id);
+    });
+
+    expect(locked).not.toBeNull();
+    expect(locked?.id).toBe(cart.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Cron route (ADR Decision 6b): GET, CRON_SECRET-gated, fails closed.
 
 describe("GET /api/cron/release-expired-reservations", () => {

@@ -3,10 +3,11 @@ import EmptyCheckoutCart from "../EmptyCheckoutCart";
 import ReviewStep from "./ReviewStep";
 import CartSummary from "@/components/CartSummary";
 
-// `/checkout/review` (M3-3a): reuses M3-1's `CartSummary`/`toCartView` as
-// the sole source of pricing — no new pricing logic here. The "Place
-// order" control is explicitly inert (see ReviewStep) — this item creates
-// zero `Order`/`InventoryReservation`/`PaymentTransaction` rows.
+// `/checkout/review` (M3-3a/M3-3): reuses M3-1's `CartSummary`/`toCartView`
+// as the sole source of pricing — no new pricing logic here. "Place order"
+// (M3-3, HRH-46) POSTs to `POST /api/checkout` — see `ReviewStep` — which
+// creates the real `Order`/`InventoryReservation` rows server-side; `cart`
+// is passed through so a stock-conflict error can name the offending line.
 export default async function CheckoutReviewPage() {
   const context = await resolveCheckoutContext();
   if (!context.ok) {
@@ -35,7 +36,7 @@ export default async function CheckoutReviewPage() {
       <h1 className="text-xl font-semibold">Checkout — Review order</h1>
       <div className="mt-6 flex flex-col gap-6">
         <CartSummary cart={context.cart} region={context.region} />
-        <ReviewStep />
+        <ReviewStep cart={context.cart} />
       </div>
     </main>
   );

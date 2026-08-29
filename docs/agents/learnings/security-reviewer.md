@@ -152,3 +152,34 @@ inventory function, ask independently of the ADR: who can supply this,
 and what does the function itself verify about it? Treat "the route layer
 will pass a trusted value" as an unenforced contract, not a control —
 record it as binding on whichever item builds that route.
+
+## A row created before the transaction is a PII leak on every failure path
+**Symptom (M3-3):** A checkout route created an `Address` row holding
+customer PII immediately before calling the atomic order transaction, so
+every stock/address/conflict error — and every idempotent double-submit
+replay, which returns the *first* order — left a permanent, ownerless row
+no user-facing API can ever list or delete.
+**Cause:** Review attention goes to "does the transaction roll back
+correctly," and it does; the un-transacted write sitting one line above it
+is not part of the atom being reviewed.
+**Rule going forward:** On any money path, list every write that happens
+*before* the transaction opens and ask what deletes it when the
+transaction throws. Check the idempotent-replay branch too, not just the
+error branches — a success response can still orphan a row. Where the row
+is created from unauthenticated input, also check the column types for
+unbounded `String`/`text` and the validator for missing max lengths.
+
+## A shared validator's extra optional field is silent mass assignment
+**Symptom (M3-3):** A route documented its accepted body fields, then
+handed the raw object to a shared `validateAddressBody` that also accepts
+and returns an `isDefault` flag, spreading `...data` into `create` — so a
+field the route never intended to expose became client-settable, bypassing
+the unset-previous-default transaction that both sibling routes wrap
+around exactly that field, and turning a DB partial-unique violation into
+an uncaught 500 on the money path.
+**Rule going forward:** When a diff reuses an existing validator on a new
+route, diff the validator's returned fields against the route's own
+documented body shape. Any field the validator returns that the route's
+comment does not list is mass assignment — and check whether the other
+callers of that validator wrap the field in extra logic (a transaction, an
+index-violation catch) that the new caller skipped.

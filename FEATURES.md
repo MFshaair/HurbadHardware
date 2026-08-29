@@ -868,6 +868,31 @@ cleanly, consistent with M2-2's verified facet-panel behavior).
 **Integration checkpoint:** concurrent-checkout-of-last-unit test passes
 (one 200, one 409); full cart→reservation dogfood exits 0.
 
+**STATUS: MET (qa-dogfood-engineer, 2026-08-29, confirmed directly, not by
+report).** Both halves independently re-verified: (1) the concurrent-
+checkout-of-last-unit test (`tests/test17-reservation.test.ts`, `describe
+("createReservationAndOrder — concurrent last-unit checkout")`, one of two
+simultaneous checkouts against a single available unit throws
+`InsufficientStockError` — the service-level equivalent of one 200/one 409
+— `RegionalInventory.reserved` ends at exactly 1) passes as part of the
+232-passed/2-skipped `npm test` run. (2) `scripts/agents/dogfood.mjs`'s
+`dogfoodCheckout()` leg now drives a REAL browser click on `/checkout/
+review`'s "Place order" button all the way to a genuine 201 — real
+`orderNumber` in the confirmation UI, real `Order`/`InventoryReservation`
+(exactly +1 each)/`OrderEvent` (`CREATED`, `payload.paymentProvider ===
+"stripe"`) rows independently re-queried from Postgres, `GET /api/cart`
+confirmed empty/consumed afterward, and the browser's own `sessionStorage`
+checkout-draft key confirmed genuinely `null` (not merely re-written
+empty) — `node scripts/agents/dogfood.mjs` exits 0. Proven able to fail:
+temporarily commented out `ReviewStep.tsx`'s `clearDraft()` call and
+re-ran the same dogfood command — it failed with a specific, exact error
+naming the still-present draft JSON, not a generic timeout; restored and
+re-ran, green again, with a follow-up query confirming zero leftover
+fixture rows either way. Per this run's standing process (see
+`docs/agents/run-state.md`), this MET status should trigger the
+orchestrator's INTEGRATION CHECKPOINT step (full milestone re-ground +
+dogfood run) before M4 work starts.
+
 ### M3-1: Shopping cart
 **Status:** verified · **Owner:** catalog-inventory-engineer (cart service + API routes) + storefront-admin-engineer (`/cart` page + wiring `VariantSelector.tsx`'s existing add-to-cart button) · **Design review: platform-architect, scoped to the guest-session identity mechanism only — see note below**
 - [x] Cart identity/lookup: `getOrCreateCart(...)` (`src/lib/cartService.ts`) resolves an authenticated user's cart by `userId` (via `auth.api.getSession()`, same pattern as M1's protected pages); resolves a guest's cart by the `hurbad_cart` session cookie (`src/lib/cartCookie.ts`) per `docs/agents/arch-decisions/M3-1-guest-session-cookie.md` (`crypto.randomUUID()`, httpOnly, `sameSite: lax`, `__Host-` prefix + `secure` in production only, 7-day `maxAge` kept in lockstep with `ShoppingCart.expiresAt`). Confirmed by reading both files and by dogfooding: `GET /api/cart` with no cookie returns an empty cart with no DB row created; `POST /api/cart/add` mints one only on that first write.
@@ -1363,15 +1388,305 @@ code, not taken on the builder's report. 5 non-blocking findings tracked:
 - Security sign-off: `docs/agents/security-signoff/M3-3a.md` STATUS: CLEAR verified
 
 
-### M3-3: Checkout flow & authoritative pricing
-**Status:** planned · **Owner:** commerce-payments-engineer + storefront-admin-engineer
-- [ ] Real `Order`/`InventoryReservation` creation reuses the address +
-      payment-method selection from M3-3a's now-inert `/checkout/review`
-      "Place order" action, wired to M3-2's atomic reservation transaction
-      once it exists (tax already computed server-side by M3-1/M3-3a;
-      no new tax logic here)
-- [ ] Price is always read from `RegionalPrice` server-side, never trusted from the client
-- [ ] Checkout always reads inventory/price from the primary DB, never a replica
+### M3-3: Checkout flow & authoritative pricing (HRH-46)
+**Status:** verified (gate-check.sh M3-3 exit 0 — 2026-08-29) · **Owner:** commerce-payments-engineer + storefront-admin-engineer, **coordination required with catalog-inventory-engineer** for two criteria below that touch `src/lib/cartService.ts`/`src/lib/reservationService.ts` (M3-2's files, not this item's owners' usual surface — do not let either fix get silently dropped because it falls outside the stated owner pair) · **Design review: platform-architect NOT required — see reasoning below**
+
+**QA/dogfood (qa-dogfood-engineer, 2026-08-29):** `scripts/agents/
+dogfood.mjs`'s `dogfoodCheckout()` leg extended past the previously-inert
+"Place order" click to a genuine 201 — real `orderNumber` shown in a real
+confirmation UI, real `Order`/`InventoryReservation`/`OrderEvent` rows
+independently re-queried from Postgres (not just an HTTP status), the cart
+confirmed consumed via `GET /api/cart`, ZERO new `PaymentTransaction` rows
+(confirms the M3/M4 boundary holds in a real run, not just by reading the
+route), and the browser's own `sessionStorage` checkout-draft key confirmed
+genuinely `null`. Proven able to fail: temporarily removed `ReviewStep.tsx`'s
+`clearDraft()` call and re-ran the dogfood script — failed with a specific
+error naming the still-present draft JSON; restored, re-ran, green, and
+confirmed zero leftover fixture rows in Postgres afterward either way. Full
+`npm test` (`scripts/agents/local-check.sh`): build/lint clean, 232 passed /
+2 skipped, 0 failed. **This closes M3's own milestone integration
+checkpoint** ("concurrent-checkout-of-last-unit test passes; full
+cart→reservation dogfood exits 0") — see the `## M3` heading above for the
+full account. Known limits: PRD "Critical Failure-Path Verification" items
+not yet automated by this pass — webhook delivered 2-5 times, payment-
+succeeds-after-timeout, reservation-expires-during-checkout, stale-replica-
+never-used-for-checkout — all genuinely belong to M4 (no real payment
+provider/webhook exists yet to test against); flagged here so they aren't
+lost, not treated as this item's own gap.
+
+Linear HRH-46 ("Tax Calculation & Authoritative Pricing"): despite the
+title, **no new tax logic is built here.** Confirmed by reading
+`src/lib/reservationService.ts` directly (money/tax fully computed inside
+`createReservationAndOrder`, `docs/agents/arch-decisions/M3-2-inventory-
+reservation.md` Decision 5) — M3-2 (`verified`, gate-checked 2026-08-25)
+already recomputes price/tax server-side from `RegionalPrice`/
+`src/lib/tax.ts`'s `getTaxRate`, with no client-supplied amount, currency,
+tax rate, or region ever accepted. M3-3's job is wiring M3-3a's inert
+`/checkout/review` "Place order" button to that already-built, already
+tax-correct transaction — not reimplementing it.
+
+- [x] **Route handler derives `cartId` server-side, never accepts one from
+      the client** — implemented as `POST /api/checkout`
+      (`src/app/api/checkout/route.ts`, commerce-payments-engineer,
+      2026-08-29): calls `auth.api.getSession()` itself, then
+      `getCartSessionId()` + `findActiveCart({ userId, sessionId })`
+      (same pattern as `src/app/api/cart/route.ts`), and passes the
+      resolved `cart.id` to `createReservationAndOrder`. Any `cartId`
+      field present in the request body is never read at all — proven by
+      `tests/test18-checkout.test.ts`'s dedicated security test: an
+      attacker supplies a victim's real `cartId` (plus a forged `userId`)
+      in the body, and the resulting order/subtotal reflects the
+      attacker's OWN cart, with the victim's cart left completely
+      untouched (still active, unconsumed, resolvable by the victim's own
+      cookie afterward). This closes security-reviewer's M3-2 finding
+      **F2(a)** (`docs/agents/security-signoff/M3-2.md`) at the route
+      layer, on top of `createReservationAndOrder`'s own F2(b) defense in
+      depth (already `[x]` below).
+- [x] **Guest/new-address resolution creates a real `Address` row before
+      calling `createReservationAndOrder`**: if the request body's
+      `addressMode === "saved"`, `savedAddressId` is passed through
+      unchanged (ownership re-checked inside `createReservationAndOrder`'s
+      own transaction). If `"new"`, `newAddress` is validated via the
+      existing `validateAddressBody` (`src/lib/addressValidation.ts`) and
+      an `Address` row is created with `userId: session.user.id` **only
+      when** authenticated **and** `saveNewAddress === true`; otherwise
+      `userId: null` — including for an authenticated user who left the
+      checkbox unchecked (proven directly: `tests/test18-checkout.test.ts`
+      creates one order with `saveNewAddress: true` and confirms the
+      address DOES appear in a follow-up `GET /api/addresses`, then a
+      second order for the SAME authenticated user with
+      `saveNewAddress: false` and confirms that one's address does NOT
+      appear in the list).
+- [x] **`paymentProvider` is actually persisted, not silently discarded.**
+      `src/lib/reservationService.ts`'s `attemptCreateReservationAndOrder`
+      now writes `payload: { cartId, sessionId, paymentProvider }` on the
+      `CREATED` `OrderEvent` (previously `{cartId, sessionId}` only) — a
+      one-field addition to an already-free-form `Json` column, zero
+      migration. This edit falls inside `reservationService.ts` (M3-2's
+      usual file, catalog-inventory-engineer's), made directly by
+      commerce-payments-engineer per this item's own binding criterion and
+      disclosed here per the coordination note in this item's header.
+      Verified by `tests/test18-checkout.test.ts` querying the real
+      `OrderEvent` row after a live checkout and asserting
+      `payload.paymentProvider === "mpesa"` (also dogfooded live against a
+      manually-booted `next dev` server, same assertion against Postgres).
+
+**Route contract (`POST /api/checkout`, for the next dispatch wiring
+`/checkout/review`'s success state):**
+```
+Request body (the M3-3a checkout draft's shape — NOT a cartId):
+{
+  addressMode: "saved" | "new",
+  savedAddressId?: string,        // required when addressMode === "saved"
+  newAddress?: {                   // required when addressMode === "new"
+    fullName, phone, region, city, postalCode, street: string
+  },
+  saveNewAddress?: boolean,        // only consulted when addressMode === "new"
+  paymentProvider: "stripe" | "mpesa",
+}
+
+Success — 201, body is ReservationOrderResult verbatim:
+{
+  orderId: string,
+  orderNumber: string,             // e.g. "HH-KE-MTDZND4B-39e219"
+  region: "KE" | "ET" | "SO",
+  currency: string,
+  subtotalAmount: string,          // e.g. "1500.00"
+  taxAmount: string,
+  shippingAmount: string,
+  totalAmount: string,
+  paymentStatus: string,           // e.g. "PENDING"
+  fulfillmentStatus: string,       // e.g. "PLACED"
+  idempotent: boolean,             // true = a resubmit found the SAME
+                                     // already-created order
+}
+
+Errors:
+  - 400 { error: string } — this route's OWN validation (malformed JSON,
+    invalid addressMode, missing savedAddressId/newAddress,
+    validateAddressBody's field errors) — always distinct wording from
+    below.
+  - Otherwise reservationErrorResponse's table (404 cart/address not
+    found, 409 stock/reservation conflicts, 400 invalid payment
+    provider) — see src/lib/reservationService.ts.
+  - 404 { error: "Cart not found" } if no active cart resolves
+    server-side at all (no cookie/session, expired cart).
+```
+Cart-id-ignored proof, double-submit proof (two CONCURRENT requests on the
+same still-active cart -> one Order, one `idempotent:true` response, one
+`OrderItem` set — not a sequential resubmit, which 404s once the cart is
+consumed, by design), guest/authenticated/saved/new-address matrix,
+insufficient-stock 409, and cross-user saved-address 404 are all covered
+by `tests/test18-checkout.test.ts` (12 tests, real `next dev` server, real
+Postgres) — plus one full manual dogfood against a manually-booted server
+(add-to-cart -> POST /api/checkout with a forged `cartId` in the body ->
+201 with correct totals -> re-queried in Postgres: `Order`, `OrderEvent`
+payload, consumed `ShoppingCart` all confirmed, fixture rows cleaned up
+afterward).
+- [x] **F1 fix (binding, from `docs/agents/security-signoff/M3-2.md`):**
+      `src/lib/cartService.ts:267`'s `lockCart` now compares against
+      `(now() AT TIME ZONE 'UTC')` instead of a bare `now()`, matching the
+      fix `reservationService.ts` already applies at 7 sites (implemented
+      by `catalog-inventory-engineer`, 2026-08-29). `lockCart` was
+      re-exported test-only as `cartService.__lockCartForTest` (not part of
+      the public cart API — every real caller still reaches it internally
+      via `addToCart`/`updateCartItemQuantity`/`removeFromCart`) so the
+      regression test drives the real function, not a duplicated copy of
+      its SQL. Regression test
+      (`tests/test17-reservation.test.ts`, `describe("cartService.lockCart
+      — timezone regression (F1)")`): a real Prisma transaction issues `SET
+      LOCAL TIME ZONE 'America/New_York'` (scoped to just that transaction,
+      auto-reverts at commit, cannot leak into other tests) then calls
+      `__lockCartForTest` against (a) a cart consumed via `expiresAt = now`
+      — asserted `null` (no longer live/lockable) — and (b) a genuinely
+      live cart under the same skewed session — asserted still lockable.
+      Both pass. Required because M3-2's double-submit idempotency
+      (Decision 9) depends on every `cartService.ts` read correctly
+      filtering an already-consumed cart via this exact predicate.
+- [x] **F2(b) fix (binding, same sign-off file):**
+      `createReservationAndOrder` (`src/lib/reservationService.ts`) now
+      asserts `cart.userId === input.userId || cart.userId === null` plus a
+      guest `sessionId` match (`CreateReservationAndOrderInput` gained an
+      optional `sessionId` field for this) immediately after locking the
+      cart and BEFORE the idempotent-lookup branch, throwing
+      `CartNotFoundError` on failure — the identical error/status as a
+      genuinely missing cart, so the check itself creates no
+      cart-existence oracle. This closes F2 at the function level (defense
+      in depth alongside the route-level fix M3-3's route handler must
+      still do) and F3 (the cart-id-keyed order-detail oracle in the
+      idempotent-lookup branch) in the same change, since the check runs
+      before that branch is ever reached. Regression tests
+      (`tests/test17-reservation.test.ts`, `describe("createReservationAndOrder
+      — cart ownership assertion (F2(b)/F3)")`): (1) an authenticated
+      attacker supplying a victim's `cartId` → `CartNotFoundError`, with
+      zero stock/order mutation proven afterward; (2) a guest presenting a
+      DIFFERENT session's `cartId` with a mismatched `sessionId` →
+      `CartNotFoundError`; (3) the genuine owner in both the authenticated
+      and matching-guest-session cases still succeeds. All pass.
+- [x] **Real success state (storefront-admin-engineer, 2026-08-29):**
+      `src/app/checkout/review/ReviewStep.tsx`'s "Place order" button now
+      POSTs the draft to `POST /api/checkout` (never a `cartId` — the route
+      derives it server-side per the earlier criteria above). On a 2xx
+      response it calls the `CheckoutDraftContext`'s `clearDraft()` (ADR
+      Decision 7, listed there as "M3-3's job") and renders a real
+      confirmation view in place of the review UI, showing the actual
+      `orderNumber`/subtotal/tax/shipping/total/`paymentStatus` from
+      `ReservationOrderResult` — no more "not yet available" placeholder.
+      Typed error responses map to inline, per-error messages, not a
+      generic catch-all: a 409 carrying `variantId`
+      (`InsufficientStockError`'s shape) looks up that line in the cart
+      passed down from the server component and names the specific
+      product/variant and remaining stock (`data-testid="checkout-stock-
+      error"`, distinct from the generic `data-testid="checkout-error"`
+      banner used for 404 address/cart-not-found and other 409/400
+      responses). The button disables and shows "Placing order…" while the
+      request is in flight (defense in depth against a double-submit-by-
+      double-click; the backend is already idempotent per M3-2).
+      **Real bug caught and fixed during this build:**
+      `CheckoutDraftContext.tsx`'s `clearDraft()` had never actually been
+      exercised end-to-end before this item (the only prior caller,
+      `src/app/auth/login/page.tsx`, calls `clearCheckoutDraft()` directly
+      because the Context isn't mounted there) — calling it while the
+      Context IS mounted (i.e. from `/checkout/review` itself) triggered
+      the existing "persist draft on every state change" effect to
+      immediately re-write a fresh *empty* draft object back into
+      `sessionStorage` a render after `clearCheckoutDraft()` removed the
+      key, so the key never actually went away. Fixed with a
+      `suppressNextWriteRef` that `clearDraft()` sets before resetting
+      state, consumed (and reset) by the write effect's next run so
+      exactly one write is skipped. Proven by
+      `tests/test16-checkout-ui.test.ts`'s real end-to-end test reading
+      `window.sessionStorage.getItem(CHECKOUT_DRAFT_KEY)` directly in the
+      browser both before submit (present) and after a real 201 response
+      (`null` — genuinely absent, not merely stale/unread) — this is the
+      test that caught the bug (it failed against the pre-fix code with
+      the empty-draft JSON string still present, not `null`). A second new
+      test drains stock out from under a live cart after add-to-cart
+      (same pattern as `tests/test18-checkout.test.ts`'s 409 test) and
+      confirms the real running app renders
+      `data-testid="checkout-stock-error"` naming the specific
+      product/variant and remaining count, with zero `Order` rows created
+      and the button left enabled/usable afterward, not stuck disabled.
+      `tests/test16-checkout-ui.test.ts` (20 tests) and
+      `tests/test18-checkout.test.ts` (12 tests, unchanged, already
+      covering the route's own success/error contract) both pass; full
+      `npm test` (`scripts/agents/local-check.sh`): 232 passed / 2
+      skipped, 0 failed, build/lint clean, `npx vitest run --coverage`
+      thresholds met (93.99% statements / 82.43% branches / 97.24%
+      functions / 95.36% lines).
+
+**Explicitly out of scope (M4):** any real Stripe/M-Pesa API call or
+`PaymentTransaction` row. Confirmed the schema supports this split by
+reading `prisma/schema.prisma` directly: `PaymentTransaction` is a
+separate model related to `Order` by `orderId`, so an `Order` can exist
+`PENDING` with a provider recorded (in the `OrderEvent` payload, per above)
+before any charge/STK-push attempt exists.
+
+**Architect review: NOT required**, unlike M3-2's genuinely-novel design
+questions (lock ordering, background expiry, error contract). This item
+wires an already-designed, already-`verified` transaction
+(`createReservationAndOrder`) to an already-designed draft UI (M3-3a's
+`CheckoutDraftProvider`) — closer to M2-4/M3-3a's UI-wiring shape than
+M3-2's. The one question M3-3a's own ADR flagged as "a real open question
+for whoever builds M3-2/M3-3" (guest `newAddress` → persisted `Address`
+row) is **not actually open**: M3-2's ADR Decision 5 explicitly named it
+"M3-3's job" and left the mechanics fully determined by already-existing
+code (nullable `Address.userId`, `validateAddressBody`, the
+`userId`-scoped `GET /api/addresses` query) — resolved above as a
+mechanical criterion, not a design call. If a genuinely new question
+surfaces during implementation (not anticipated by any of the above), stop
+and escalate rather than improvising, per this item's own precedent.
+
+**Security review: STATUS CLEAR** (`docs/agents/security-signoff/M3-3.md`,
+2026-08-29) — no blocking findings. `cartId` server-side derivation, the
+ownership assertion, guest-address `userId: null` handling,
+`paymentProvider` allowlisting, server-only money computation, and the
+`clearCheckoutDraft()` fix were all independently re-verified by tracing
+code, not accepted on report. 4 findings tracked:
+- **F1 (MEDIUM):** `POST /api/checkout` creates the guest/new `Address`
+  row **before** opening `createReservationAndOrder`'s transaction, so it
+  is never rolled back on any failure — a drained-stock 409, an invalid
+  address-id 404, or any other error leaves a permanent, ownerless PII
+  row (name/phone/street) that no user-facing API can list or delete.
+  Worse: on the idempotent-double-submit-replay path (M3-2's own
+  intentional behavior), the *losing* concurrent request still creates a
+  second `Address` row even though the *winning* request's order is
+  returned to both callers — so an ordinary accidental double-click on
+  "Place order" can silently leak a duplicate PII row on an otherwise
+  fully successful checkout. Third recurrence of "PII write not scoped to
+  the transaction it belongs to" in this codebase (cf. M3-3a's F3).
+  **Binding on M4 at the latest** — whoever next touches this route must
+  move the address creation inside the transaction (or add compensating
+  cleanup on every non-2xx exit + the idempotent-replay branch). Route to
+  commerce-payments-engineer.
+- **F2 (LOW, real bug, not just theoretical):** `newAddress`'s
+  `isDefault` field is client-settable via the route (undocumented in its
+  own body-shape comment — reached because `validateAddressBody` returns
+  it and the create call spreads `...data`), bypassing the
+  unset-previous-default transaction both sibling address routes
+  carefully wrap around exactly that field. The resulting unique-index
+  violation (`P2002`) is thrown *before* the route's try/catch, surfacing
+  as an **uncaught 500 on the "Place order" click** rather than a clean
+  error — a real availability bug on the money path, not just a
+  hardening nicety, if ever triggered (currently only reachable by a
+  hand-crafted request, since the M3-3a draft UI has no `isDefault`
+  field). Route to commerce-payments-engineer: either strip `isDefault`
+  from the route's accepted fields or wrap the create in the same
+  transaction/catch pattern `POST /api/addresses` already uses.
+- **F3 (LOW, carried forward, still unfixed):** `ReviewStep.tsx` — even
+  after this pass's rewrite — still interpolates `draft.savedAddressId`
+  unencoded into a fetch URL path (same class as M3-3a's F2, never
+  closed). Route to storefront-admin-engineer.
+- **F4 (LOW, advisory):** `reservationService.ts`'s ownership assertion
+  silently no-ops guest-cart checking whenever `input.sessionId` is
+  `undefined` — safe today only because `POST /api/checkout` always
+  supplies it, which is exactly the "route layer passes a trusted value"
+  unenforced-contract shape that produced M3-2's original F2. Should fail
+  closed (reject rather than skip the check) before M4 adds a second
+  caller of `createReservationAndOrder`. Route to catalog-inventory-engineer.
+
+
+**Verified:** `scripts/agents/gate-check.sh M3-3` exit 0 on 2026-08-29. All checks GREEN: build (Next.js 15.5.23 compiled successfully), lint (1 warning, 0 errors), test+coverage (232 passed/2 skipped, 93.99% statements/82.43% branches/97.24% functions/95.36% lines, all thresholds met), dogfood entrypoint (full cart → checkout address → payment → review → REAL Place order → 201 → Order/InventoryReservation/OrderEvent rows confirmed in Postgres → cart consumed → sessionStorage checkout draft cleared), and security sign-off STATUS: CLEAR. M3 milestone integration checkpoint verified: concurrent-last-unit test + full cart→reservation dogfood both exit 0.
 
 ---
 

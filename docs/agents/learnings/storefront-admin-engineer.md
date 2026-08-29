@@ -286,6 +286,40 @@ paper over this. Catch it with a real `npm run build` before handoff, not
 just `next dev`, since dev mode never prerenders and won't surface this
 class of bug.
 
+## A Context's "clear on success" method needs to suppress its own write-on-change effect, or the clear silently undoes itself a render later
+**Symptom (M3-3):** `CheckoutDraftContext.tsx`'s `clearDraft()` (calls
+`clearCheckoutDraft()` then `setDraft(emptyDraft())`) looked correct by
+inspection and had shipped in M3-3a — but had never actually been
+exercised end-to-end, because its only prior caller
+(`src/app/auth/login/page.tsx`) called `clearCheckoutDraft()` directly,
+bypassing the Context entirely (that page renders outside the checkout
+subtree, so the Context isn't mounted there — see M3-3a's own learnings
+entry on this). The first real caller from INSIDE the mounted subtree
+(`/checkout/review`'s "Place order" success handler, M3-3) exposed a real
+bug: the Context's existing `useEffect(() => { ...; writeCheckoutDraft(draft); }, [draft])`
+fires on the very next render after `setDraft(emptyDraft())`, immediately
+re-writing a fresh *empty-but-present* draft object back into
+`sessionStorage` — so the key that `clearCheckoutDraft()` just removed
+reappears a moment later, just with empty fields instead of gone. A test
+asserting only "the UI shows a confirmation view" or "the draft's fields
+read as empty" would have stayed green; only reading the raw storage key
+directly (`window.sessionStorage.getItem(key)`) and asserting `null` (not
+merely falsy/empty-JSON) caught it.
+**Rule going forward:** for any Context/hook that (a) persists its state to
+storage on every change via an effect AND (b) exposes a "clear" action
+meant to leave storage genuinely empty, the clear action must suppress
+that persist-effect's very next run (e.g. a ref flag set by the clear
+action and consumed-and-reset by the effect) — otherwise "clear then
+reset to a default in-memory value" always round-trips the default value
+back into storage. Prove a "genuinely cleared" claim by reading the raw
+storage key directly in the test (not the UI's derived rendering of it,
+not the in-memory value) both before and after the action, asserting the
+key is actually absent (`null`/`undefined`), not present-with-default-
+content. A guard/side-effect that only one caller ever exercises (here,
+the direct-`clearCheckoutDraft()` login path) does not prove a *different*
+caller going through the Context method works — each distinct call site
+needs its own real-flow proof.
+
 ## When dispatched into a task, check whether a parallel/prior agent already built your half before writing new code
 **Symptom (M3-1):** dispatched to build `/cart` page, `CartSummary.tsx`,
 add-to-cart wiring, and `tests/test14-cart-ui.test.ts` — but all of it

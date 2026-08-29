@@ -16,7 +16,14 @@
 // M3-3a's add-to-cart -> checkout address -> payment -> review -> inert
 // Place-order leg (REAL BROWSER via Playwright, not HTTP-only like the legs
 // above — added 2026-08-24 for M3-3a; see dogfoodCheckout()'s own header
-// comment for why this leg breaks from the file's usual HTTP-only style).
+// comment for why this leg breaks from the file's usual HTTP-only style)
+// PLUS M3-3's extension of that same leg past the (now real) "Place order"
+// click all the way to a genuine 201 order — real orderNumber returned,
+// real Order/InventoryReservation/OrderEvent rows queried back out of
+// Postgres, the cart confirmed consumed (GET /api/cart -> null), and the
+// browser's own sessionStorage checkout-draft key confirmed genuinely gone
+// (not just stale) — added 2026-08-29 for M3-3, closing M3's own milestone
+// integration checkpoint ("full cart->reservation dogfood exits 0").
 //
 // KNOWN GAP (flagged, not silently ignored): M1-2 (forgot-password/reset
 // UI) and M1-3 (profile/address management) both shipped and were marked
@@ -58,34 +65,23 @@
 //   M6 — PRD "Customer Journey 1" end to end (browse/search/cart/checkout/
 //        M-Pesa/confirmation/admin-ship), run against a fresh seeded DB
 //
-// M3-3a NOTE: the "checkout -> reservation created" half of the M3 bullet
-// above is NOT yet coverable — real order/reservation creation is M3-2/
-// M3-3 proper, still `planned`. dogfoodCheckout() below covers exactly what
-// M3-3a actually shipped: the address/payment/review SELECTION UI, ending at
-// an honest "not yet available" state on Place order with ZERO Order/
-// InventoryReservation/PaymentTransaction rows created — this leg must be
-// revisited (extended past Place order, not replaced) once M3-2/M3-3 land.
-//
-// M3-2 STATUS (checked 2026-08-25, qa-dogfood-engineer): `createReservation
-// AndOrder`/`releaseExpiredReservationsBatch`/the cron route landed
-// (src/lib/reservationService.ts, src/app/api/cron/release-expired-
-// reservations/route.ts) but per M3-2's own explicit scope note in
-// FEATURES.md, NOTHING routes to it yet — `/checkout/review`'s "Place
-// order" button (dogfoodCheckout() above) is still deliberately inert, and
-// there is no other HTTP/browser entry point a real shopper could hit that
-// reaches this code. Deliberately NOT adding a dogfood leg that calls
-// `createReservationAndOrder` directly (bypassing HTTP/browser entirely):
-// this file's whole premise is exercising a REAL USER JOURNEY, i.e. a click
-// a shopper could actually make — a bare service-function call proxies
-// nothing a user does and would just be a duplicate of
-// tests/test17-reservation.test.ts's own 22 tests (including the two real-
-// Postgres concurrency tests) under a different filename, which is exactly
-// the kind of theater this domain's charter warns against ("a test that
-// passes trivially is worse than no test"). The right fix is wiring
-// `/checkout/review`'s Place-order click to this service (M3-3), at which
-// point dogfoodCheckout() gets EXTENDED past its current inert-button
-// assertion to prove a real click creates a real Order/InventoryReservation
-// with correct totals — do not add a parallel service-level leg instead.
+// M3 bullet STATUS (updated 2026-08-29, qa-dogfood-engineer, M3-3): the
+// "checkout -> reservation created -> price/tax correct" half of the M3
+// bullet above is now fully coverable and IS covered — `POST /api/checkout`
+// (commerce-payments-engineer, M3-3) wires `/checkout/review`'s "Place
+// order" button to the already-`verified` `createReservationAndOrder`
+// transaction (M3-2). dogfoodCheckout() below now drives a REAL click on
+// that button all the way to a genuine 201, then re-queries Postgres
+// directly for the resulting Order/InventoryReservation/OrderEvent rows —
+// this is no longer a duplicate of tests/test17-reservation.test.ts's
+// service-level tests or tests/test18-checkout.test.ts's route-level tests,
+// because it is the one place in the whole suite that proves the ACTUAL
+// browser click (real sessionStorage-driven draft, real cookies, real
+// `next dev` server) reaches that code — nothing else in this repo clicks
+// the real button. This closes M3's own milestone integration checkpoint
+// ("full cart->reservation dogfood exits 0") — see FEATURES.md's M3
+// heading and this leg's own header comment above dogfoodCheckout() for
+// the full account, including how this was proven able to fail.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -947,11 +943,16 @@ async function dogfoodCart() {
 }
 
 // ---------------------------------------------------------------------------
-// M3-3a — add to cart -> /checkout/address (select/save address) ->
+// M3-3a/M3-3 — add to cart -> /checkout/address (select/save address) ->
 // /checkout/payment (pick provider) -> /checkout/review (real address +
-// payment shown, server-reverified) -> click "Place order" -> honest
-// "not yet available" state, with ZERO Order/InventoryReservation/
-// PaymentTransaction rows created.
+// payment shown, server-reverified) -> click "Place order" -> a genuine
+// 201 (M3-3, added 2026-08-29): real orderNumber shown in the confirmation
+// UI, real Order/InventoryReservation/OrderEvent rows confirmed in
+// Postgres, the cart confirmed CONSUMED (GET /api/cart -> null, not just
+// "still has items"), and the browser's own sessionStorage checkout-draft
+// key confirmed genuinely removed (not merely re-written empty — see the
+// `clearDraft()`/`suppressNextWriteRef` bug this same key already caught
+// once, per FEATURES.md's M3-3 entry and tests/test16-checkout-ui.test.ts).
 //
 // UNLIKE every other leg in this file, this one drives a REAL BROWSER
 // (Playwright), not a plain fetch. Every prior leg's "click" was faithfully
@@ -1008,6 +1009,15 @@ async function dogfoodCheckout() {
       // reference, and never swallow a real deletion failure.
       const user = await db.user.findUnique({ where: { email } });
       if (user) {
+        // M3-3 addition: an Order now genuinely gets created by this leg,
+        // and Order.shippingAddressId references Address WITHOUT cascade
+        // (see prisma/schema.prisma) — the Order (and everything that DOES
+        // cascade from it: OrderItem/PaymentTransaction/InventoryReservation/
+        // OrderEvent/Shipment/Refund/ReturnRequest) must be deleted BEFORE
+        // the Address it points at, or the Address delete below hits a live
+        // FK violation. Same "delete child-with-FK-to-fixture first, in
+        // dependency order" discipline as this file's cart-cleanup lesson.
+        await db.order.deleteMany({ where: { userId: user.id } });
         await db.address.deleteMany({ where: { userId: user.id } });
         await db.shoppingCart.deleteMany({ where: { userId: user.id } });
         await db.session.deleteMany({ where: { userId: user.id } });
@@ -1185,30 +1195,114 @@ async function dogfoodCheckout() {
       throw new Error(`/checkout/review did not show the selected payment provider. Got: ${paymentText}`);
     }
 
-    // 4. Click "Place order" -> honest "not yet available" message, and
-    // ZERO Order/InventoryReservation/PaymentTransaction rows created —
-    // this is the actual money-path invariant this leg exists to guard:
-    // an inert checkout button must never silently create real records.
+    // 4. (M3-3) Click "Place order" for real -> a genuine 201, a real
+    // confirmation view with a real orderNumber, real Order/
+    // InventoryReservation/OrderEvent rows in Postgres, the cart CONSUMED,
+    // and the sessionStorage checkout draft genuinely cleared. This is the
+    // concrete "guest checkout from cart to confirmation" E2E scenario
+    // (PRD) actually becoming real, and closes M3's own milestone
+    // integration checkpoint ("full cart->reservation dogfood exits 0").
+    const sessionStorageBefore = await page.evaluate(
+      (key) => window.sessionStorage.getItem(key),
+      "hurbad_checkout_draft_v1",
+    );
+    if (!sessionStorageBefore) {
+      throw new Error(
+        "Expected the checkout draft to still be present in sessionStorage immediately before " +
+          "clicking Place order (otherwise the later 'cleared' assertion is meaningless) — got null.",
+      );
+    }
+
     await page.locator('[data-testid="place-order"]').click();
-    await page.waitForSelector('[data-testid="place-order-not-available"]', { timeout: 5_000 });
-    const message = await page.locator('[data-testid="place-order-not-available"]').textContent();
-    if (!message || !/not yet available/i.test(message)) {
-      throw new Error(`Expected an honest "not yet available" message on Place order, got: ${message}`);
+    await page.waitForSelector('[data-testid="order-confirmation"]', { timeout: 10_000 });
+    const orderNumber = await page
+      .locator('[data-testid="confirmation-order-number"]')
+      .textContent();
+    if (!orderNumber || !/^HH-KE-/.test(orderNumber.trim())) {
+      throw new Error(`Expected a real HH-KE-... orderNumber on the confirmation view, got: ${orderNumber}`);
     }
 
     const ordersAfter = await db.order.count();
     const reservationsAfter = await db.inventoryReservation.count();
-    const transactionsAfter = await db.paymentTransaction.count();
-    if (ordersAfter !== ordersBefore || reservationsAfter !== reservationsBefore || transactionsAfter !== transactionsBefore) {
+    if (ordersAfter !== ordersBefore + 1) {
+      throw new Error(`Expected exactly +1 Order row after a real Place-order click, got ${ordersBefore} -> ${ordersAfter}`);
+    }
+    if (reservationsAfter !== reservationsBefore + 1) {
       throw new Error(
-        `Place order created real rows despite being inert: Order ${ordersBefore}->${ordersAfter}, ` +
-          `InventoryReservation ${reservationsBefore}->${reservationsAfter}, PaymentTransaction ${transactionsBefore}->${transactionsAfter}`,
+        `Expected exactly +1 InventoryReservation row (one line item) after a real Place-order ` +
+          `click, got ${reservationsBefore} -> ${reservationsAfter}`,
+      );
+    }
+
+    const order = await db.order.findUnique({
+      where: { orderNumber: orderNumber.trim() },
+      include: { events: true, reservations: true, items: true },
+    });
+    if (!order) {
+      throw new Error(`Order ${orderNumber.trim()} shown in the confirmation UI does not exist in Postgres`);
+    }
+    if (order.items.length !== 1 || order.items[0].variantId !== variant.id) {
+      throw new Error(`Expected the real Order's single OrderItem to reference the fixture variant, got: ${JSON.stringify(order.items)}`);
+    }
+    const createdEvent = order.events.find((e) => e.eventType === "CREATED");
+    if (!createdEvent) {
+      throw new Error(`Expected a real "CREATED" OrderEvent on the new Order, got events: ${JSON.stringify(order.events)}`);
+    }
+    if (createdEvent.payload?.paymentProvider !== "stripe") {
+      throw new Error(
+        `Expected the CREATED OrderEvent's payload.paymentProvider to be "stripe" (the option clicked ` +
+          `above), got: ${JSON.stringify(createdEvent.payload)}`,
+      );
+    }
+    if (order.reservations.length !== 1 || order.reservations[0].status !== "ACTIVE") {
+      throw new Error(`Expected exactly one ACTIVE InventoryReservation on the new Order, got: ${JSON.stringify(order.reservations)}`);
+    }
+
+    // M3-3 is explicitly scoped to STOP before any real Stripe/M-Pesa call
+    // or PaymentTransaction row (that's M4) — confirm the boundary actually
+    // holds in a real end-to-end run, not just by reading the route code.
+    const transactionsAfter = await db.paymentTransaction.count();
+    if (transactionsAfter !== transactionsBefore) {
+      throw new Error(
+        `Expected ZERO new PaymentTransaction rows from a real Place-order click (M4's job, not ` +
+          `M3-3's), got ${transactionsBefore} -> ${transactionsAfter}`,
+      );
+    }
+
+    // Cart genuinely consumed — not just "still has the item in it". Same
+    // cookie the browser used throughout this whole leg, hitting the real
+    // GET /api/cart route.
+    const cartAfterRes = await fetch(`${BASE_URL}/api/cart`, {
+      headers: { Cookie: fullCookieHeader },
+    });
+    const cartAfterBody = await cartAfterRes.json();
+    if (cartAfterBody.cart?.id !== null || cartAfterBody.cart?.itemCount !== 0) {
+      throw new Error(
+        `Expected GET /api/cart to return an empty view (id: null, itemCount: 0 — findActiveCart's ` +
+          `consumed-cart filter, toCartView's empty fallback) after a successful checkout, got: ${JSON.stringify(cartAfterBody.cart)}`,
+      );
+    }
+
+    // sessionStorage checkout draft genuinely cleared, not merely
+    // re-written as an empty object (this exact distinction caught a real
+    // bug during M3-3's build — see FEATURES.md's M3-3 entry and
+    // tests/test16-checkout-ui.test.ts).
+    const sessionStorageAfter = await page.evaluate(
+      (key) => window.sessionStorage.getItem(key),
+      "hurbad_checkout_draft_v1",
+    );
+    if (sessionStorageAfter !== null) {
+      throw new Error(
+        `Expected sessionStorage's checkout draft key to be genuinely removed (null) after a ` +
+          `successful order, got: ${sessionStorageAfter}`,
       );
     }
 
     await page.close();
     console.log(
-      "[dogfood] PASS: add to cart -> checkout address -> payment -> review -> inert Place order",
+      "[dogfood] PASS: add to cart -> checkout address -> payment -> review -> REAL Place order " +
+        "-> 201 -> Order/InventoryReservation/OrderEvent rows confirmed -> cart consumed -> " +
+        "sessionStorage draft cleared",
     );
   } finally {
     await cleanup();
@@ -1224,6 +1318,8 @@ await dogfoodCheckout();
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
     "search-entry + M2-2 browse/search/filter + M3 cart add/view/update/remove/409/" +
-    "logout-rotation + M3-3a checkout address/payment/review/inert-Place-order covered; " +
+    "logout-rotation + M3-3/M3-3a full cart->checkout->REAL Place order->201->Order/" +
+    "InventoryReservation/OrderEvent rows confirmed->cart consumed->draft cleared covered " +
+    "(M3 milestone integration checkpoint: full cart->reservation dogfood exits 0 — MET); " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

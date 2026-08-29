@@ -192,9 +192,15 @@ export interface CreateReservationAndOrderInput {
   // Session userId, or null for a guest checkout. Used BOTH for the
   // Address ownership check (never trust a client-supplied user id — this
   // must come from a server-side `auth.api.getSession()` call at the route
-  // layer) and as `Order.userId`.
+  // layer) and as `Order.userId`. Also used for the cart ownership check
+  // below (security-reviewer M3-2 F2(b)).
   userId: string | null;
   guestEmail?: string | null;
+  // The requester's guest-cart cookie value (`cartCookie.ts`), when known.
+  // Optional so already-verified internal/test callers that don't carry a
+  // cookie session still work; a route handler MUST always pass this for a
+  // guest checkout — see the cart ownership check below (F2(b)).
+  sessionId?: string;
 }
 
 export interface ReservationOrderResult {
@@ -320,6 +326,21 @@ async function attemptCreateReservationAndOrder(
   return db.$transaction(async (tx) => {
     const cart = await lockCartForOrder(tx, input.cartId);
     if (!cart) throw new CartNotFoundError(input.cartId);
+
+    // Security-reviewer M3-2 F2(b)/F3: cart ownership must be asserted here,
+    // at the function level, not left to whichever route handler calls this
+    // — a client-supplied cartId for a cart owned by a DIFFERENT shopper (or
+    // a different guest session) must be rejected with the SAME error/status
+    // as a genuinely missing cart, so this check itself creates no
+    // cart-existence oracle. This runs BEFORE the idempotent-lookup branch
+    // below, so a stranger's consumed cart cannot be used to read back
+    // another shopper's order totals either (closes F3 in the same change).
+    const ownedByCaller = cart.userId === input.userId || cart.userId === null;
+    const guestSessionMatches =
+      cart.userId !== null || input.sessionId === undefined || cart.sessionId === input.sessionId;
+    if (!ownedByCaller || !guestSessionMatches) {
+      throw new CartNotFoundError(input.cartId);
+    }
 
     const now = new Date();
 
@@ -493,7 +514,11 @@ async function attemptCreateReservationAndOrder(
         orderId: order.id,
         eventType: "CREATED",
         actorId: input.userId,
-        payload: { cartId: input.cartId, sessionId: cart.sessionId },
+        // `paymentProvider` recorded here (M3-3, HRH-46) so a chosen-but-
+        // not-yet-charged provider is queryable before M4 ever creates a
+        // PaymentTransaction — no schema change, `payload` is already a
+        // free-form Json field.
+        payload: { cartId: input.cartId, sessionId: cart.sessionId, paymentProvider: input.paymentProvider },
       },
     });
 

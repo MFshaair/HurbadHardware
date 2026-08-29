@@ -473,3 +473,52 @@ the fix with stable, correct results each time. If a future item adds
 alternative fix), that would be a schema change requiring the
 migrate-dev-twice drift check — not attempted here since the ADR explicitly
 forbade any schema change for M3-2.
+
+**Follow-up (M3-3, 2026-08-29): `cartService.ts:267`'s `lockCart` fixed the
+same way.** Security-reviewer's M3-2 sign-off (F1) flagged this exact site
+as the one place the bug class survived, plus a second (`prisma/schema.prisma`'s
+`dbgenerated` cart-TTL default) not yet fixed — see that file's F1 note for
+the still-open schema-level half. Fixed `lockCart`'s raw-SQL predicate to
+`"expiresAt" > (now() AT TIME ZONE 'UTC')`. To regression-test a *private*
+function like `lockCart` without duplicating its SQL in the test (which
+would prove nothing about the real code drifting later), re-exported it
+test-only: `export { lockCart as __lockCartForTest }`, with a comment
+marking it non-public. The test then opens a real `db.$transaction`, issues
+`SET LOCAL TIME ZONE 'America/New_York'` as the first statement (scoped to
+just that transaction — reverts automatically at commit/rollback, so it
+cannot leak into any other test even without `fileParallelism: false`), and
+calls the re-exported function directly — this exercises the REAL
+production code path under a genuinely skewed session, not a
+reasoned-about approximation. Rule going forward: prefer this
+"test-only re-export + `SET LOCAL` inside a real transaction" pattern over
+either (a) duplicating a private function's raw SQL into the test file
+(rots silently when the source changes) or (b) trying to change the whole
+DB session/role's default timezone for the test process (leaks across
+tests/files, requires elevated privileges, doesn't reliably apply to an
+already-open pooled connection).
+
+## Cart/order ownership must be asserted inside the money function itself, not just at the route layer
+
+**Context (M3-2 F2(b)/F3, closed M3-3, 2026-08-29):** `createReservationAndOrder`
+locked and consumed a `ShoppingCart` by id alone, with no check that the
+caller actually owned it — security-reviewer flagged this as F2(b) (missing
+assertion) and F3 (the same gap turns the idempotent-lookup branch into a
+cart-id-keyed order-detail oracle: anyone who can present a consumed
+`cartId` got back the full order/money summary). Fixed by adding
+`cart.userId === input.userId || cart.userId === null` (guest carts) plus,
+for the guest case specifically, a `cart.sessionId === input.sessionId`
+match (added `sessionId?: string` to `CreateReservationAndOrderInput`),
+throwing the SAME `CartNotFoundError` used for a genuinely missing cart —
+critical detail: same error/status for "doesn't exist" vs "exists but isn't
+yours," or the check itself becomes a new existence oracle. **Ordering
+matters**: this check must run immediately after the cart lock and BEFORE
+the `cart.expiresAt <= now()` idempotent-lookup branch — putting it after
+would still let a stranger's `cartId` reach the order-detail read on the
+idempotent path, reopening F3 even with F2(b) "fixed." Rule going forward:
+whenever a route-level ownership check is planned for later (e.g. "the
+route handler will derive `cartId` server-side and never accept it from the
+client"), still assert ownership inside the shared function that actually
+performs the money-moving/stock-moving transaction — defense in depth
+matters most exactly here, since a future second caller of the same
+function (a different route, an admin tool, a script) won't automatically
+inherit a route-level guard that lives one layer up.

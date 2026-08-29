@@ -43,6 +43,17 @@ export function CheckoutDraftProvider({ children }: { children: React.ReactNode 
   // storage on the very first post-hydration render (harmless, but
   // avoids an unnecessary write).
   const hydratedRef = useRef(false);
+  // Guards against the write-on-change effect below immediately
+  // re-persisting the fresh empty draft straight back into sessionStorage
+  // right after `clearDraft()` removes the key (M3-3, HRH-46 fix) — without
+  // this, a caller that clears the draft while the Context is still
+  // mounted (e.g. `/checkout/review` on successful order placement) would
+  // see the key reappear a render later holding an empty-but-present
+  // draft object, not a genuinely absent one. `clearCheckoutDraft()`
+  // called directly from OUTSIDE the checkout subtree (e.g.
+  // `src/app/auth/login/page.tsx`, where this Context isn't mounted) has
+  // no such effect to race against and needs no guard.
+  const suppressNextWriteRef = useRef(false);
 
   useEffect(() => {
     setDraft(readCheckoutDraft());
@@ -52,6 +63,10 @@ export function CheckoutDraftProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     if (!hydratedRef.current) return;
+    if (suppressNextWriteRef.current) {
+      suppressNextWriteRef.current = false;
+      return;
+    }
     writeCheckoutDraft(draft);
   }, [draft]);
 
@@ -81,6 +96,7 @@ export function CheckoutDraftProvider({ children }: { children: React.ReactNode 
 
   const clearDraft = useCallback(() => {
     clearCheckoutDraft();
+    suppressNextWriteRef.current = true;
     setDraft(emptyDraft());
   }, []);
 

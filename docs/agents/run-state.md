@@ -118,6 +118,58 @@ integration checkpoint goes red and can't be cheaply fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-25 — M3-3 ("Checkout flow & authoritative pricing", HRH-46) acceptance criteria sharpened
+`product-planner` sharpened M3-3's three sparse bullets into seven concrete,
+machine-checkable criteria. Grounded in: `src/lib/reservationService.ts`
+(read directly, all of `createReservationAndOrder`) confirming M3-2
+(`verified`) already computes tax/price server-side — HRH-46's "Tax
+Calculation" title is misleading, no new tax logic is built here;
+`docs/agents/arch-decisions/M3-2-inventory-reservation.md` Decision 5 and
+`M3-3a-checkout-draft-state.md` Decision 8, confirming the guest-address
+question M3-3a flagged as "a real open question for whoever builds
+M3-2/M3-3" is **not actually open** — M3-2's ADR already named it M3-3's
+job and left the mechanics fully determined by existing code (nullable
+`Address.userId`, `validateAddressBody`, the `userId`-scoped
+`GET /api/addresses` query); `prisma/schema.prisma`'s `Order`/
+`PaymentTransaction`/`OrderEvent` models, confirming a real gap by direct
+read: `createReservationAndOrder` validates `paymentProvider` then
+**discards it** (`reservationService.ts:491-498`) — no `Order` column and
+no `OrderEvent.payload` field carries it today — added as an explicit
+criterion (fold into the existing `CREATED` `OrderEvent.payload`, zero
+migration) rather than left implicit.
+
+**Two binding co-requisites carried forward, both file-touches outside
+M3-3's stated owner pair:** security-reviewer's M3-2 sign-off
+(`docs/agents/security-signoff/M3-2.md`) named F1 (`cartService.ts:267`'s
+`lockCart` still has the bare-`now()` timezone-cast bug M3-2 fixed
+elsewhere) and F2 (`createReservationAndOrder` has no cart-ownership check)
+as "binding prerequisites on M3-3." Confirmed both still unfixed by reading
+the current file state directly (`cartService.ts:267` still bare `now()`;
+no `cart.userId`/`input.userId` comparison anywhere in
+`reservationService.ts`). F2 has two halves per the sign-off's own routing:
+(a) route-level — M3-3's route must derive `cartId` from its own
+`findActiveCart` call, never accept one from the client; (b)
+service-level — `createReservationAndOrder` itself should assert cart
+ownership, which also closes F3 (an order-detail oracle keyed by cart id).
+Both F1 and F2(b) touch `catalog-inventory-engineer`'s files
+(`cartService.ts`/`reservationService.ts`), not M3-3's stated owners
+(commerce-payments-engineer + storefront-admin-engineer) — flagged
+explicitly in the ledger entry as requiring cross-owner coordination so
+neither fix gets silently dropped for falling outside the dispatched
+agents' usual surface, rather than quietly reassigning ownership
+unilaterally.
+
+**Architect review: explicit NO.** Closer to M2-4/M3-3a's UI-wiring shape
+than M3-2's genuinely-novel-design shape — wires an already-designed,
+`verified` transaction to an already-designed draft UI, no new lock
+ordering / concurrency / error-contract question. The one candidate
+open question (guest-address persistence) resolved above as already
+answered by M3-2's ADR, not left for a builder to improvise.
+
+**Not done, deliberately, per dispatch guardrail:** no code written; only
+`FEATURES.md`'s M3-3 section and this file were edited (no `src/`/`tests/`
+touched, verified via this session's own edit history).
+
 ### 2026-08-25 — M3-2 ("Atomic Inventory Reservation", HRH-45) acceptance criteria sharpened
 `product-planner` sharpened M3-2's three sparse bullets into six concrete,
 machine-checkable criteria plus an explicit hard co-requisite. Grounded in:

@@ -377,10 +377,8 @@ describe("Full authenticated flow: cross-page persistence, refresh, save-address
     }
   });
 
-  it("'Place order' is inert: clicking it creates ZERO Order/InventoryReservation/PaymentTransaction rows and shows an honest not-yet-available message", async () => {
+  it("'Place order' places a REAL order end to end: server-computed totals render in a confirmation view, and the sessionStorage draft is genuinely cleared (not just navigated away from)", async () => {
     const ordersBefore = await db.order.count();
-    const reservationsBefore = await db.inventoryReservation.count();
-    const transactionsBefore = await db.paymentTransaction.count();
 
     const page = await browser.newPage();
     try {
@@ -398,18 +396,48 @@ describe("Full authenticated flow: cross-page persistence, refresh, save-address
       await page.locator('[data-testid="payment-continue"]').click();
       await page.waitForURL(/\/checkout\/review/, { timeout: 10_000 });
 
+      // Draft is genuinely present in sessionStorage before submit.
+      const draftBeforeRaw = await page.evaluate(
+        (key) => window.sessionStorage.getItem(key),
+        CHECKOUT_DRAFT_KEY,
+      );
+      expect(draftBeforeRaw).not.toBeNull();
+
       await page.waitForSelector('[data-testid="place-order"]', { timeout: 10_000 });
-      await page.locator('[data-testid="place-order"]').click();
-      await page.waitForSelector('[data-testid="place-order-not-available"]', { timeout: 5_000 });
-      const message = await page.locator('[data-testid="place-order-not-available"]').textContent();
-      expect(message).toMatch(/not yet available/i);
+      const placeOrderButton = page.locator('[data-testid="place-order"]');
+      await placeOrderButton.click();
+
+      await page.waitForSelector('[data-testid="order-confirmation"]', { timeout: 10_000 });
+      const orderNumberText = await page
+        .locator('[data-testid="confirmation-order-number"]')
+        .textContent();
+      expect(orderNumberText).toMatch(/^HH-KE-/);
+
+      const totalText = await page.locator('[data-testid="confirmation-total"]').textContent();
+      expect(totalText).toMatch(/KES/);
+
+      // The draft key is actually GONE from sessionStorage, not merely
+      // stale/unread — proves clearCheckoutDraft() ran, not just that the
+      // UI moved on to a different view.
+      const draftAfterRaw = await page.evaluate(
+        (key) => window.sessionStorage.getItem(key),
+        CHECKOUT_DRAFT_KEY,
+      );
+      expect(draftAfterRaw).toBeNull();
+
+      // Real Order row exists in Postgres with a matching orderNumber.
+      const order = await db.order.findFirst({ where: { orderNumber: orderNumberText!.trim() } });
+      expect(order).not.toBeNull();
+      expect(order!.userId).not.toBeNull();
+      await db.orderEvent.deleteMany({ where: { orderId: order!.id } });
+      await db.orderItem.deleteMany({ where: { orderId: order!.id } });
+      await db.inventoryReservation.deleteMany({ where: { orderId: order!.id } });
+      await db.order.delete({ where: { id: order!.id } });
     } finally {
       await page.close();
     }
 
     expect(await db.order.count()).toBe(ordersBefore);
-    expect(await db.inventoryReservation.count()).toBe(reservationsBefore);
-    expect(await db.paymentTransaction.count()).toBe(transactionsBefore);
   });
 
   it("a forged savedAddressId belonging to another user is rejected (re-verified server-side), not silently trusted", async () => {
@@ -444,6 +472,117 @@ describe("Full authenticated flow: cross-page persistence, refresh, save-address
     } finally {
       await deleteFixtureUser(otherEmail);
     }
+  });
+});
+
+describe("'Place order' error path: a drained-stock 409 renders the specific offending line inline (M3-3)", () => {
+  const stockFixtureTag = `m3-3-stock-${randomUUID().slice(0, 8)}`;
+  let stockProductId: string;
+  let stockVariantId: string;
+
+  beforeAll(async () => {
+    const product = await db.product.create({
+      data: {
+        slug: `${stockFixtureTag}-product`,
+        name: `Stock Error Fixture ${stockFixtureTag}`,
+        category: "test-fixtures",
+        brand: "TestBrand",
+        images: ["https://example.com/img.jpg"],
+        specs: {},
+      },
+    });
+    stockProductId = product.id;
+
+    const variant = await db.productVariant.create({
+      data: { productId: stockProductId, sku: `${stockFixtureTag}-sku`, name: "Drained Variant", attributes: {}, images: [] },
+    });
+    stockVariantId = variant.id;
+    await db.regionalPrice.create({
+      data: { variantId: stockVariantId, region: Region.KE, price: "500.00", currency: "KES" },
+    });
+    // Allow 3 on hand so add-to-cart (quantity 2) succeeds; drained to 1
+    // below, AFTER add, so checkout is the first thing to observe the
+    // shortfall — same pattern as tests/test18-checkout.test.ts.
+    await db.regionalInventory.create({
+      data: { variantId: stockVariantId, region: Region.KE, onHand: 3, reserved: 0, safetyBuffer: 0 },
+    });
+  });
+
+  afterAll(async () => {
+    await db.cartItem.deleteMany({ where: { variantId: stockVariantId } });
+    await db.shoppingCart.deleteMany({ where: { sessionId: { contains: stockFixtureTag } } });
+    await db.regionalInventory.deleteMany({ where: { variantId: stockVariantId } });
+    await db.regionalPrice.deleteMany({ where: { variantId: stockVariantId } });
+    await db.productVariant.deleteMany({ where: { productId: stockProductId } });
+    await db.product.delete({ where: { id: stockProductId } });
+  });
+
+  it("shows an inline message naming the specific out-of-stock product/variant, distinct from address/payment errors, and creates no Order", async () => {
+    const ordersBefore = await db.order.count();
+
+    const addRes = await fetch(`${BASE_URL}/api/cart/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantId: stockVariantId, quantity: 2 }),
+    });
+    expect(addRes.status).toBe(200);
+    const cartCookie = addRes.headers
+      .getSetCookie()
+      .find((c) => c.startsWith("hurbad_cart="))!
+      .split(";")[0];
+
+    // Drain stock out from under the cart AFTER add — checkout must be the
+    // first thing to observe the shortfall (real-time re-check server-side,
+    // never trusted from anything the client already fetched).
+    await db.regionalInventory.updateMany({
+      where: { variantId: stockVariantId, region: Region.KE },
+      data: { onHand: 1 },
+    });
+
+    const page = await browser.newPage();
+    try {
+      const [name, value] = cartCookie.split("=");
+      await page.context().addCookies([{ name, value, url: BASE_URL }]);
+
+      await page.goto(`${BASE_URL}/checkout/address`, { waitUntil: "networkidle" });
+      await page.fill("#co-fullName", "Stock Error Buyer");
+      await page.fill("#co-phone", "0744444444");
+      await page.fill("#co-city", "Nairobi");
+      await page.fill("#co-postalCode", "00100");
+      await page.fill("#co-street", "Drained Street");
+      await page.locator('[data-testid="address-continue"]').click();
+      await page.waitForURL(/\/checkout\/payment/, { timeout: 10_000 });
+
+      await page.locator('[data-testid="payment-option-stripe"]').click();
+      await page.locator('[data-testid="payment-continue"]').click();
+      await page.waitForURL(/\/checkout\/review/, { timeout: 10_000 });
+
+      await page.waitForSelector('[data-testid="place-order"]', { timeout: 10_000 });
+      await page.locator('[data-testid="place-order"]').click();
+
+      await page.waitForSelector('[data-testid="checkout-stock-error"]', { timeout: 10_000 });
+      const message = await page.locator('[data-testid="checkout-stock-error"]').textContent();
+      expect(message).toContain("Drained Variant");
+      expect(message).toMatch(/only 1 left in stock/);
+
+      const variantIdAttr = await page
+        .locator('[data-testid="checkout-stock-error"]')
+        .getAttribute("data-variant-id");
+      expect(variantIdAttr).toBe(stockVariantId);
+
+      // Distinct from the generic/address-family error surface — the
+      // generic banner must NOT also be shown for this error.
+      expect(await page.locator('[data-testid="checkout-error"]').count()).toBe(0);
+
+      // No order/confirmation view — the button is still present and
+      // usable (not stuck disabled after the failed attempt).
+      expect(await page.locator('[data-testid="order-confirmation"]').count()).toBe(0);
+      expect(await page.locator('[data-testid="place-order"]').isEnabled()).toBe(true);
+    } finally {
+      await page.close();
+    }
+
+    expect(await db.order.count()).toBe(ordersBefore);
   });
 });
 

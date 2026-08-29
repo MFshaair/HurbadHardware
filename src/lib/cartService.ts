@@ -264,11 +264,20 @@ async function lockCart(tx: Prisma.TransactionClient, cartId: string): Promise<L
   const rows = await tx.$queryRaw<LockedCart[]>`
     SELECT id, region, "sessionId", "userId"
     FROM "ShoppingCart"
-    WHERE id = ${cartId} AND "expiresAt" > now()
+    WHERE id = ${cartId} AND "expiresAt" > (now() AT TIME ZONE 'UTC')
     FOR UPDATE
   `;
   return rows[0] ?? null;
 }
+
+// Exported ONLY for the F1 timezone regression test (security-reviewer
+// M3-2 sign-off, `docs/agents/security-signoff/M3-2.md`) — not part of the
+// public cart API. Every real caller in this file already reaches
+// `lockCart` internally via `addToCart`/`updateCartItemQuantity`/
+// `removeFromCart`; this named re-export just lets a test drive the exact
+// same function (not a duplicated copy of its SQL) under a deliberately
+// skewed DB session timezone.
+export { lockCart as __lockCartForTest };
 
 // ---------------------------------------------------------------------------
 // Identity resolution (ADR Decision 5 / Decision 6)

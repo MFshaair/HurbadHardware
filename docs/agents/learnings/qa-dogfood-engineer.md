@@ -367,6 +367,69 @@ discipline), clean up those rows immediately after observing the result —
 don't rely on a vitest `afterAll` that never runs for a session that never
 went through vitest.
 
+## When extending a dogfood leg past a "not yet available" placeholder to a real success path, check the ACTUAL response/DOM shape before asserting it
+
+**Symptom:** Extending `dogfoodCheckout()` (M3-3) to assert `GET /api/cart`
+returns a consumed/empty cart after a real checkout, the first assertion
+(`cartAfterBody.cart !== null`) failed even though the checkout itself had
+genuinely succeeded — `toCartView`'s real empty-cart shape is `{id: null,
+region, currency: "", items: [], itemCount: 0, ...}`, never a bare `cart:
+null` at the top level (that shape is reserved for "no cookie/session at
+all," a different case from "a real cart existed and was consumed").
+
+**Cause:** Assumed the response shape from the route's own doc-comment
+("a request with no cart cookie/session simply gets an empty cart back")
+without checking what a CONSUMED (previously-real, now-expired) cart
+actually serializes to, which is a third case the comment didn't
+distinguish.
+
+**Rule going forward:** When writing a new dogfood/test assertion against
+an existing route's response shape, grep the route handler and its
+view-serializer (`toCartView`, or equivalent) directly for the exact shape
+in the specific case being asserted (empty-no-cookie vs.
+consumed-had-a-cart vs. populated) rather than assuming from a doc-comment
+or from a sibling case's shape — then run the assertion once uninstrumented
+to see the real JSON before hardening the check. Same general discipline as
+this file's other "check the tool's real behavior before trusting a
+comparison built on top of it" entries, just applied to a route's response
+shape instead of a coverage tool or dev-server HTML.
+
+## Extending a dogfood leg past a checkout/money-path success state needs FK-ordered cleanup for the new rows, not just the old ones
+
+**Symptom:** Extending `dogfoodCheckout()` (M3-3) from an inert Place-order
+click to a REAL one that creates an `Order` meant the leg's existing
+cleanup (delete `Address`/`ShoppingCart` before the fixture `Product`,
+established for M3-3a) was no longer sufficient — a real `Order` now
+exists whose `shippingAddressId` points at the very `Address` row that
+cleanup deletes, and `Order` has no cascade-delete FROM `Address`, so
+deleting the `Address` first would hit a live FK violation the moment this
+leg actually starts creating real orders.
+
+**Cause:** Same root pattern as this file's earlier cart/product cleanup-
+ordering lesson, but for a table (`Order`) that only starts existing once a
+dogfood leg's SCOPE grows to cover a real success path — the ordering
+requirement is invisible until that growth happens, so it must be
+re-checked (not assumed still-correct) every time a leg is extended past a
+previously-inert action into one that writes new FK-linked rows.
+`Order`'s OWN children (`OrderItem`/`PaymentTransaction`/
+`InventoryReservation`/`OrderEvent`/`Shipment`/`Refund`/`ReturnRequest`) DO
+all cascade from `Order` itself per `prisma/schema.prisma`, so deleting the
+`Order` row alone is sufficient for that half — the ordering problem is
+specifically `Order` -> `Address`, not `Order` -> its own children.
+
+**Rule going forward:** Whenever a dogfood/test leg is extended past a
+previously-honest "not yet available"/inert placeholder into a path that
+creates new rows in a table not previously written by that leg, re-check
+`prisma/schema.prisma` for every new table's outbound FK relations (not
+just re-use the prior cleanup order verbatim) and delete in dependency
+order: the new table's own rows first (letting its own cascades handle its
+children), THEN the older fixture rows it points at. Verified fixed by
+directly re-querying Postgres for leftover `dogfood-m3-3a-*`-tagged users/
+products after several runs (including one that deliberately failed
+mid-leg, per this domain's "prove it can fail" discipline) — zero
+leftovers in every case, including the failure case (cleanup runs in a
+`finally` block regardless of which assertion threw).
+
 ## Existing pre-M0 vitest failures were environment, not implementation bugs
 
 **Context (not yet a lesson):** `tests/test4-stripe.test.ts` and

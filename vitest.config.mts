@@ -214,6 +214,16 @@ export default defineConfig({
         "src/app/checkout/payment/PaymentStep.tsx",
         "src/app/checkout/review/page.tsx",
         "src/app/checkout/review/ReviewStep.tsx",
+        // M3-3: POST /api/checkout independently calls
+        // auth.api.getSession()/reads the real cart cookie, so it's only
+        // meaningfully exercised via tests/test18-checkout.test.ts's
+        // spawned `next dev` subprocess (same measurement-gap
+        // justification as src/app/api/cart/** above, not a testing gap).
+        // The pure/data-layer functions it calls
+        // (src/lib/reservationService.ts, src/lib/addressValidation.ts,
+        // src/lib/cartService.ts) are deliberately NOT excluded — already
+        // unit-tested in-process elsewhere (M3-2, M1-3, M3-1).
+        "src/app/api/checkout/**",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at
