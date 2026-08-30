@@ -519,6 +519,43 @@ describe("createStripeCheckoutSession — duplicate-attempt predicate", () => {
     expect(rows).toHaveLength(2);
   });
 
+  it("ADR M4-2 Decision 2 (F1 symmetric case): a stale mpesa INITIATED row (5 min old) is NOT adopted/mutated by createStripeCheckoutSession — it creates its own stripe row", async () => {
+    const { orderId, sessionId } = await createFixtureOrder({});
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const mpesaRow = await db.paymentTransaction.create({
+      data: {
+        orderId,
+        provider: "mpesa",
+        idempotencyKey: randomUUID(),
+        amount: new Prisma.Decimal("1160.00"),
+        currency: "KES",
+        status: "INITIATED",
+        createdAt: fiveMinAgo,
+        updatedAt: fiveMinAgo,
+      },
+    });
+    createSessionMock.mockResolvedValue({
+      sessionId: "cs_test_f1_symmetric",
+      clientSecret: "cs_test_f1_symmetric_secret",
+    });
+
+    const result = await paymentService.createStripeCheckoutSession({ orderId, userId: null, sessionId });
+
+    // The mpesa row is untouched — never adopted or mutated by the Stripe
+    // module (row selection/mutation is provider-scoped, ADR M4-2
+    // Decision 2).
+    const unchangedMpesaRow = await db.paymentTransaction.findUniqueOrThrow({ where: { id: mpesaRow.id } });
+    expect(unchangedMpesaRow.status).toBe("INITIATED");
+    expect(unchangedMpesaRow.failureCode).toBeNull();
+
+    expect(result.paymentTransactionId).not.toBe(mpesaRow.id);
+    const stripeRow = await db.paymentTransaction.findUniqueOrThrow({ where: { id: result.paymentTransactionId } });
+    expect(stripeRow.provider).toBe("stripe");
+
+    const rows = await db.paymentTransaction.findMany({ where: { orderId } });
+    expect(rows).toHaveLength(2);
+  });
+
   it("an INITIATED row younger than 120s blocks with PaymentAttemptInFlightError (the double-click case)", async () => {
     const { orderId, sessionId } = await createFixtureOrder({});
     await db.paymentTransaction.create({

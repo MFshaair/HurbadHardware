@@ -21,13 +21,27 @@ import {
   type EmbeddedCheckoutLineItem,
   type CreateEmbeddedCheckoutSessionInput,
 } from "./stripe";
+import {
+  OrderNotFoundError,
+  OrderNotPayableError,
+  PaymentAlreadyConfirmedError,
+  PaymentAttemptInFlightError,
+  IN_FLIGHT_GRACE_MS,
+  assertNoBlockingAttempt,
+} from "./paymentErrors";
 
-// ADR Decision 2(c): must exceed the worst-case in-flight Stripe call
-// duration. Decision 4 pins `timeout: 20_000, maxNetworkRetries: 1` on the
-// Stripe SDK -> worst case ~40s + backoff, comfortably inside 120s. If the
-// SDK timeout ever changes, this constant must move with it (they are one
-// decision).
-const IN_FLIGHT_GRACE_MS = 120_000;
+// Re-exported so existing importers (`paymentService.OrderNotFoundError`,
+// etc. — see tests/test20-payment-service.test.ts) keep working unchanged.
+// The classes themselves now live in `paymentErrors.ts` so `mpesaService.ts`
+// (ADR M4-2) can share them without importing this whole module (avoids a
+// paymentService.ts <-> mpesaService.ts circular import).
+export {
+  OrderNotFoundError,
+  OrderNotPayableError,
+  PaymentAlreadyConfirmedError,
+  PaymentAttemptInFlightError,
+};
+
 // ADR Decision 3: Stripe retains idempotency keys for 24 hours. Past that,
 // a replay is no longer a replay.
 const STALE_CEILING_MS = 24 * 60 * 60 * 1000;
@@ -44,36 +58,10 @@ const SUPPORTED_STRIPE_CURRENCIES = new Set(["KES", "ETB", "SOS"]);
 // without string-matching. See `paymentErrorResponse` below. Same
 // signature/conventions as reservationService.ts's `reservationErrorResponse`.
 
-export class OrderNotFoundError extends Error {
-  constructor(public readonly orderId: string) {
-    super(`Order not found or not owned by this requester: ${orderId}`);
-    this.name = "OrderNotFoundError";
-  }
-}
-
-export class OrderNotPayableError extends Error {
-  constructor(public readonly paymentStatus: string) {
-    super(`Order payment status is ${paymentStatus}, not PENDING`);
-    this.name = "OrderNotPayableError";
-  }
-}
-
-export class PaymentAlreadyConfirmedError extends Error {
-  constructor() {
-    super("This order has already been paid");
-    this.name = "PaymentAlreadyConfirmedError";
-  }
-}
-
-// The only 409 in this module that means "retry shortly and it may work" —
-// covers a double-click (live INITIATED/PENDING row) and Stripe's own
-// `idempotency_key_in_use` concurrent-replay race (ADR Decision 3).
-export class PaymentAttemptInFlightError extends Error {
-  constructor() {
-    super("A payment attempt is already in progress");
-    this.name = "PaymentAttemptInFlightError";
-  }
-}
+// OrderNotFoundError / OrderNotPayableError / PaymentAlreadyConfirmedError /
+// PaymentAttemptInFlightError now live in `paymentErrors.ts` (imported and
+// re-exported above) — shared with `mpesaService.ts` (ADR M4-2 Decision 2,
+// closes security-signoff M4-1 F1).
 
 export class UnsupportedCurrencyError extends Error {
   constructor(public readonly currency: string) {
@@ -126,7 +114,14 @@ export function paymentErrorResponse(
     return { status: 409, body: { error: "This order has already been paid" } };
   }
   if (err instanceof PaymentAttemptInFlightError) {
-    return { status: 409, body: { error: "A payment attempt is already in progress" } };
+    // `provider` is optional (ADR M4-2 Decision 2, additive widening) — only
+    // present when the throw site passed one. Existing M4-1 call sites in
+    // this module now pass "stripe" explicitly (see prepareAttempt below);
+    // a bare `new PaymentAttemptInFlightError()` (as constructed directly in
+    // some tests) still produces a body with no `provider` key.
+    const body: Record<string, unknown> = { error: "A payment attempt is already in progress" };
+    if (err.provider) body.provider = err.provider;
+    return { status: 409, body };
   }
   if (err instanceof UnsupportedCurrencyError) {
     return {
@@ -297,17 +292,19 @@ async function prepareAttempt(
       );
     }
 
-    // (b) The durable predicate (ADR Decision 2b).
+    // (b) The durable predicate (ADR M4-2 Decision 2, closes security-signoff
+    // M4-1 F1): the BLOCKING check ("is anyone paying right now") is GLOBAL
+    // across every provider on this order — a live M-Pesa STK push must
+    // block a new Stripe attempt exactly as a live Stripe session blocks a
+    // new one here (PRD U7 Test 6, double-charge prevention). Row
+    // SELECTION/MUTATION below (which specific row to reuse, CAS, or fail
+    // forward) stays scoped to `provider === "stripe"` only — this module
+    // must never adopt or mutate a foreign-provider (e.g. mpesa) row; that
+    // provider's own service owns its own stale-row cleanup.
     const existing = await tx.paymentTransaction.findMany({ where: { orderId } });
+    assertNoBlockingAttempt(existing);
 
-    if (existing.some((r) => r.status === "CONFIRMED")) {
-      throw new PaymentAlreadyConfirmedError();
-    }
-    if (existing.some((r) => r.status === "PENDING")) {
-      throw new PaymentAttemptInFlightError();
-    }
-
-    const initiated = existing.find((r) => r.status === "INITIATED");
+    const initiated = existing.find((r) => r.status === "INITIATED" && r.provider === "stripe");
     let paymentTransactionId: string;
     let idempotencyKey: string;
 
@@ -315,8 +312,10 @@ async function prepareAttempt(
       const ageMs = Date.now() - initiated.createdAt.getTime();
       if (ageMs < IN_FLIGHT_GRACE_MS) {
         // The double-click case: another request is mid-Stripe-call right
-        // now (or plausibly is).
-        throw new PaymentAttemptInFlightError();
+        // now (or plausibly is). Unreachable in practice — assertNoBlocking
+        // Attempt above already throws for any INITIATED row (any provider)
+        // younger than IN_FLIGHT_GRACE_MS — kept as defense in depth.
+        throw new PaymentAttemptInFlightError("stripe");
       } else if (ageMs < STALE_CEILING_MS) {
         // Crash recovery (ADR Decision 3): reuse the row and its
         // idempotency key — replay the identical Stripe request. Do NOT
@@ -427,7 +426,7 @@ export async function createStripeCheckoutSession(
         // Concurrent-replay case (ADR Decision 3): the sibling request
         // holding this same key is still going to succeed and must be
         // allowed to write Phase C — leave the row INITIATED, not FAILED.
-        throw new PaymentAttemptInFlightError();
+        throw new PaymentAttemptInFlightError("stripe");
       }
 
       // Phase C (failure branch, ADR Decision 8): CAS INITIATED -> FAILED.
@@ -475,7 +474,7 @@ export async function createStripeCheckoutSession(
           "updatedAt" = (now() AT TIME ZONE 'UTC')
       WHERE id = ${prepared.paymentTransactionId} AND status = 'INITIATED'::"PaymentTransactionStatus"
     `;
-    if (affected !== 1) throw new PaymentAttemptInFlightError();
+    if (affected !== 1) throw new PaymentAttemptInFlightError("stripe");
     await tx.orderEvent.create({
       data: {
         orderId: input.orderId,

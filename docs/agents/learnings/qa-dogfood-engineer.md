@@ -536,3 +536,91 @@ check whether the specific test environment it runs under (here,
 literal currently accurate — a hardcoded value that's accurate-for-now but
 would silently drift later is a real residual risk worth documenting, but
 it is a different (lower) severity than a test that is *already* wrong.
+
+## A "no UI yet" precedent (M4-1) doesn't automatically extend to every sibling item — check whether the OTHER half of the "is there anything real to prove" question (real HTTP reachability, not just a UI click) is still open
+
+**Symptom:** M4-2 (M-Pesa STK push route) looked, at first glance, like a
+repeat of M4-1's "no dogfood extension, nothing routes to it from a page
+yet" precedent — no `MpesaCheckout`-equivalent component exists, same as
+M4-1's `StripeCheckout.tsx` at the time. But `tests/test23-mpesa-stk-push
+.test.ts`'s entire 27-test suite (confirmed by grep for every `describe(`
+block) calls `mpesaService.createMpesaStkPush` directly, in-process — never
+the exported Next.js route handler, never over real HTTP, never against a
+spawned `next dev` server. That is a DIFFERENT gap than "no UI to click
+through" — it means nothing in the repo had ever proven the route itself
+(registration, `src/middleware.ts` non-interception, body validation,
+session/cookie resolution) actually works, independent of whether a browser
+can reach it yet. M4-1b's webhook leg had already established this class of
+check is worth doing even with no UI (a webhook has no UI at all, ever) —
+the same reasoning applies to any POST route a browser WOULD eventually
+call, as long as a *narrow* slice of it can be proven without needing the
+thing that's actually missing (real Daraja sandbox credentials, in this
+case). The route's own phase ordering (Phase A: DB lookup/ownership,
+synchronous and mockable-free; Phase B: the actual external network call)
+made this possible with zero mocking: requests that fail in Phase A (bad
+body, non-existent order) never reach Daraja at all, so a 400/400/404
+real-HTTP check is both genuine and achievable with no sandbox credentials.
+
+**Rule going forward:** When a new item looks like a repeat of a prior
+"no dogfood extension" precedent, re-derive the reasoning from scratch
+rather than pattern-matching on "no UI yet" alone — specifically check (1)
+whether the route's own test suite is in-process-only or already exercises
+real HTTP (`grep` for `spawn`/`next dev` in the relevant test file, same
+check used for the M4-1b webhook precedent), and (2) whether the route has
+an internal phase boundary that lets a narrow, real check be proven WITHOUT
+needing whatever external resource (sandbox credentials, a mock injection
+point in a spawned child process) is actually missing. If both are true, a
+narrow "route-wiring-only" leg is real signal, not theater, even with no UI
+— document the narrower scope explicitly (what it does NOT prove) in the
+same header-comment style as the M4-1/M4-1b precedents, so a future reader
+doesn't mistake it for a full happy-path leg.
+
+## An unordered `findFirst`/`findMany` used to pick a dogfood fixture can silently fall outside the paginated page the leg then asserts against
+
+**Symptom:** `production-readiness-gate` reported a RED gate-check on an
+M4-2 run because `dogfoodHomepage()` failed with "Clicking through the
+'accessories' category card did not land on a /products page listing the
+seeded product 'Apple AirPods Pro'" — a spurious failure with zero relation
+to the item actually being verified (M4-2 touched no homepage/catalog
+code).
+
+**Cause:** `db.product.findFirst({ where: { category, isActive: true,
+deletedAt: null } })` had no `orderBy`. Postgres gives NO ordering
+guarantee for a query without `ORDER BY` — it can return ANY matching row
+physically present, not "the first one inserted" or any other intuitive
+default. Meanwhile the actual page this leg fetches next
+(`/products?category=<x>`, no `page` param → page 1) is paginated
+(`PAGE_SIZE = 20`, `src/lib/productService.ts`) and ordered by `orderBy:
+[{ createdAt: "asc" }, { id: "asc" }]`. The "accessories" category had 25
+active seeded products in the dev DB; "Apple AirPods Pro" was rank 22 by
+that real ordering — i.e., on page 2, which this leg's plain
+`fetch(BASE_URL + categoryHref)` (page 1, no `?page=` param) never
+renders. The unordered `findFirst` could (and did) pick that row instead
+of one of the first 20, causing a failure that looks like a real
+category/listing bug but is entirely an artifact of the fixture-selection
+query, not the code under test. Two more `findFirst` calls in
+`dogfoodCatalogSearch()` (`appleProduct`/`samsungProduct`, picking a
+seeded product to filter/search by brand) had the exact same shape — not
+yet triggering because both brands currently have fewer than
+`PAGE_SIZE` (20) active seeded products, but the same latent bug, waiting
+for the seed data to grow past that count.
+
+**Rule going forward:** Any `findFirst`/`findMany` in `dogfood.mjs` (or any
+test) that picks a fixture row to then assert against a PAGINATED page's
+rendered HTML must use the EXACT SAME `orderBy` the real page/route uses
+to decide what's on page 1 — grep the actual service function
+(`src/lib/productService.ts` or equivalent) for its `orderBy` rather than
+assuming Prisma/Postgres has any implicit insertion-order default (it does
+not). This is the same "check the tool's real behavior before trusting a
+comparison built on top of it" discipline as the coverage-defaults and
+dev-mode-HTML-timestamp lessons above, applied to Postgres's own
+unordered-query semantics. When auditing a file for this class of bug,
+`grep -n "findFirst\|findMany"` and check each one against: (a) does the
+result feed into an assertion against a paginated/limited page, and (b) is
+there an explicit `orderBy` matching that page's real query. Proved the
+fix is a genuine (non-coincidental) gate: after adding the matching
+`orderBy`, reverting it alone reproduced the exact original failure on 4/4
+consecutive runs in this dev DB (Postgres's physical row order was stable
+enough here to reproduce reliably, though in principle this class of bug
+is inherently non-deterministic and might not reproduce identically on a
+different DB/run) — then restoring the fix gave 5+ consecutive clean runs.

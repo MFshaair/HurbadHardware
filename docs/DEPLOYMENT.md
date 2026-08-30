@@ -88,7 +88,7 @@ secrets are still configured per-project as above.
 3. For production, apply for a Paybill/Till number (`MPESA_SHORTCODE`) and
    Lipa Na M-Pesa Online passkey (`MPESA_PASSKEY`) through Safaricom
 4. Set `MPESA_CALLBACK_URL` to the deployed Kenya domain's webhook route
-   (`https://ke.hurbadhardware.com/api/payments/mpesa/callback`)
+   (`https://ke.hurbadhardware.com/api/webhooks/mpesa`)
 5. Add all M-Pesa variables to the **Kenya** Vercel project only —
    Ethiopia/Somalia don't use M-Pesa (see `.env.production.ethiopia` /
    `.env.production.somalia`, which note Telebirr/EVC Plus as Phase 2 instead)

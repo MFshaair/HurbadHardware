@@ -217,6 +217,131 @@ it structurally cannot, and reaching for an env-flag to fake it in
 production code would violate the "no NODE_ENV branch swaps in fake SDK
 behavior at runtime" rule this domain is bound by.
 
+## A "fail forward + fresh row" crash-recovery mechanism needs a DIFFERENT test than a "replay the same row" one, even though both look like "handle a 5-minute-old INITIATED row"
+
+**Symptom:** M4-2's M-Pesa crash recovery (ADR M4-2 Decision 3) looks, at a
+glance, like a copy of M4-1's Stripe crash recovery (ADR M4-1 Decision 3) —
+both detect an orphaned `INITIATED` row past a grace period. Writing the
+test by pattern-matching M4-1's `test20-payment-service.test.ts` "crash
+recovery" test (assert `result.paymentTransactionId === seeded.id`, same
+`idempotencyKey` passed to the provider) would have produced a test that
+silently encodes the WRONG invariant for M-Pesa and would pass against a
+buggy "replay" implementation just as easily as a correct "fail forward"
+one, because the assertion shape looks similar at first glance.
+
+**Cause:** the two ADRs deliberately chose opposite mechanisms for the same
+surface-level scenario, for a protocol-shape reason (Stripe has an
+idempotency key that safely dedupes a replay server-side; Daraja's STK
+push has no such key, so a replay is a genuinely new prompt to the
+customer's phone — replaying risks a real second charge, not just a
+wasted API call). A test copied from the wrong precedent would assert
+`result.paymentTransactionId === seeded.id` (M4-1's correct invariant) when
+the correct M4-2 assertion is the opposite: `result.paymentTransactionId
+!== orphan.id` AND `newRow.idempotencyKey !== orphan.idempotencyKey`.
+
+**Rule going forward:** when a new payment provider's ADR explicitly calls
+out that it inverts a specific mechanism from a prior provider's ADR (search
+for language like "unavailable and must not be imitated" — M4-2's Decision
+3 uses exactly that phrasing about M4-1's replay approach), write that
+test's core assertion as the NEGATION of the prior provider's equivalent
+assertion, and say so in the test's own `it(...)` title (this repo's test23
+titles the crash-recovery test "fail forward, not replay — unlike M4-1's
+Stripe reuse" for exactly this reason) — a future reader (or future you)
+should not need to open both ADRs side-by-side to know the test is testing
+the deliberately-opposite behavior on purpose.
+
+## A cross-provider security fix (F1-class) needs ONE shared predicate function, not two independently-written copies
+
+**Symptom:** M4-2's ADR (Decision 2) required patching `paymentService.ts`
+(Stripe, existing) to also block on a live M-Pesa attempt, AND the new
+`mpesaService.ts` to block on a live Stripe attempt — the same "is anyone
+paying right now, across every provider" question asked from two different
+provider modules. Writing this predicate independently in each file (even
+copy-pasted with find/replace) creates a serious risk: if the staleness
+math (`Date.now() - row.createdAt.getTime() < GRACE_MS`) or the CONFIRMED/
+PENDING/INITIATED branch ordering drifts even slightly between the two
+copies during a later edit to just one of them, the global "no double
+charge" guarantee silently degrades to a provider-scoped one — exactly
+the class of regression security-signoff M4-1 F1 was raised about in the
+first place, just reintroduced asymmetrically instead of symmetrically.
+
+**Cause:** the GLOBAL blocking check (does any row of any provider mean
+"stop") is a single security invariant that happens to be consumed from
+two otherwise-unrelated modules. Provider-scoped row SELECTION/mutation
+(which specific row to reuse/CAS/fail-forward) is correctly
+provider-specific and belongs in each module separately — but conflating
+"provider-specific" with "the whole predicate" is the trap.
+
+**Rule going forward:** when an ADR requires the same cross-cutting
+security check to be enforced identically from two-or-more otherwise
+independent service modules, extract ONLY the shared/global part into one
+function in a small dedicated module (this repo's
+`src/lib/paymentErrors.ts`, holding `assertNoBlockingAttempt` plus the
+error classes both modules throw), imported by both, and leave the
+provider-scoped part (row selection, mutation, CAS) duplicated-but-locally-
+scoped in each provider's own service file. Watch for import-cycle risk
+when doing this: if the shared module needs error classes that used to
+live in one of the two consuming modules, move the classes into the shared
+module too (with the original module re-exporting them for backward
+compatibility with existing imports/tests) rather than having the shared
+module import from one of its own consumers.
+
+## A framework-free service's `fetchImpl` test seam needs to be threaded ALL THE WAY to the top-level export, not just the lowest-level wrapper
+
+**Symptom:** `mpesa.ts`'s `stkPush`/`getMpesaAccessToken` both already had a
+`fetchImpl` parameter (the established mocking seam for this module, same
+pattern `getMpesaAccessToken` used since the U1 stub). It would have been
+easy to leave `mpesaService.ts`'s `createMpesaStkPush` calling `stkPush()`
+with no second argument (implicitly defaulting to the real global `fetch`)
+on the theory that "the seam already exists in mpesa.ts, that's enough" —
+which would make every DB/CAS/concurrency test in `mpesaService.ts`
+structurally unable to avoid a real network call the moment it reached
+Phase B, defeating the entire "never real network" mocking-boundary rule
+for this domain.
+
+**Rule going forward:** when a lower-level wrapper module already has an
+injectable dependency (a `fetchImpl` param, a client instance, etc.) and a
+higher-level service module built on top of it needs to be testable without
+real I/O, the higher-level module's own public function signature must
+accept and forward that same seam (an optional field on its input object,
+defaulting to the real implementation) — verify this by grep'ing for every
+call site of the lower-level function from the higher-level module and
+confirming each one explicitly passes the seam through, not just the first
+one written.
+
+## "Fix path X" acceptance criteria need a repo-wide grep, not just the files the ADR named
+
+**Symptom:** M4-2's build fixed `MPESA_CALLBACK_URL`'s wrong
+`/api/payments/mpesa/callback` path only in the two files the ADR's own
+diff snippet showed (`.env.example`, `.env.development`) and marked the
+FEATURES.md checklist item "resolved." `security-reviewer`'s M4-2 F1
+finding caught two files the ADR narrative never explicitly listed as
+diff targets but that carried the exact same wrong value:
+`.env.production.kenya` (the real Kenya production env — the one that
+actually matters for a live deploy) and `docs/DEPLOYMENT.md`'s operator
+runbook. Had this shipped, Daraja would have received a callback URL that
+404s in Kenya production: a customer debited by M-Pesa with literally no
+server-side route to ever record the payment.
+
+**Cause:** an ADR's worked example/diff snippet naturally shows the
+smallest illustrative fix (usually the dev-facing `.env.example`), not
+every file in the repo carrying the same stale string — env files split
+per-region (`.env.production.{kenya,ethiopia,somalia}`) and prose docs
+(deployment runbooks, README callouts) are easy to miss because they're
+not co-located with the code files an ADR is reasoning about.
+
+**Rule going forward:** whenever a task description says "fix path/value
+X" or "X is now canonical," before marking the checklist item resolved,
+`grep -rn` the OLD value across the entire repo (excluding
+`node_modules`/`.git`), not just the files the ADR/task text explicitly
+named. Triage every hit: source/config/env files and operator-facing docs
+(anything a human or a deploy pipeline will actually read/use) must be
+fixed; only genuinely historical narrative (an ADR's "here is what was
+wrong before" prose, a security-signoff doc describing the finding, a
+run-state entry recording the old risk) is legitimate to leave unchanged,
+and even then only because it's describing history accurately, not
+because it was missed.
+
 ## Existing mocked-SDK fallback pattern (context, not yet a lesson)
 
 `tests/test4-stripe.test.ts` already establishes the pattern for this

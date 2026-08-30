@@ -316,6 +316,34 @@ return shape) in the acceptance criteria and flag it as a reason
 platform-architect review may still be warranted, rather than assuming
 reuse makes the item automatically UI-wiring-shaped.
 
+## "Cached in memory" acceptance criteria need a serverless-instance reality check
+**Symptom:** HRH-49's Linear description said "cached OAuth token (refreshed
+~3600s)" — read literally, this paraphrases into an acceptance criterion a
+builder could satisfy with an obvious in-memory module-scope cache, which
+looks done (token reused across sequential calls in a local dev server or
+in tests) without ever surfacing that it doesn't work the way the criterion
+implies once deployed.
+**Cause:** This repo deploys to Vercel serverless functions
+(`vercel.json`'s `regions`), which spin up multiple concurrent instances
+and cold-start fresh ones regularly — none of them share process memory.
+A cache phrased only in terms of its observable behavior ("token is
+reused, not re-fetched every call") doesn't reveal that the underlying
+platform breaks that assumption across instances, the same shape as the
+earlier "library defaults the opposite way" and "required+unique column
+with no auth backing" lessons in this file — a criterion can look
+self-evidently satisfiable while hiding a platform-level correctness
+question.
+**Rule going forward:** Before finalizing any acceptance criterion that
+says something is "cached"/"reused"/"held in memory" across requests,
+check the actual deployment target (serverless vs. long-running process)
+for whether that even holds true. If the target is serverless/stateless
+per-instance, either (a) name explicitly that the criterion accepts
+per-instance re-fetching as a deliberate, justified tradeoff, or (b) name
+the shared-storage mechanism (DB row, external cache) the criterion
+actually requires — don't let "cached" pass through as if it's
+platform-agnostic, and flag it for architect review if the answer isn't
+obviously (a).
+
 ## A Linear item can name a component that never made it into the actual build — verify the file exists before treating its absence as a gap
 **Symptom:** HRH-42's Linear description named `CartContext.tsx` alongside
 `useCart.ts` as the artifacts for "cart persistence." M3-1 (already

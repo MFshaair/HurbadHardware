@@ -2329,11 +2329,381 @@ in scope to fix here.)
 
 **Verified:** `scripts/agents/gate-check.sh M4-1b` exit 0 on 2026-08-29. All checks GREEN: build, lint, test+coverage (94.35% statements/lines, 83.57% branches, 97.2% functions, all thresholds met), dogfood entrypoint (real signed Stripe webhook delivery over HTTP → Order.paymentStatus CONFIRMED → onHand decremented → redelivery idempotent), and security sign-off STATUS: CLEAR (`docs/agents/security-signoff/M4-1b.md`). All 10 ADR-required tests pass, with two critical branches empirically proven load-bearing during build: crash-gap-resume (naive "already-CONFIRMED → duplicate" made the test fail), and charge.failed-inert (wiring it to the fail path made the test fail). Dogfood webhook leg successfully extended `scripts/agents/dogfood.mjs` with real signed-webhook-delivery-over-HTTP proof.
 
-### M4-2: M-Pesa Daraja integration
-**Status:** planned · **Owner:** commerce-payments-engineer
-- [ ] OAuth token cached/refreshed; STK push with 60s timeout
-- [ ] Callback HMAC-verified, idempotent; retry up to 2x with backoff, then fallback to Stripe
-- [ ] Reconciliation job queries Daraja every 15 min for stuck pending transactions
+### M4-2: M-Pesa Daraja OAuth & STK Push (HRH-49)
+**Status:** verified (gate-check.sh M4-2 exit 0 — 2026-08-30) · **Owner:** commerce-payments-engineer
+**Verified (production-readiness-gate, 2026-08-30):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 325 passed / 2 skipped / 0 failed; statements 90.25% (1010/1119), branches 78.62% (618/786), functions 95.93% (165/172), lines 91.37% (932/1020) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all legs passed, including the M4-2 route-wiring leg: `POST /api/checkout/create-mpesa-session` reachable over real HTTP, body validation (400 on unknown key, 400 on missing orderId) and order-lookup wired correctly, real Postgres lookup confirmed (404 on non-existent orderId)
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M4-2.md` STATUS: CLEAR (F1 MEDIUM cross-provider blocking gap fixed in src/lib/paymentErrors.ts and src/lib/paymentService.ts + env files; F2–F5 non-blocking advisories; re-verified by security-reviewer 2026-08-30 after builder's fix pass)
+
+**Verification note:** this is a 3rd gate attempt (2 prior REDs on F1 security finding + pre-existing dogfood bug, both fixed upstream). Security-reviewer confirmed F1 re-verified as fixed; qa-dogfood-engineer confirmed dogfood bug in scripts/agents/dogfood.mjs was fixed (orderBy determinism). Orchestrator independently confirmed both local-check.sh (325 passed) and dogfood.mjs (all legs green) before dispatch. Gate-check.sh ran clean this session — all checks GREEN, exit 0.
+
+
+**Architect review: DONE (platform-architect, 2026-08-30).** Binding design
+is `docs/agents/arch-decisions/M4-2-mpesa-stk-push.md` — 12 decisions
+covering the OAuth token cache (module-scope in-memory, deliberately
+best-effort, safe only because of a mandatory invalidate-and-retry-once
+rule on 401/403), the F1 cross-provider fix (global blocking predicate,
+provider-scoped row mutation — patches `paymentService.ts` too, not just
+the new module), crash recovery (fail the orphan forward, NEVER replay
+the push — Daraja has no idempotency key, unlike M4-1's Stripe flow, so
+replaying could put a second prompt on the customer's phone), the exact
+whole-KES `Amount` format with ceil-rounding and its UI-disclosure
+implication, the four-phase flow's 202-Accepted response shape (no
+synchronous outcome, unlike M4-1), the `providerTxId`/`CheckoutRequestID`
+decision (with a named trap for HRH-50 not to overwrite it with the
+M-Pesa receipt number), and the resolved `/api/webhooks/mpesa` callback
+path. Build against it, do not improvise. Two open product questions
+flagged as **not blocking this item** but binding on HRH-50/launch: the
+rounding-disclosure UI change, and the 15-minute reservation TTL now
+colliding with *two* different payment-provider windows (needs one
+answer for both, not two).
+
+**Files:** `src/lib/mpesaService.ts` (new), `src/lib/mpesa.ts` (extended —
+today it is a **U1-only stub**: `getMpesaAccessToken` does one uncached
+OAuth call per invocation, no STK push at all, confirmed by direct read
+2026-08-30), `app/api/checkout/create-mpesa-session/route.ts` (new).
+**Schema impact: none** — `PaymentTransaction` (`prisma/schema.prisma:261-287`)
+is already provider-agnostic (`provider String`, `providerTxId String?
+@unique`, `idempotencyKey String @unique`, `metadata Json?`); no migration.
+
+This is the first M-Pesa integration beyond the U1 smoke stub, and its
+protocol shape is genuinely different from M4-1's Stripe work, not a copy:
+Daraja's OAuth token is a **client-credentials token cached/reused across
+requests** (not a per-request API key like Stripe's), and STK push is a
+**fire-and-forget initiation** whose response only confirms the prompt was
+dispatched to the customer's phone — actual payment confirmation arrives
+later, asynchronously, via HRH-50's webhook, never from this route.
+
+- [x] **OAuth token cache: module-scope in-memory, best-effort by design**
+      (ADR M4-2 Decision 1 — decided, not a builder's call). `mpesaService.ts`
+      wraps `getMpesaAccessToken` with a module-scope cache reused until 60s
+      before Safaricom's reported `expires_in` (~3600s). **No DB table, no
+      shared store** — `package.json` and `.env.example` confirm this repo has
+      no Redis/KV/Upstash, only Postgres, and persisting a bearer credential
+      at rest is a security downgrade for a saving of ~1 HTTP call per
+      checkout. Vercel's per-instance memory means the cache is a *cost*
+      optimisation, never a correctness mechanism — the same framing
+      `src/lib/rateLimit.ts:9-16` already uses. Acceptance therefore requires
+      all four: (i) cache keyed by `MPESA_CONSUMER_KEY`; (ii) single-flight
+      (cache the promise, not just the value); (iii) **invalidate-and-retry-
+      once on a 401/403 from the STK push** — this is the rule that makes an
+      in-memory cache safe, and it has its own test; (iv) `cache: "no-store"`
+      on the OAuth fetch, and the token never logged.
+- [x] **Three-phase pattern, following ADR M4-1's Decisions 1-3 shape**
+      (`docs/agents/arch-decisions/M4-1-stripe-embedded-checkout.md`):
+      Phase A (`db.$transaction`: lock `Order` `FOR UPDATE`, ownership +
+      payability + duplicate-attempt checks, INSERT `PaymentTransaction`
+      `status: INITIATED`, `provider: "mpesa"`) → commit → Phase B (no
+      transaction: Daraja STK push call, under its own bounded HTTP
+      timeout, distinct from the customer-facing prompt window below) →
+      Phase C (CAS UPDATE `INITIATED → PENDING`, `providerTxId` = Daraja's
+      `CheckoutRequestID`, `MerchantRequestID` stored in `metadata`, plus an
+      `OrderEvent`). **The M4-1 duplicate-attempt/crash-recovery query must
+      be scoped by `provider` as well as `orderId`** — this closes the
+      already-tracked F1 finding
+      (`docs/agents/security-signoff/M4-1.md`: "harmless with only one
+      provider live today, but once M4-2 (M-Pesa) exists, an abandoned
+      M-Pesa `INITIATED` row on the same order could be silently hijacked
+      and reused as a Stripe attempt. Must be fixed when M4-2 is built").
+- [x] **Route contract:** `POST /api/checkout/create-mpesa-session`, body
+      exactly `{ orderId: string, phoneNumber?: string }` (unknown keys →
+      400). If `phoneNumber` is omitted, default to the order's shipping
+      `Address.phone` (`prisma/schema.prisma:432`, already required and
+      collected at checkout) normalized to Safaricom MSISDN format
+      (`2547XXXXXXXX`); if supplied, validate the same format — a customer
+      paying from a different phone than their delivery contact is a real
+      case STK push must support (ADR M4-2 Decision 8 — resolved: allow the
+      override, one shared normalizer for both paths, accepting `07xx`/`01xx`/
+      `7xx`/`1xx`/`+254`/`254` forms; `checkRateLimit` at
+      `mpesa-stk:${userId ?? clientIp}` (`{ limit: 5, windowMs: 600_000 }`) as
+      abuse control against ringing a stranger's phone). Same ownership
+      resolution as M4-1 (session `userId` or guest
+      cart-cookie `sessionId` match on the order's `CREATED` `OrderEvent`
+      payload) — 404, not 403, on mismatch, same anti-oracle rule.
+- [x] **`PaymentTransaction` after a successful Phase C:** `provider:
+      "mpesa"`, `status: PENDING` (matches PRD U8 Test 1: "STK push
+      initiated → `PaymentTransaction` created (PENDING)"), `providerTxId`
+      = `CheckoutRequestID`, `amount`/`currency` read from the `Order`
+      (never client-supplied — same non-negotiable as M4-1 Decision 5;
+      KES only, Kenya-only per PRD KTD2, no ET/SO M-Pesa flow exists),
+      `metadata: { merchantRequestId, phoneNumber, orderTotal,
+      amountRequested, roundingDelta }` only. **`Amount` is WHOLE KES, not
+      minor units** (ADR M4-2 Decision 5 — Stripe's ×100 does not transfer;
+      M-Pesa has no sub-shilling denomination). Because 16% VAT routinely
+      produces a total with cents, `Order.totalAmount` is **ceil'd** to the
+      next whole shilling and `PaymentTransaction.amount` records the ceil'd
+      figure actually requested (a deliberate divergence from M4-1, where
+      `amount == Order.totalAmount`); the order total and delta go in
+      `metadata`. Ceil, never floor — an underpayment must never be silently
+      accepted. Guard `< 1` and `> MPESA_MAX_AMOUNT_KES` (new env, default
+      150_000).
+- [x] **The "60s timeout" in HRH-49's Linear description is Safaricom's own
+      STK-prompt expiry, handled entirely Safaricom-side.** Correction to the
+      earlier wording: `/mpesa/stkpush/v1/processrequest` takes
+      **`CallBackURL` only — there is no `TimeOutURL`** on this endpoint
+      (`QueueTimeOutURL` belongs to the B2C/C2B/reversal APIs). The expiry is
+      reported through the *same* `CallBackURL` with `ResultCode: 1037`
+      (unreachable) or `1032` (cancelled). This route sets `CallBackURL`,
+      returns as soon as Daraja acknowledges dispatch, and does not poll or
+      wait — that is HRH-50's job.
+- [x] **`MPESA_CALLBACK_URL` mismatch resolved: `/api/webhooks/mpesa` is
+      canonical** (ADR M4-2 Decision 7). `.env.example:57` must be updated
+      from `/api/payments/mpesa/callback`. Reasons: it matches the PRD's file
+      list, it matches the existing `src/app/api/webhooks/stripe/route.ts`
+      sibling, and **`vercel.json` grants `maxDuration: 30` to
+      `app/api/webhooks/**/*.ts` only** — the old path would silently get the
+      default. Must be absolute `https://`; `mpesaService.ts` fails closed in
+      Phase A, before any row is created, if it is unset or not https.
+      **Update (2026-08-30, security-signoff M4-2 F1):** the initial fix
+      above only touched `.env.example`/`.env.development`, the two files
+      the ADR named explicitly — it missed `.env.production.kenya:13` (the
+      actual Kenya production value Daraja would have been given) and
+      `docs/DEPLOYMENT.md`'s operator runbook, both of which still carried
+      the old `/api/payments/mpesa/callback` path. If deployed as-is, Kenya
+      production would have handed Daraja a callback URL that 404s — a
+      customer debited by M-Pesa with no way for this app to ever record
+      the payment. Both files are now fixed to `/api/webhooks/mpesa`; a
+      repo-wide grep confirms no other stale occurrences of the old path
+      remain outside of historical narrative (ADR/run-state/security-signoff
+      docs describing the finding itself, left as accurate history). Fully
+      resolved now.
+- [x] **Mocking boundary — no real Daraja sandbox credentials exist**
+      (`.env.example`: `MPESA_CONSUMER_KEY`/`MPESA_CONSUMER_SECRET`/
+      `MPESA_PASSKEY` all `REPLACE_ME`, confirmed). Tests mock the outbound
+      `fetch` calls to Daraja's `/oauth/v1/generate` and
+      `/mpesa/stkpush/v1/processrequest` endpoints, extending the
+      `fetchImpl` injection seam `src/lib/mpesa.ts` already establishes for
+      the OAuth call (do not replace it) — never touch real network or
+      require real credentials; all DB/auth/ownership/CAS logic runs for
+      real against the test DB, same convention as M4-1's
+      `paymentService.ts` tests.
+
+**Implementation notes (commerce-payments-engineer, 2026-08-30).** Built
+exactly against `docs/agents/arch-decisions/M4-2-mpesa-stk-push.md`.
+
+- `src/lib/mpesa.ts` extended (not replaced): `getMpesaAccessToken` keeps
+  its original signature/`fetchImpl` seam verbatim; added a module-scope
+  token cache with single-flight (`inFlight` promise, not just the
+  resolved value) keyed by `MPESA_CONSUMER_KEY`, a 60s refresh margin, and
+  `stkPush()` with the mandatory 401/403 invalidate-and-retry-once rule.
+  `buildDarajaTimestampAndPassword(shortcode, passkey, nowMs?)` computes
+  `Timestamp`/`Password` from `Date.now()` + a fixed +3h offset — never
+  reads `TZ` — empirically confirmed identical under `TZ=UTC` and
+  `TZ=Africa/Mogadishu` (required test 11). Success requires
+  `res.ok && ResponseCode === "0" && CheckoutRequestID` — a bare `res.ok`
+  is never treated as success. No `TimeOutURL` field. Both fetches bounded
+  via `AbortSignal.timeout`.
+- `src/lib/paymentErrors.ts` (new): extracted `OrderNotFoundError`/
+  `OrderNotPayableError`/`PaymentAlreadyConfirmedError`/
+  `PaymentAttemptInFlightError` (now carries an optional `provider` field,
+  additive — existing bodies unchanged unless a throw site passes one) plus
+  `assertNoBlockingAttempt()`, the GLOBAL half of the F1 fix, shared by both
+  `paymentService.ts` and the new `mpesaService.ts` so the "is anyone paying"
+  gate cannot silently diverge between providers. `paymentService.ts`
+  re-exports the classes unchanged so existing imports keep working.
+- `src/lib/paymentService.ts` **patched (F1 fix, closes
+  `docs/agents/security-signoff/M4-1.md` F1)**: Phase A's duplicate-attempt
+  predicate now calls the shared `assertNoBlockingAttempt` (global block,
+  any provider) but scopes row SELECTION/reuse/CAS to
+  `r.provider === "stripe"` only — a stale M-Pesa row is never adopted or
+  mutated by the Stripe flow. All internal `PaymentAttemptInFlightError`
+  throw sites now pass `"stripe"` explicitly. Verified via a new symmetric
+  test in `tests/test20-payment-service.test.ts` (a stale mpesa INITIATED
+  row is untouched and Stripe creates its own row).
+- `src/lib/mpesaService.ts` (new, framework-free): `createMpesaStkPush`
+  implements the four-phase flow — Phase A commits before Phase B's HTTP
+  call, matching M4-1's never-hold-a-lock-across-a-network-call rule.
+  Amount is ceil'd whole KES (`Prisma.Decimal.ceil()`), never floored;
+  `PaymentTransaction.amount` records the ceil'd figure, `metadata` carries
+  `orderTotal`/`roundingDelta`. Crash recovery (Decision 3): an orphaned
+  `INITIATED` row (>120s, `providerTxId IS NULL`) is CAS'd `FAILED`
+  (`stk_push_indeterminate`) and a **brand-new row with a brand-new
+  `idempotencyKey`** is created — explicitly NOT reused/replayed, the
+  opposite of M4-1's Stripe crash-recovery behaviour, because Daraja has no
+  idempotency key and replaying risks a second phone prompt. A stale
+  `PENDING` row (>180s, `PENDING_STALE_MS`) is separately CAS'd `FAILED`
+  (`callback_timeout`) so a retry is never permanently blocked.
+  `normalizeMsisdn` accepts `07xx`/`01xx`/`7xx`/`1xx`/`+254`/`254` forms.
+- `src/app/api/checkout/create-mpesa-session/route.ts` (new): thin route,
+  body exactly `{ orderId, phoneNumber? }`, `checkRateLimit` at
+  `mpesa-stk:${userId ?? clientIp}` (`{ limit: 5, windowMs: 600_000 }`),
+  202 Accepted on success (no synchronous payment outcome).
+- `.env.example`/`.env.development` patched: `MPESA_CALLBACK_URL` fixed to
+  `https://REPLACE_ME.ngrok.app/api/webhooks/mpesa` (was the wrong
+  `http://localhost:3000/api/payments/mpesa/callback`), `MPESA_MAX_AMOUNT_KES`
+  added (default `150000`).
+
+**Tests: `tests/test23-mpesa-stk-push.test.ts` (new, 27 tests, all
+passing)** — covers all 15 of the ADR's Decision 11 required tests
+(concurrency, token-cache hit/expiry/401-retry, F1 cross-provider isolation,
+cross-provider in-flight block, `PENDING_STALE_MS` sweep, crash recovery
+fail-forward-not-replay, whole-KES ceil rounding, Daraja soft-error 200,
+TZ-independent timestamp, phone normalization, ownership, region guard, no
+secret leakage) plus a happy-path dogfood. One symmetric test added to
+`tests/test20-payment-service.test.ts` (stale mpesa row not adopted by
+Stripe). `tests/test5-mpesa.test.ts` (the pre-existing U1 OAuth stub suite)
+still passes unmodified — `getMpesaAccessToken`'s signature/behaviour is
+byte-compatible.
+
+**Verified by builder (not self-verified as `verified` — that's
+`production-readiness-gate`'s call):** `npm run build` clean, `npm run lint`
+clean (0 errors, 1 pre-existing unrelated warning), `npm test` full suite —
+321 passed / 2 skipped / 4 failed, all 4 failures pre-existing Playwright/
+spawned-server timeout flakiness in `tests/test13-product-search.test.ts`
+and `tests/test14-cart-ui.test.ts` (catalog/cart UI, untouched by this
+item) — `tests/test22-stripe-webhook.test.ts`'s one incidental full-suite
+failure also reproduced as pre-existing flakiness (passed 33/33 in
+isolation immediately after). All commerce/payments test files
+(test4/test5/test19/test20/test21/test22/test23) passed clean, including
+in the full-suite run.
+
+**Known limits carried forward (per the ADR, not resolved here):** no
+callback/webhook handler (HRH-50, separate item — deliberately out of
+scope); no STK Query/reconciliation polling; no storefront UI wiring for
+M-Pesa checkout; rounding is not yet disclosed in any UI (flagged to
+product-planner); real Daraja sandbox credentials are still `REPLACE_ME` —
+the `Timestamp`/`Password` construction and the exact `ResponseCode`/error
+envelope shape are unverified against the real sandbox.
+
+**Security review: 1 MEDIUM (fixed in this pass) + 4 LOW findings**
+(`docs/agents/security-signoff/M4-2.md`, 2026-08-30). The F1 cross-provider
+fix, fail-forward crash recovery, TZ-independent timestamp construction,
+whole-KES ceil-rounding, token-cache safety, and PII/error-leak handling
+were all independently re-verified by tracing code, not accepted on
+report. Findings:
+- **F1 (MEDIUM, FIXED in this pass):** the `MPESA_CALLBACK_URL` correction
+  missed `.env.production.kenya` and `docs/DEPLOYMENT.md`'s operator
+  runbook, both still pointing at the old, now-nonexistent
+  `/api/payments/mpesa/callback` path — a real production risk (Daraja
+  would 404 on the callback, leaving a debited customer with no recorded
+  payment). Both files corrected; a repo-wide grep confirmed no other live
+  reference to the old path remains (only historical/narrative mentions in
+  docs describing the fix itself).
+- **F2 (LOW, binding on HRH-50):** a stale mpesa `PENDING` row that stops
+  blocking globally (via the 180s sweep) is correctly never touched by
+  `paymentService.ts`'s Stripe flow, but nothing currently prevents a
+  *late* Daraja callback from confirming it alongside an already-CONFIRMED
+  Stripe attempt on the same order. HRH-50's callback handler must
+  re-check, under the `Order` `FOR UPDATE` lock, that no transaction of
+  *any* provider is already `CONFIRMED` before confirming this one. Route
+  to whoever builds HRH-50.
+- **F3 (LOW):** `mpesaService.ts`'s `PENDING_STALE_MS` constant is
+  redeclared as a copy of the shared value in `paymentErrors.ts` rather
+  than imported, exposed only via a `__TEST_ONLY__` export — the real
+  predicate reads the shared original, so this is a maintainability/
+  drift risk, not a live bug, but the two could silently diverge on a
+  future edit. Route to commerce-payments-engineer.
+- **F4 (LOW):** the anti-phone-spam rate limit on
+  `POST /api/checkout/create-mpesa-session` keys on
+  `userId ?? getClientIp(request)`, and `getClientIp` reads the
+  client-settable `x-forwarded-for` header — spoofable by exactly the
+  guest caller the control is meant to constrain. Prefer
+  `x-vercel-forwarded-for` (platform-set, not client-controllable) or the
+  cart session id as the fallback key. Route to commerce-payments-engineer
+  or platform-infra-engineer.
+- **F5 (LOW):** the stale-row sweep (`.find(...)`) only ever handles the
+  first stale row of each status per call, not all of them — a MVP-volume
+  non-issue today, worth revisiting if multiple stale rows ever
+  accumulate on one order. Route to commerce-payments-engineer.
+
+**QA/dogfood (qa-dogfood-engineer, 2026-08-30).**
+
+- **Dogfood-extension decision: extended, narrowly.** No storefront M-Pesa
+  UI exists (`grep -rn "create-mpesa-session|MpesaCheckout|mpesaService"
+  src/app` returns only the route file itself) — same "unwired code path"
+  situation as M4-1's Stripe session route, which correctly got no dogfood
+  leg. But `tests/test23-mpesa-stk-push.test.ts` (confirmed by direct read
+  of every `describe(` block) is entirely in-process — all 27 tests call
+  `mpesaService.createMpesaStkPush` directly, never the exported route
+  handler, never over real HTTP, never against a spawned `next dev` server —
+  so nothing in this repo had proven `POST
+  /api/checkout/create-mpesa-session` is actually registered, reachable, and
+  not intercepted by `src/middleware.ts`. Unlike M4-1b's webhook leg
+  (pure local HMAC, zero external mocking needed) or a hypothetical
+  full-happy-path M-Pesa leg (would need either real Daraja sandbox creds —
+  none exist, `.env.example`'s `MPESA_CONSUMER_KEY`/`SECRET`/`PASSKEY` are
+  all `REPLACE_ME` — or a way to inject a mock `fetchImpl` into a spawned
+  child process, which this file's process-isolated design doesn't support),
+  the route's own Phase A/B/C split makes a *narrower* real check possible
+  with **zero Daraja mocking**: Phase A (order lookup/ownership, real
+  Postgres) can fail before Phase B ever calls Daraja. Added
+  `dogfoodMpesaRouteWiring()` to `scripts/agents/dogfood.mjs`: real HTTP POST
+  to a real spawned `next dev` server asserting 400 (unknown body key), 400
+  (missing `orderId`), and 404 (non-existent `orderId`, real Postgres lookup
+  + `mpesaErrorResponse` mapping) — genuinely proves route
+  registration/reachability/middleware-non-interception, a gap test23 cannot
+  close by design. Explicitly NOT a substitute for a full happy-path STK-push
+  leg; that remains blocked on real sandbox creds + a mounted UI (documented
+  inline in `dogfood.mjs`'s "M4-2 STATUS" header comment, same style as the
+  M4-1/M4-1b precedent it follows). Full `node scripts/agents/dogfood.mjs`
+  run: exit 0, all legs including the new one passed
+  (`[dogfood] PASS: POST /api/checkout/create-mpesa-session reachable over
+  real HTTP -> 400 (unknown key) / 400 (missing orderId) / 404 (order not
+  found, real Postgres lookup) all wired correctly`).
+- **Red/green spot-check (option b): `src/lib/mpesa.ts`'s 401-retry-exactly-
+  once rule.** Temporarily commented out the `if (res.status === 401 ||
+  res.status === 403) { res = await attempt(true); }` retry block in
+  `stkPush()`. Reran `tests/test23-mpesa-stk-push.test.ts`'s "required test
+  4: token cache 401-retry" alone: failed RED with a specific, non-generic
+  error (`MpesaPushRejectedError: M-Pesa push rejected: 401 invalid token`,
+  thrown from `mpesaService.ts`'s `classifyPushFailure`) — proving the
+  retry-once rule is genuinely load-bearing, not just present. Restored the
+  original code exactly; reran the full file: 27/27 passed. Confirmed no
+  residual diff (`grep -n "TEMPORARY QA BREAK" src/lib/mpesa.ts` — no match).
+- **Full suite:** `npm test` (server-boot + migrate-drift-x2 + db-scenarios +
+  migration-reset[skipped, requires human consent] + `vitest run`) — **325
+  passed / 2 skipped / 0 failed**, no flakiness observed this run (unlike the
+  builder's own run, which saw 4 pre-existing Playwright/spawned-server
+  timeout flakes in test13/test14 — none reproduced here).
+- **Known-limits (not this agent's job to fix):** PRD "Critical
+  Failure-Path Verification" items specific to M-Pesa (STK-prompt-expiry
+  handling, late-callback-after-already-CONFIRMED) remain untested until
+  HRH-50 (the callback handler) exists — tracked as security-review F2,
+  routed to commerce-payments-engineer, not to this agent. No automated test
+  yet exercises a real Daraja sandbox response shape (mocking boundary is
+  intentional per the ADR, but means the `Timestamp`/`Password`/
+  `ResponseCode` envelope assumptions are unverified against the real API).
+
+### M4-2b: M-Pesa Callback Handler & Retry Logic (HRH-50)
+**Status:** planned, NOT dispatched · **Owner:** commerce-payments-engineer
+**Depends on M4-2 existing** (needs a real `PaymentTransaction` row and
+`CheckoutRequestID` to verify against), same sibling-blocking relationship
+M4-1b had on M4-1. Left at PRD granularity only — not sharpened yet, per
+the same convention M4-1b was left at until M4-1 was `verified` — because
+its actual criteria depend on decisions M4-2 hasn't made yet (exact
+`metadata` shape, `providerTxId` semantics, whether M4-2's OAuth-cache
+decision affects a retry's new STK push).
+- [ ] `app/api/webhooks/mpesa/route.ts` — HMAC-SHA256 signature
+      verification; idempotency via `PaymentTransaction.idempotencyKey`/
+      `providerTxId` lookup (duplicate delivery → 200 no-op, same shape as
+      M4-1b's CAS-gate-before-confirm pattern)
+- [ ] Retry up to 2x with backoff (5s, 10s) on customer timeout/ignore; a
+      new STK push is issued on each retry
+- [ ] After retries exhausted: fallback-to-Stripe option surfaced to the
+      customer
+- [ ] **Flagged, not confirmed in scope:** the PRD's U8 Approach
+      (`plans/Full PRD file.md:1746`) also names a background reconciliation
+      job (every 15 min, query Daraja for `PENDING` transactions older than
+      20 min) — this was the old bundled M4-2's third bullet, but HRH-50's
+      own Linear description (as given to this dispatch) names only HMAC/
+      idempotency/retry/fallback, not reconciliation. Carried forward here
+      so it isn't silently dropped; whoever picks this up should confirm
+      via Linear/human whether it's in HRH-50's scope or needs its own
+      ticket before building it.
+- [ ] **Inherited bindings from ADR M4-2** (do not re-derive): (i)
+      `providerTxId` holds `CheckoutRequestID` — **never overwrite it with
+      `MpesaReceiptNumber`**, despite what the `schema.prisma:265` comment
+      invites; the receipt goes in `metadata.mpesaReceiptNumber`. (ii)
+      Reconcile the callback `Amount` against **`PaymentTransaction.amount`**
+      (the ceil'd requested figure), not `Order.totalAmount`. (iii) A callback
+      whose `CheckoutRequestID` matches **no row** with `ResultCode: 0` is
+      money-received-against-no-attempt — persist it for ops, never
+      200-and-drop. (iv) A `ResultCode: 0` callback for a row already CAS'd
+      `FAILED` by M4-2's `PENDING_STALE_MS` sweep must still be confirmed, and
+      a double-payment flagged if a later attempt already CONFIRMED.
 
 ---
 

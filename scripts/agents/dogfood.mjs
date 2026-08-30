@@ -139,6 +139,58 @@
 // checkout -> pay with Stripe -> webhook confirms -> order CONFIRMED) still
 // requires StripeCheckout.tsx to be mounted first and remains the open M4
 // checkpoint bullet above.
+//
+// M4-2 STATUS (checked 2026-08-30, qa-dogfood-engineer, M4-2/HRH-49):
+// grep -rn "create-mpesa-session|MpesaCheckout|mpesaService" src/app confirms
+// NOTHING in src/app/ calls POST /api/checkout/create-mpesa-session except
+// the route file itself -- no MpesaCheckout-equivalent component exists,
+// same "unwired code path" situation as M4-1's own StripeCheckout.tsx. A
+// full click-through leg (add to cart -> checkout -> pick M-Pesa -> STK
+// push -> phone prompt) is therefore still theater and NOT added, matching
+// the M4-1 precedent above.
+//
+// BUT unlike M4-1 (where NOTHING routes to the Stripe route at all, over any
+// transport), this route IS reachable, and a genuinely narrow, real check is
+// available WITHOUT needing UI, without needing real Daraja credentials, and
+// without mocking Daraja over HTTP: tests/test23-mpesa-stk-push.test.ts is
+// (confirmed by direct read -- `grep -n "describe(" tests/test23-mpesa-stk-
+// push.test.ts`) ENTIRELY in-process -- every one of its 27 tests imports and
+// calls `mpesaService.createMpesaStkPush` directly, never the exported route
+// handler, never over real HTTP, never against a spawned `next dev` server.
+// That means nothing in this repo has ever proven
+// POST /api/checkout/create-mpesa-session is actually registered, reachable,
+// not intercepted by src/middleware.ts, and correctly wires the route's own
+// body-validation/rate-limit/session-cookie-resolution layer (route.ts lines
+// 34-90) into the shared service -- the exact same class of gap
+// dogfoodStripeWebhook() closed for the webhook route above.
+//
+// The route's own Phase A/B/C split (ADR M4-2 Decision on ordering) makes
+// this provable with ZERO Daraja mocking: Phase A (order lookup/ownership,
+// real Postgres) runs and can throw BEFORE Phase B ever calls Daraja's real
+// network endpoint. So a request for a non-existent orderId, or a malformed
+// body, resolves entirely within Phase A/route-validation and never reaches
+// Daraja at all -- there is no fetchImpl seam to inject from outside the
+// process (unlike test23's in-process calls), and no real MPESA_CONSUMER_KEY
+// exists to attempt a real Daraja call with, so this leg deliberately stops
+// at the Phase-A boundary rather than attempting a happy-path STK push over
+// real HTTP (which would either need real sandbox creds this repo doesn't
+// have, or reaching into the spawned child process to inject a mock fetch,
+// which isn't how this file's process-isolated `next dev` child works).
+// dogfoodMpesaRouteWiring() below asserts: (1) unknown body key -> 400
+// (route's own validation, never reaches the service at all); (2) missing
+// orderId -> 400 (same); (3) a syntactically-valid but non-existent orderId
+// -> 404 (proves the route's session/cookie resolution, the service's real
+// Postgres query, and mpesaErrorResponse's OrderNotFoundError mapping all
+// wire together correctly over real HTTP against a real running server) --
+// each of these is impossible to get by accident (a route registration
+// failure, a middleware-intercepted redirect, or a JSON-body-parsing bug
+// would all produce a different status/shape, same "prove it can fail"
+// discipline as every other leg in this file). This is a genuine, narrower
+// "route-wiring-only" leg, same class as dogfoodStripeWebhook() -- NOT a
+// substitute for a full happy-path M-Pesa STK push dogfood leg, which still
+// requires both real sandbox credentials (or an injectable mock reachable
+// from inside the spawned child process) AND a mounted UI, neither of which
+// exist yet. Add the full leg once both exist.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -415,8 +467,21 @@ async function dogfoodHomepage() {
     const categoryHref = hrefMatch[1];
     const categoryFromHref = decodeURIComponent(categoryHref.split("category=")[1]);
 
+    // MUST match the exact ordering `getProductListing`/`searchProducts`
+    // (src/lib/productService.ts) use — `findFirst` with no `orderBy` gives
+    // NO ordering guarantee from Postgres, so it can return ANY matching
+    // row, not necessarily one that lands on page 1 of the paginated
+    // /products response this leg fetches next. Confirmed as a real,
+    // reproduced bug 2026-08-30 (qa-dogfood-engineer): the "accessories"
+    // category has 25 active products in the dev DB, and an unordered
+    // `findFirst` could return "Apple AirPods Pro" (rank 22 by
+    // createdAt/id asc, PAGE_SIZE=20 — i.e. page 2), which is never present
+    // in the page-1 HTML fetched below, causing a spurious failure
+    // unrelated to any real bug in the category/listing code. See
+    // docs/agents/learnings/qa-dogfood-engineer.md for the full account.
     const categoryProduct = await db.product.findFirst({
       where: { category: categoryFromHref, isActive: true, deletedAt: null },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     if (!categoryProduct) {
       throw new Error(
@@ -544,11 +609,20 @@ async function dogfoodCatalogSearch() {
         `Expected a seeded catalog (>=1 active product), found ${seededProductCount}. Run \`npx prisma db seed\` first.`,
       );
     }
+    // Same "match the listing/search page's real orderBy" discipline as the
+    // dogfoodHomepage() fix above (2026-08-30) — currently harmless because
+    // both brands have fewer than PAGE_SIZE (20) active seeded products, so
+    // an unordered pick still always lands on page 1 today, but that's a
+    // seed-count coincidence, not a guarantee; ordering defensively so this
+    // doesn't silently become the same class of flaky bug once the catalog
+    // grows past 20 products for either brand.
     const appleProduct = await db.product.findFirst({
       where: { brand: "Apple", isActive: true, deletedAt: null },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     const samsungProduct = await db.product.findFirst({
       where: { brand: "Samsung", isActive: true, deletedAt: null },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     if (!appleProduct || !samsungProduct) {
       throw new Error(
@@ -1654,12 +1728,141 @@ async function dogfoodStripeWebhook() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// M4-2 — route-wiring-only leg: POST /api/checkout/create-mpesa-session over
+// real HTTP against a real spawned `next dev` server (see the "M4-2 STATUS"
+// header comment above for why this is deliberately narrower than a full
+// happy-path STK push leg). No fixture rows are created -- every assertion
+// here resolves inside Phase A / the route's own body validation, before any
+// Daraja network call would ever happen.
+// ---------------------------------------------------------------------------
+async function dogfoodMpesaRouteWiring() {
+  const PORT = process.env.DOGFOOD_MPESA_PORT ?? "3109";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const BOOT_TIMEOUT_MS = 60_000;
+
+  console.log(
+    "[dogfood] M-Pesa route wiring: POST /api/checkout/create-mpesa-session reachable over real HTTP, " +
+      "body validation and order-lookup wired correctly (no Daraja call, no UI yet)...",
+  );
+
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  async function cleanup() {
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // (1) Unknown body key -> 400, resolved entirely by the route's own
+    // validation (never reaches mpesaService/the DB at all).
+    const badKeyRes = await fetch(`${BASE_URL}/api/checkout/create-mpesa-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: "does-not-matter", pin: "1234" }),
+    });
+    if (badKeyRes.status !== 400) {
+      const body = await badKeyRes.text().catch(() => "<unreadable>");
+      throw new Error(
+        `Expected 400 for an unknown body key ("pin"), got ${badKeyRes.status} (redirected: ` +
+          `${badKeyRes.redirected}, final url: ${badKeyRes.url}). This can happen if the route isn't ` +
+          `actually registered, or src/middleware.ts's matcher widened to intercept this path. Body ` +
+          `(truncated): ${body.slice(0, 300)}`,
+      );
+    }
+
+    // (2) Missing orderId -> 400, same layer.
+    const missingOrderIdRes = await fetch(`${BASE_URL}/api/checkout/create-mpesa-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phoneNumber: "0700000000" }),
+    });
+    if (missingOrderIdRes.status !== 400) {
+      const body = await missingOrderIdRes.text().catch(() => "<unreadable>");
+      throw new Error(
+        `Expected 400 for a missing orderId, got ${missingOrderIdRes.status}. Body (truncated): ${body.slice(0, 300)}`,
+      );
+    }
+
+    // (3) Syntactically-valid but non-existent orderId -> 404. This is the
+    // one that actually proves the route's session/cookie resolution, the
+    // service's real Postgres lookup (OrderNotFoundError), and
+    // mpesaErrorResponse's status mapping all wire together correctly over
+    // real HTTP -- a route-registration failure, a middleware redirect, or a
+    // JSON-parsing bug would each produce a different status/shape here.
+    const notFoundRes = await fetch(`${BASE_URL}/api/checkout/create-mpesa-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orderId: `dogfood-mpesa-nonexistent-${Date.now()}` }),
+    });
+    if (notFoundRes.status !== 404) {
+      const body = await notFoundRes.text().catch(() => "<unreadable>");
+      throw new Error(
+        `Expected 404 for a non-existent orderId, got ${notFoundRes.status} (redirected: ` +
+          `${notFoundRes.redirected}, final url: ${notFoundRes.url}). Body (truncated): ${body.slice(0, 300)}`,
+      );
+    }
+    const notFoundBody = await notFoundRes.json();
+    if (notFoundBody.error !== "Order not found") {
+      throw new Error(`Expected {"error":"Order not found"}, got: ${JSON.stringify(notFoundBody)}`);
+    }
+
+    console.log(
+      "[dogfood] PASS: POST /api/checkout/create-mpesa-session reachable over real HTTP -> " +
+        "400 (unknown key) / 400 (missing orderId) / 404 (order not found, real Postgres lookup) all wired correctly",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
 await dogfoodRegisterLogin();
 await dogfoodHomepage();
 await dogfoodCatalogSearch();
 await dogfoodCart();
 await dogfoodCheckout();
 await dogfoodStripeWebhook();
+await dogfoodMpesaRouteWiring();
 
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
@@ -1669,5 +1872,7 @@ console.log(
     "(M3 milestone integration checkpoint: full cart->reservation dogfood exits 0 — MET) + " +
     "M4-1b real signed webhook delivery->CONFIRMED->onHand decremented->idempotent redelivery " +
     "(webhook-only leg; full click-through Stripe-payment journey still pending StripeCheckout.tsx " +
-    "mounting); M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
+    "mounting) + M4-2 real HTTP route-wiring leg (400/400/404 on POST /api/checkout/create-mpesa-session, " +
+    "no Daraja call needed; full happy-path STK-push leg still pending real sandbox creds + mounted UI); " +
+    "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

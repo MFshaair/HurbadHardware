@@ -128,6 +128,112 @@ fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-30 — Pre-existing dogfood flakiness found and fixed: `dogfoodHomepage()`'s unordered `findFirst` could pick a page-2 product
+`production-readiness-gate` returned RED on an M4-2 gate-check run because
+`node scripts/agents/dogfood.mjs` failed with "Clicking through the
+'accessories' category card did not land on a /products page listing the
+seeded product 'Apple AirPods Pro'". Root-caused by qa-dogfood-engineer:
+this was a **pre-existing test-quality bug in `dogfoodHomepage()`,
+unrelated to M4-2 or any payment work** — `db.product.findFirst({ where:
+{ category, isActive: true, deletedAt: null } })` had no `orderBy`, so
+Postgres could return ANY matching row, not necessarily one on page 1 of
+`/products?category=<x>` (paginated 20/page, `orderBy: [{ createdAt: "asc"
+}, { id: "asc" }]` per `src/lib/productService.ts`). The "accessories"
+category has 25 active seeded products in the dev DB; "Apple AirPods Pro"
+is rank 22 by that ordering — i.e. page 2, never present in the page-1
+HTML the leg fetches. Fixed by adding the SAME `orderBy` to the `findFirst`
+call in `scripts/agents/dogfood.mjs`'s `dogfoodHomepage()`, plus two
+similarly-unordered `findFirst` calls in `dogfoodCatalogSearch()`
+(`appleProduct`/`samsungProduct`) that are currently harmless (both brands
+have <20 active seeded products) but are the same bug class and would
+silently start flaking once either brand's seeded count crosses
+`PAGE_SIZE` (20). Verified the fix is genuinely deterministic (not a lucky
+green run): 5+ consecutive clean runs after the fix, and — reverting just
+the `orderBy` on the homepage leg — reproduced the exact original failure
+on 4/4 consecutive runs (this dev DB's physical row order is currently
+stable, so the failure reproduces reliably here even though it is, in
+principle, Postgres-ordering-dependent). Full `npm test`/`local-check.sh`
+confirmed clean (325/325, 0 failed) after restoring the fix; one isolated
+20s Playwright timeout in `tests/test14-cart-ui.test.ts` during a
+concurrent `npm test` run was confirmed to be the known pre-existing flake
+pattern (see `docs/agents/learnings/qa-dogfood-engineer.md`), not caused by
+this change — it passed clean in 3 separate isolated reruns and in the
+full `local-check.sh` run. See
+`docs/agents/learnings/qa-dogfood-engineer.md` for the durable lesson.
+Not part of M4-2's own scope — no FEATURES.md entry added for this fix.
+
+### 2026-08-30 — M4-2 split into M4-2 (HRH-49, OAuth & STK push) + M4-2b (HRH-50, callback & retry), acceptance criteria sharpened
+`product-planner` was dispatched on HRH-49 ("Daraja OAuth & STK Push").
+Confirmed via `get_issue` that HRH-49's real scope (`mpesaService.ts`,
+`create-mpesa-session/route.ts` — cached OAuth token, STK push with 60s
+timeout) is only part of the original `FEATURES.md` M4-2's three bullets,
+and that HRH-50 ("M-Pesa Callback Handler & Retry Logic",
+`app/api/webhooks/mpesa/route.ts` — HMAC verification, idempotency, 2x
+retry with backoff, Stripe fallback) is a separate Linear issue — same
+bundling pattern as the pre-split M4-1. Split into `M4-2` (HRH-49,
+dispatchable, seven sharpened criteria) and `M4-2b` (HRH-50, left
+`planned`/not dispatched, PRD-granularity only), same naming/ordering
+convention as M4-1/M4-1b.
+
+Grounded in direct reads, not assumed: `src/lib/mpesa.ts` (read in full) —
+confirmed it is a **U1-only stub**, `getMpesaAccessToken` does one
+uncached OAuth call per invocation with no token caching and no STK push
+at all; this is genuinely new integration work, not an extension of a
+mostly-complete wrapper the way M4-1 extended `stripe.ts`.
+`prisma/schema.prisma`'s `PaymentTransaction` model confirmed
+provider-agnostic already (`provider String`, `providerTxId String?
+@unique`, `idempotencyKey String @unique`, `metadata Json?`) — zero
+migration needed. PRD U8 (`plans/Full PRD file.md:1727-1754`) read in full
+for the actual Daraja Approach/Test-scenario list, not just the sparse
+Linear description — confirmed the "60s timeout" language refers to
+Safaricom's own STK-prompt expiry window (customer-facing), not something
+HRH-49's initiation call itself waits on. `.env.example` confirmed
+`MPESA_CONSUMER_KEY`/`MPESA_CONSUMER_SECRET`/`MPESA_PASSKEY` are all still
+`REPLACE_ME` — same standing no-real-sandbox-credentials risk as Stripe.
+Also found and flagged (not fixed): `.env.example`'s
+`MPESA_CALLBACK_URL` (`/api/payments/mpesa/callback`) does not match the
+PRD/Linear-named route path `app/api/webhooks/mpesa/route.ts` — carried
+into M4-2's criteria so it's resolved before HRH-50 inherits it silently.
+
+**A real, load-bearing design question surfaced and deliberately left
+unresolved for architect review, not assumed either way:** this repo
+deploys to Vercel serverless functions (`vercel.json`: `regions:
+["lhr1"]`), which do not share memory across concurrent invocations or
+cold starts. A naive in-memory-per-process OAuth token cache (the obvious
+literal reading of "cached, refreshed ~3600s") does **not** give
+cross-instance correctness on this platform — every cold/concurrent
+instance would still do its own OAuth call. Whether that's acceptable
+(Daraja allows repeated token issuance; framed as a cost/volume question,
+not a correctness bug) or needs a shared store instead is named explicitly
+as an open decision in M4-2's first criterion, not silently defaulted to
+either answer.
+
+Also carried forward without resolving: M4-1's tracked security finding F1
+(`docs/agents/security-signoff/M4-1.md`) — the crash-recovery/
+duplicate-attempt query is scoped by `orderId` but not `provider`, and was
+explicitly flagged there as "must be fixed when M4-2 is built." Folded
+into M4-2's criteria as a binding fix, not left implicit. The PRD's third
+original bullet (15-min reconciliation job) is not confirmed to be in
+HRH-50's actual Linear scope (only HMAC/idempotency/retry/fallback were
+named) — flagged explicitly in M4-2b as unconfirmed rather than silently
+assumed in or out of scope.
+
+**Architect review: explicit YES.** Same class as M4-1, not M2-4/M3-3a's
+UI-wiring shape — concrete unresolved design questions named, not left to
+a builder: (1) the token-cache-storage question above; (2) which Daraja
+identifier (`CheckoutRequestID` vs `MerchantRequestID`) plays the
+`providerTxId` role, mirroring the exact "which id is the unique one" trap
+M4-1's ADR hit for Stripe; (3) STK push `Amount` field format (whole KES
+vs. minor units — unverified, do not assume M4-1's ×100 convention
+transfers); (4) whether the three-phase transaction-then-external-call
+ordering M4-1 established applies identically given STK push's
+fire-and-forget response shape (no `client_secret`-equivalent to hand back
+synchronously); (5) the `MPESA_CALLBACK_URL` path mismatch above.
+
+**Not done, deliberately, per dispatch guardrail:** no code written; only
+`FEATURES.md`'s M4-2/M4-2b sections and this file were edited (no
+`src/`/`tests/` touched).
+
 ### 2026-08-29 — M4-1b (HRH-48, Stripe webhook) acceptance criteria sharpened; money-taken-but-stock-gone scoped around, not answered
 `product-planner` was dispatched to sharpen M4-1b now that M4-1 (HRH-47) is
 `verified`. Confirmed by direct read

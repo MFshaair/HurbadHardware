@@ -122,7 +122,7 @@ exploitation would presuppose a separate XSS to write the malicious
 value in the first place — defense in depth, not "unreachable so skip
 it."
 
-## A timezone/cast bug fixed in the new file usually has siblings in the old one
+## A fix scoped to "the files I touched" leaves siblings holding the old value
 **Symptom (M3-2):** A builder correctly diagnosed that raw-SQL `now()`
 implicitly cast to a `timestamp without time zone` column adopts the DB
 session's timezone, and fixed every site in the new file they were
@@ -130,13 +130,25 @@ writing (`reservationService.ts`) — while the same predicate survived
 untouched in the older file the new mechanism depends on
 (`cartService.ts:267`) and in `schema.prisma`'s own `dbgenerated()`
 default.
+**Symptom (M4-2, same class, config edition):** An item whose acceptance
+criteria included "resolve the `MPESA_CALLBACK_URL` path mismatch" fixed
+`.env.example` and `.env.development` and checked the box — while
+`.env.production.kenya` and `docs/DEPLOYMENT.md`'s operator runbook still
+carried the old, now-nonexistent callback path. The code's fail-closed
+guard only validated "set and https://", so a well-formed URL pointing at
+a route that will never exist passes validation and every payment callback
+would be silently lost in production.
 **Cause:** The fix is scoped to "files I touched," but the invariant is
-global to the schema's column types.
-**Rule going forward:** When a diff fixes a SQL-semantics bug class, grep
-the *whole repo* for the pattern — including `schema.prisma`'s
-`dbgenerated()` defaults, which are raw SQL nobody thinks to grep — and
-check the sign of the skew: an offset that shortens a TTL in dev may
-lengthen it in production, turning a UX bug into a control weakening.
+global to the schema's column types / to every environment file and doc
+that names the value.
+**Rule going forward:** When a diff fixes a SQL-semantics bug class or an
+env-var/URL/path value, grep the *whole repo* for the old pattern —
+including `schema.prisma`'s `dbgenerated()` defaults, every `.env.*`
+variant (especially the per-region production ones nobody opens), and
+`docs/DEPLOYMENT.md`-style runbooks. Check the sign of the skew: an offset
+that shortens a TTL in dev may lengthen it in production. And when a
+ledger checkbox claims a mismatch is "resolved", verify the claim against
+every file carrying the value, not just the two the diff touched.
 
 ## Ownership checks land on the parameter that was asked about, not the one that wasn't
 **Symptom (M3-2):** A money-path function ownership-checked
@@ -196,7 +208,12 @@ cannot distinguish the two.
 money path, check it is scoped by every discriminator the table carries
 (provider/type/kind), not just the parent id — and check the branch that
 *writes back* (does it stamp a provider-specific id into a row whose
-provider column says something else?).
+provider column says something else?). **Correct shape, confirmed in
+M4-2:** the *blocking* question ("is anyone paying right now") must stay
+GLOBAL/unscoped, while *row selection and mutation* must be
+provider-scoped. When reviewing a fix for this class, verify both halves
+independently and in both directions — a fix that scopes the blocking
+query too is a regression that reintroduces double-charging.
 
 ## Allowlists that pre-open explicitly out-of-scope regions
 **Symptom (M4-1):** A currency allowlist included the two regions the run
@@ -206,7 +223,9 @@ open escalation, justified as "wiring the mechanism testably."
 entry for a region/currency the ledger says is out of scope as a finding
 (fail-safe default = ship the in-scope value only), even when no code path
 can reach it yet — reachability changes silently, allowlists don't get
-re-reviewed.
+re-reviewed. The good counter-example is M4-2's M-Pesa route, which
+hard-gates on `region === "KE" && currency === "KES"` *before* any network
+call — prefer that shape when asking a builder to fix an over-broad list.
 
 ## A misconfiguration error wrapped into a security-typed error becomes the wrong HTTP status
 **Symptom (M4-1b):** An ADR bound "missing secret -> 500, never 400". The
@@ -225,3 +244,59 @@ that can throw for a NON-security reason (client construction, env
 reads, JSON parsing) and confirm each still maps to its intended status.
 Hoist config/constructor calls above the `try` rather than trusting the
 wrapper.
+
+## A provider-scoped staleness sweep opens a cross-provider double-confirm window
+**Symptom (M4-2):** A provider's PENDING attempt row is aged out by a
+provider-specific staleness ceiling so the *global* in-flight predicate
+stops blocking, letting a second provider's attempt proceed — but the
+sibling provider's module correctly refuses to mutate the foreign row, so
+it stays PENDING forever. A late callback for the first provider can then
+confirm alongside the second provider's confirmation.
+**Cause:** "Don't mutate another provider's row" and "age out stale rows so
+retries aren't blocked forever" are both individually correct, and the gap
+only exists in the intersection — which no single module owns.
+**Rule going forward:** Whenever a staleness ceiling lets a payment attempt
+bypass an in-flight guard, ask who terminally resolves the bypassed row and
+what happens if its outcome arrives late. Make it a binding requirement on
+whichever item builds the callback/webhook handler that it re-checks, under
+the parent row lock, for an already-CONFIRMED transaction of *any* provider
+before confirming.
+
+## A constant duplicated "for test visibility" is a test that agrees with itself
+**Symptom (M4-2):** A threshold used by a shared predicate was redeclared
+verbatim in the consuming module and exported through a `__TEST_ONLY__`
+object so tests could assert against it — but the predicate reads the
+original, not the copy. Editing the copy changes what the tests assert
+without changing any behaviour.
+**Rule going forward:** When a diff exports constants for test convenience,
+check the exported symbol is the same binding the production code path
+reads, not a same-valued redeclaration. Flag every duplicated
+security-relevant threshold (grace windows, staleness ceilings, limits) and
+require a re-export/import rather than a second literal.
+
+## Client-settable headers as a rate-limit key defeat the limit for the caller it targets
+**Symptom (M4-2):** A route added a rate limit as the named defense against
+abusing an optional destination-override field (sending payment prompts to
+an arbitrary phone). The key was `userId ?? clientIp`, and the IP came from
+the first value of a client-supplied `x-forwarded-for` — so for exactly the
+unauthenticated/guest caller the control targets, the bucket key is
+attacker-chosen and rotatable.
+**Rule going forward:** Read the key-derivation function, not just the
+`checkRateLimit` call site. If the fallback branch derives its key from a
+request header the client can set, the limit is decorative for that branch.
+Require a platform-set header (e.g. `x-vercel-forwarded-for`) or a
+server-issued session/cart id instead — and note in the finding that an
+in-memory per-instance bucket is additionally weak on serverless.
+
+## A "repo-wide grep found nothing" claim can be blind to gitignored env files
+**Symptom (M4-2):** Re-verifying a builder's claim that a stale config
+value (`MPESA_CALLBACK_URL`'s old path) no longer appears anywhere in the
+repo, a default `grep -rn` came back clean — but `.env.local` and the
+`.env.production.*` files most likely to actually hold a live wrong value
+are exactly the files `.gitignore` excludes, and ripgrep honors
+`.gitignore` by default.
+**Rule going forward:** When re-verifying a "grep found nothing" claim
+about an env var or secret-adjacent value, grep each gitignored env file
+by its explicit path (`.env.local`, `.env*.local`, any `.env.production*`)
+in addition to the repo-wide sweep — a clean default grep is not evidence
+those files are clean, only that they weren't checked.
