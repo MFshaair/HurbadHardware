@@ -255,6 +255,30 @@ model OrderItem {
   @@index([variantId])
 }
 
+/// Inbound M-Pesa STK callbacks that could not be resolved to a
+/// PaymentTransaction (ADR M4-2 Decision 3's residual risk / ADR M4-2b
+/// Decision 7). A ResultCode:0 row here is MONEY RECEIVED AGAINST NO KNOWN
+/// ATTEMPT and requires manual refund or reconciliation. Never dropped.
+model MpesaCallbackDeadLetter {
+  id                String    @id @default(cuid())
+  checkoutRequestId String    @unique
+  merchantRequestId String?
+  resultCode        Int
+  resultDesc        String
+  amount            Decimal?  @db.Decimal(12, 2)
+  mpesaReceiptNumber String?
+  transactionDate   String?
+  phoneNumber       String? // PII — same handling rule as PaymentTransaction.metadata
+  rawPayload        Json // the full callback body, for ops/Safaricom support
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime  @default(now())
+
+  @@index([resultCode])
+  @@index([createdAt])
+  @@index([reviewedAt])
+}
+
 // Payment transactions are separate from orders (AHD5).
 // One order may have multiple transaction attempts.
 

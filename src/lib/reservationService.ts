@@ -571,8 +571,17 @@ export async function createReservationAndOrder(
  * longer ACTIVE (e.g. a late webhook arriving after TTL expiry), the ENTIRE
  * transaction rolls back and throws `ReservationNotActiveError` — it does
  * NOT silently re-reserve, and does NOT transition EXPIRED -> CONFIRMED.
+ *
+ * `eventPayload` is an optional, purely-additive merge into the
+ * `PAYMENT_CONFIRMED` `OrderEvent`'s payload (default `{}`, unchanged
+ * behaviour for every existing caller) — added for ADR M4-2b Decision 4's
+ * `resolvedAfterRetries` observability field, which has nowhere else to
+ * live since this function owns the only `PAYMENT_CONFIRMED` write.
  */
-export async function confirmReservationsForOrder(orderId: string): Promise<void> {
+export async function confirmReservationsForOrder(
+  orderId: string,
+  eventPayload: Record<string, unknown> = {},
+): Promise<void> {
   await db.$transaction(async (tx) => {
     const reservations = await tx.inventoryReservation.findMany({
       where: { orderId },
@@ -611,7 +620,7 @@ export async function confirmReservationsForOrder(orderId: string): Promise<void
 
     await tx.order.update({ where: { id: orderId }, data: { paymentStatus: "CONFIRMED" } });
     await tx.orderEvent.create({
-      data: { orderId, eventType: "PAYMENT_CONFIRMED", payload: {} },
+      data: { orderId, eventType: "PAYMENT_CONFIRMED", payload: eventPayload as Prisma.InputJsonValue },
     });
   });
 }

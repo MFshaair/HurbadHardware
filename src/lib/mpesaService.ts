@@ -180,6 +180,16 @@ export interface CreateMpesaStkPushInput {
   // never real network, while every DB/auth/ownership/CAS code path above
   // still runs for real.
   fetchImpl?: typeof fetch;
+  /**
+   * SERVER-ONLY (ADR M4-2b Decision 12b). Skips the ownership check because
+   * there is no requester — this attempt is triggered by an authenticated
+   * Daraja callback's retry logic, not by a user. The route layer NEVER
+   * sets this and never reads it from a request body. Only
+   * `src/lib/mpesaCallbackService.ts` may pass it. Every other guard
+   * (paymentStatus === 'PENDING', region/currency, amount range,
+   * assertNoBlockingAttempt, the stale sweeps) still runs unchanged.
+   */
+  systemInitiated?: boolean;
 }
 
 export interface CreateMpesaStkPushResult {
@@ -201,17 +211,28 @@ interface PreparedMpesaAttempt {
 /**
  * Builds and validates the STK Push callback URL. Fails closed BEFORE any
  * `PaymentTransaction` row is created if `MPESA_CALLBACK_URL` is unset or
- * not `https://` (ADR Decision 7) — same fail-closed shape as
- * paymentService.ts's `buildReturnUrl`.
+ * not `https://` (ADR M4-2 Decision 7), or if `MPESA_CALLBACK_SECRET` is
+ * unset/too short/still the `REPLACE_ME` placeholder (ADR M4-2b Decision 1)
+ * — same fail-closed shape as paymentService.ts's `buildReturnUrl`.
+ *
+ * The secret is composed here, as a path segment, rather than changing
+ * `MPESA_CALLBACK_URL`'s own value — ADR M4-2b Decision 1 is explicit that
+ * `MPESA_CALLBACK_URL` stays byte-identical to what M4-2 already deployed.
  */
 function buildCallbackUrl(): string {
-  const url = process.env.MPESA_CALLBACK_URL;
-  if (!url || !/^https:\/\//i.test(url)) {
+  const base = process.env.MPESA_CALLBACK_URL;
+  if (!base || !/^https:\/\//i.test(base)) {
     throw new Error(
       "MPESA_CALLBACK_URL is not set to an absolute https:// URL — cannot send an M-Pesa STK push",
     );
   }
-  return url;
+  const secret = process.env.MPESA_CALLBACK_SECRET;
+  if (!secret || secret.length < 32 || secret === "REPLACE_ME") {
+    throw new Error(
+      "MPESA_CALLBACK_SECRET is unset or too short — refusing to send an STK push whose callback cannot be authenticated",
+    );
+  }
+  return `${base.replace(/\/+$/, "")}/${encodeURIComponent(secret)}`;
 }
 
 /**
@@ -265,6 +286,7 @@ async function prepareMpesaAttempt(
   userId: string | null,
   sessionId: string | undefined,
   phoneNumberOverride: string | undefined,
+  systemInitiated: boolean,
 ): Promise<PreparedMpesaAttempt> {
   return db.$transaction(async (tx) => {
     // (a) The lock — serializes the decision, same idiom as
@@ -285,19 +307,25 @@ async function prepareMpesaAttempt(
 
     // Ownership — identical rule and identical 404-not-403 shape as
     // paymentService.ts (M4-1 ADR Decision 7): never a distinguishable 403,
-    // never an order-id existence oracle.
-    if (order.userId !== null) {
-      if (userId !== order.userId) throw new OrderNotFoundError(orderId);
-    } else {
-      if (!sessionId) throw new OrderNotFoundError(orderId);
-      const event = await tx.orderEvent.findFirst({
-        where: {
-          orderId,
-          eventType: "CREATED",
-          payload: { path: ["sessionId"], equals: sessionId },
-        },
-      });
-      if (!event) throw new OrderNotFoundError(orderId);
+    // never an order-id existence oracle. Skipped ONLY for a
+    // systemInitiated (server-triggered retry) attempt (ADR M4-2b Decision
+    // 12b) — there is no requester to check ownership against; the caller
+    // (mpesaCallbackService.ts) is itself authenticated by the callback
+    // token, not by a session.
+    if (!systemInitiated) {
+      if (order.userId !== null) {
+        if (userId !== order.userId) throw new OrderNotFoundError(orderId);
+      } else {
+        if (!sessionId) throw new OrderNotFoundError(orderId);
+        const event = await tx.orderEvent.findFirst({
+          where: {
+            orderId,
+            eventType: "CREATED",
+            payload: { path: ["sessionId"], equals: sessionId },
+          },
+        });
+        if (!event) throw new OrderNotFoundError(orderId);
+      }
     }
 
     if (order.paymentStatus !== "PENDING") {
@@ -423,7 +451,13 @@ export async function createMpesaStkPush(
   const callbackUrl = buildCallbackUrl();
 
   // Phase A — commits before Phase B begins (ADR Decision 6).
-  const prepared = await prepareMpesaAttempt(input.orderId, input.userId, input.sessionId, input.phoneNumber);
+  const prepared = await prepareMpesaAttempt(
+    input.orderId,
+    input.userId,
+    input.sessionId,
+    input.phoneNumber,
+    input.systemInitiated === true,
+  );
 
   // Phase B — NOT inside any DB transaction. A Postgres row lock must never
   // be held across this call.

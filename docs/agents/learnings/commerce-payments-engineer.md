@@ -342,6 +342,179 @@ run-state entry recording the old risk) is legitimate to leave unchanged,
 and even then only because it's describing history accurately, not
 because it was missed.
 
+## An ADR that never persists the raw wire payload anywhere still needs it for a dead-letter table — thread it as an additive opts field, don't reconstruct it from the parsed type
+
+**Symptom:** M4-2b's ADR specifies `handleMpesaCallback(cb: StkCallback)` with
+no raw-body parameter, but Decision 7's `MpesaCallbackDeadLetter.rawPayload`
+column is explicitly "the full callback body, for ops/Safaricom support."
+`StkCallback` (the parsed type) already discards unknown `CallbackMetadata`
+items and normalises several fields — passing `cb` itself as `rawPayload`
+would silently narrow what ops can see, defeating the column's stated
+purpose, while following the ADR's literal signature.
+
+**Cause:** an ADR's signature sketch for the common-path plumbing (verify →
+parse → dispatch → outcome) doesn't always account for every field a less
+common branch (the orphan/dead-letter path) needs — the raw body and the
+parsed `StkCallback` are different shapes with different lifetimes, and
+only the route layer ever has the former.
+
+**Rule going forward:** when a later Decision needs raw/pre-normalised data
+that an earlier Decision's documented function signature doesn't carry,
+extend the signature additively (an optional `opts` object field, not a
+new required positional param) rather than either (a) reconstructing an
+approximation from the narrower type, or (b) silently deviating from the
+signature without noting it. Same treatment applies to any other test-only
+seam a lower layer already exposes (`fetchImpl`) that the ADR's own
+pseudocode doesn't explicitly thread through the top-level export — thread
+it anyway (per the existing "seam needs to reach the top-level export"
+rule below) and flag the additive signature change explicitly in the
+build's status report so `production-readiness-gate`/`security-reviewer`
+can confirm it doesn't leak anything (raw M-Pesa callback bodies contain
+PII — an unmasked MSISDN — so this is exactly the kind of additive plumbing
+that needs a reviewer's eyes, not silent approval).
+
+## A resumable-state-machine ADR's pseudocode for one terminal branch (e.g. "CAS PENDING -> X") sometimes needs generalising to every status the surrounding Decision says reaches it
+
+**Symptom:** M4-2b Decision 8's amount-mismatch pseudocode shows only a
+`PENDING -> CONFIRMED` CAS, but Decision 5 states "amount reconciliation
+runs BEFORE the switch, on every row status this function can be entered
+with" — which includes `FAILED`/`CANCELLED` rows reachable via a late
+(post-timeout) callback that also happens to carry a mismatched amount.
+Implementing only the literal `PENDING` branch shown in Decision 8's
+snippet would leave `FAILED`/`CANCELLED` + mismatch unhandled (falling
+through to an `undefined` case or a thrown anomaly) even though Decision
+5's own text says amount-checking is unconditional across all reachable
+statuses.
+
+**Cause:** an ADR's worked pseudocode snippet for one Decision often shows
+only the illustrative/common case (first-time-through, i.e. `PENDING`),
+while a DIFFERENT Decision in the same document states the general rule
+that decides how many statuses actually need that snippet's logic. Reading
+Decision 8 in isolation undersells its own scope.
+
+**Rule going forward:** when one Decision's stated invariant ("X runs
+before the switch, unconditionally") is broader than another Decision's
+worked example for a related terminal state, implement the FULL set of
+statuses the invariant implies is reachable (mirroring the sibling terminal
+state's own per-status CAS shapes, e.g. reusing Decision 9's
+`FAILED/CANCELLED -> CONFIRMED` CAS pattern for Decision 8's mismatch case
+too), not just the one status the pseudocode happened to illustrate. Name
+this explicitly as an ADR-consistent extrapolation (not a deviation) in the
+build's status report, since a reviewer needs to know it was reasoned
+through, not copy-pasted.
+
+## A `PAYMENT_CONFIRMED` OrderEvent written by a shared, already-verified helper (`confirmReservationsForOrder`) can't carry a NEW provider's observability field without an additive signature change to that helper
+
+**Symptom:** M4-2b Decision 4 requires `resolvedAfterRetries: n` to appear
+"on the confirm event" when the Phase-C race resolves after a retry — but
+`reservationService.ts`'s `confirmReservationsForOrder` (M3-2, verified,
+reused verbatim by both M4-1b's Stripe path and this item's M-Pesa path)
+hardcodes `payload: {}` for that exact `PAYMENT_CONFIRMED` write, and it is
+the ONLY place that event is written (mpesaCallbackService.ts /
+paymentWebhookService.ts never write their own copy).
+
+**Cause:** a cross-cutting shared helper from an earlier, already-verified
+item sometimes owns the one write site a NEW item's ADR needs to attach a
+field to, and that helper's signature wasn't designed with the new item's
+requirement in mind (M3-2 had no reason to anticipate M4-2b's retry
+observability need).
+
+**Rule going forward:** prefer a minimal, purely-additive, backward-
+compatible signature extension (an optional parameter with a default that
+reproduces every existing caller's current behaviour byte-for-byte — here,
+`confirmReservationsForOrder(orderId, eventPayload: Record<string,
+unknown> = {})`) over either (a) writing a second, redundant OrderEvent
+just to carry the new field, which fragments the event log and risks a
+double-counted read for any future query expecting exactly one
+`PAYMENT_CONFIRMED` per order, or (b) skipping the requirement because "the
+helper is verified, don't touch it." Grep every existing call site first
+(`grep -rn "confirmReservationsForOrder("`) to confirm the default really
+is a no-op for all of them, run their existing tests unchanged, and flag
+the touch to the earlier-milestone file explicitly in the status report —
+it's a deviation from "stay inside your own new files" that a reviewer
+needs to see, even though the diff itself is two lines.
+
+## A "late/duplicate outcome" double-payment check written for the hardest-case ADR arm doesn't automatically cover every OTHER row status that can reach the same underlying race
+
+**Symptom:** M4-2b's security sign-off (F1, HIGH) caught that
+`mpesaCallbackService.ts`'s cross-provider double-payment detection
+(`otherConfirmed` lookup + `PAYMENT_DOUBLE_PAYMENT_DETECTED`) was written
+and tested ONLY inside `lateSuccess` (the FAILED/CANCELLED arm, Decision
+9's "hardest case"). A late `ResultCode: 0` landing on a row that was
+STILL `PENDING` — which is actually the MORE likely real-world shape,
+since nothing sweeps a stale mpesa `PENDING` row to `FAILED` except
+another mpesa attempt — CAS'd straight to `CONFIRMED`, hit
+`ReservationNotActiveError('CONFIRMED')` inside `runConfirm`, and silently
+returned the generic `"duplicate"` outcome: two real debits, zero ops
+signal, invisible to the `PAYMENT_DOUBLE_PAYMENT_DETECTED` ops query. The
+existing test (test 26) only ever seeded row A as `FAILED`, so it passed
+cleanly while missing the actual likelier bug shape entirely.
+
+**Cause:** an ADR's narrative naturally spends the most words on its
+hardest/most interesting case (here, Decision 9's late-success-after-
+timeout race), which pulls the builder's attention — and the double-
+payment check — toward implementing it ONLY on the code path that
+illustrates that specific narrative, rather than asking "which OTHER row
+statuses can this same underlying race (another provider having already
+confirmed the reservation) actually reach?" A security check that answers
+"is this order already paid by someone else" is a property of the ORDER,
+not of any one row's status — it needs to run everywhere a row can
+transition toward CONFIRMED, not just the one arm the design doc spent
+the most prose on.
+
+**Rule going forward:** when a resumable payment state machine has a
+cross-cutting invariant check (double-payment detection, amount
+reconciliation, etc.), grep every call site that can reach the "row is
+about to become/resume as CONFIRMED and call `confirmReservationsForOrder`"
+moment — every switch arm, not just the one the ADR's worked example
+narrates — and either share ONE predicate function across all of them
+(this is what the M4-2b F1 fix did: extracted `detectAndFlagDoublePayment`/
+`findOtherConfirmedTransaction`, called from the `PENDING` CAS-success arm,
+the `CONFIRMED` crash-gap resume arm, `lateSuccess`'s FAILED/CANCELLED arm,
+AND `runConfirm`'s own `ReservationNotActiveError('CONFIRMED')` catch as a
+last-resort race-window safety net) or explicitly justify in the status
+report why a specific arm is provably unreachable for that scenario. Write
+the regression test for the LIKELIER-not-just-the-narrated row status
+(here: `PENDING`, not `FAILED`) and prove it fails against the naive
+implementation before trusting it. See also the existing "one Decision's
+worked pseudocode snippet undersells its own scope" entry above — this is
+the same trap, but for a check an ADR didn't even attempt to generalize in
+prose, only in the hardest-case section's narrative framing.
+
+## A tracked `.env.development` value with a fail-closed length/placeholder guard needs the placeholder generated by test setup, not read from the file
+
+**Symptom:** Fixing security-signoff F2 (a real, working
+`MPESA_CALLBACK_SECRET` committed to `.env.development`) by simply
+replacing it with `"REPLACE_ME"` (matching every sibling M-Pesa
+credential's convention) would have broken most of
+`tests/test24-mpesa-callback.test.ts`: several tests capture
+`process.env.MPESA_CALLBACK_SECRET` as their "known-good original" value
+and restore it after mutating it — but `buildCallbackUrl()`'s own
+fail-closed guard (by design) rejects `< 32` chars AND the literal
+`"REPLACE_ME"`, so a naive swap would leave no valid value anywhere for
+the tests that need one, without a human ever supplying a real secret.
+
+**Cause:** unlike `STRIPE_WEBHOOK_SECRET` (`whsec_REPLACE_ME` works fine
+for HMAC tests because signing and verifying both use the same local
+string, placeholder or not), `MPESA_CALLBACK_SECRET`'s own outbound guard
+actively refuses to treat a placeholder as valid — so this credential
+needed an actual generated value for its own fail-closed check to have
+anything to pass, but committing that generated value to a tracked file is
+exactly the leak F2 flagged.
+
+**Rule going forward:** for any credential whose OWN validation logic
+rejects placeholder values (length/literal-string checks), the fix for "a
+tracked env file has a real committed value where every sibling has
+REPLACE_ME" is not just s/realvalue/REPLACE_ME/ — pair it with a test-setup
+generation step (`tests/setup.ts` here: `if (unset || === "REPLACE_ME" ||
+too short) { process.env.X = randomBytes(32).toString("hex") }`, guarded
+so a real `.env.local` value still wins) so the committed file stays a
+genuine placeholder while the test suite still exercises the real
+fail-closed path with a value that actually satisfies it. Confirm with
+`scripts/agents/local-check.sh` end-to-end (not just the one test file)
+that nothing else in the suite silently depended on the file's old
+committed value.
+
 ## Existing mocked-SDK fallback pattern (context, not yet a lesson)
 
 `tests/test4-stripe.test.ts` already establishes the pattern for this

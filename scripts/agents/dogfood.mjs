@@ -191,9 +191,42 @@
 // requires both real sandbox credentials (or an injectable mock reachable
 // from inside the spawned child process) AND a mounted UI, neither of which
 // exist yet. Add the full leg once both exist.
+//
+// M4-2b STATUS (added 2026-08-31, qa-dogfood-engineer, M4-2b/HRH-50):
+// UNLIKE M4-2's own STK-push route (which genuinely cannot be driven past
+// Phase A without real Daraja credentials, because Phase B calls Daraja's
+// real network endpoint), the M4-2b CALLBACK route's own confirm path
+// (ResultCode:0, amount matches -- ADR M4-2b Decision 5's CONFIRM state
+// machine) never calls Daraja at all; only the retry path (a 1037 result)
+// does. That means a full, genuine happy-path leg -- not just a
+// route-wiring-only one -- is achievable with ZERO Daraja mocking:
+// dogfoodMpesaCallback() below seeds a real fixture Order/PaymentTransaction/
+// InventoryReservation directly via Prisma (same pattern as
+// dogfoodStripeWebhook()), delivers a wrong-token request (404, zero DB
+// writes), a correct-token-but-malformed-body request (400, zero DB
+// writes), then a real matched ResultCode:0 callback over real HTTP against
+// a real spawned `next dev` server -- asserting a genuine "confirmed"
+// outcome, Order.paymentStatus CONFIRMED, InventoryReservation CONFIRMED,
+// onHand decremented, providerTxId left untouched, and idempotent
+// "duplicate" on redelivery. This closes the same class of gap
+// dogfoodStripeWebhook() closed for the Stripe webhook: nothing in
+// tests/test24-mpesa-callback.test.ts calls the exported route handler over
+// real HTTP against a spawned server with real middleware/env in the loop
+// (it calls `route.POST(request, ...)` in-process) -- so before this leg,
+// nothing had proven the `[token]` dynamic route segment is actually
+// registered and reachable, that src/middleware.ts's matcher (currently
+// `/profile/:path*` only) doesn't intercept it, or that the real
+// env-loaded `MPESA_CALLBACK_SECRET` and `request.json()` behave the same
+// way under a real running server as they do under vitest's own env. Does
+// NOT cover: the retry/fallback paths (Decision 10/12, which DO need a
+// Daraja mock and are already covered by test24's in-process suite), or a
+// full click-through browser journey (still blocked on the same "no
+// MpesaCheckout-equivalent component mounted anywhere" gap M4-2's own
+// status note above documents).
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
+import { randomBytes } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { PrismaClient } from "@prisma/client";
 import { chromium } from "playwright";
@@ -1735,6 +1768,20 @@ async function dogfoodStripeWebhook() {
 // happy-path STK push leg). No fixture rows are created -- every assertion
 // here resolves inside Phase A / the route's own body validation, before any
 // Daraja network call would ever happen.
+//
+// MPESA_CALLBACK_SECRET override (added 2026-08-31, qa-dogfood-engineer,
+// M4-2b/HRH-50): M4-2b's buildCallbackUrl() (mpesaService.ts) now runs its
+// own fail-closed guard — rejecting an unset/short/"REPLACE_ME" secret —
+// BEFORE Phase A's order lookup even runs (ADR M4-2b Decision 1, "fail-closed
+// placement is load-bearing"). Since .env.development's committed
+// MPESA_CALLBACK_SECRET is still the "REPLACE_ME" placeholder, this leg's
+// own case (3) (non-existent orderId -> 404) would otherwise 500 on
+// buildCallbackUrl()'s guard before ever reaching the OrderNotFoundError this
+// leg means to prove — confirmed as a genuine regression this session (a
+// clean dogfood run failed with exactly that 500 until this override was
+// added). Same fix as dogfoodMpesaCallback() below: generate a real random
+// secret for this leg's own spawned server rather than relying on the
+// placeholder.
 // ---------------------------------------------------------------------------
 async function dogfoodMpesaRouteWiring() {
   const PORT = process.env.DOGFOOD_MPESA_PORT ?? "3109";
@@ -1747,7 +1794,7 @@ async function dogfoodMpesaRouteWiring() {
   );
 
   const server = spawn("npx", ["next", "dev", "-p", PORT], {
-    env: { ...process.env, NODE_ENV: "development" },
+    env: { ...process.env, NODE_ENV: "development", MPESA_CALLBACK_SECRET: randomBytes(32).toString("hex") },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
   });
@@ -1856,6 +1903,340 @@ async function dogfoodMpesaRouteWiring() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// M4-2b — full webhook leg: POST /api/webhooks/mpesa/[token] over real HTTP
+// against a real spawned `next dev` server (added 2026-08-31 for M4-2b/
+// HRH-50, qa-dogfood-engineer). Unlike M4-2's own route-wiring-only leg
+// above, this one is a GENUINE end-to-end leg, not merely Phase-A-boundary
+// wiring: the confirm path (ResultCode:0, amount matches) in
+// mpesaCallbackService.ts's Decision 5 CONFIRM state machine never calls
+// Daraja at all — only the retry path (a 1037 result) does — so a real
+// PENDING mpesa PaymentTransaction fixture + a real ResultCode:0 callback
+// body delivered over real HTTP can be driven all the way through to a
+// genuine "confirmed" outcome with ZERO Daraja mocking needed, the same
+// reasoning the ADR's own Decision 4 note relies on. This closes three
+// distinct gaps at once, none of which test24's in-process route calls
+// (`route.POST(request, ...)`, no spawned server, no real env-loaded
+// MPESA_CALLBACK_SECRET, no src/middleware.ts) can catch: (1) the dynamic
+// `[token]` route segment is actually registered and reachable over real
+// HTTP (a `[token]` folder name typo, or Next not picking up a dynamic
+// segment under `app/api/webhooks/mpesa/`, would 404 unconditionally,
+// indistinguishable from "wrong token" unless proven against the RIGHT
+// token too); (2) src/middleware.ts's matcher (currently `/profile/:path*`
+// only, confirmed by reading it directly) genuinely does not intercept this
+// path; (3) `request.json()` and the real env-loaded `MPESA_CALLBACK_SECRET`
+// work identically under a real running server, not just vitest's env.
+//
+// Generates its own random 64-hex-char secret (mirroring tests/setup.ts's
+// own fail-closed-REPLACE_ME guard, security-signoff M4-2b F2) and passes
+// it into the spawned server's env, rather than relying on
+// .env.development's committed "REPLACE_ME" placeholder value — using
+// REPLACE_ME as a real bearer secret in a dogfood run would work today
+// (verifyMpesaCallbackToken has no REPLACE_ME special-case, only
+// buildCallbackUrl's OUTBOUND guard does) but is not representative of a
+// real deployment and would silently stop meaning anything the day
+// verifyMpesaCallbackToken ever does add that same guard.
+// ---------------------------------------------------------------------------
+async function dogfoodMpesaCallback() {
+  const PORT = process.env.DOGFOOD_MPESA_CALLBACK_PORT ?? "3110";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const BOOT_TIMEOUT_MS = 60_000;
+  const callbackSecret = randomBytes(32).toString("hex");
+
+  console.log(
+    "[dogfood] M-Pesa callback: wrong token -> 404 (zero writes) -> malformed body -> 400 (zero writes) -> " +
+      "real ResultCode:0 callback -> CONFIRMED -> onHand decremented -> idempotent redelivery, via real HTTP...",
+  );
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development", MPESA_CALLBACK_SECRET: callbackSecret },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  const uniq = Date.now();
+  let productId;
+  let addressId;
+
+  async function cleanup() {
+    try {
+      // Same FK-ordering discipline as dogfoodStripeWebhook()'s cleanup:
+      // Order -> Address has no cascade, so delete the Order (which DOES
+      // cascade its own children) before the Address it points at.
+      if (addressId) {
+        await db.order.deleteMany({ where: { shippingAddressId: addressId } });
+        await db.address.delete({ where: { id: addressId } });
+      }
+      if (productId) {
+        await db.product.delete({ where: { id: productId } });
+      }
+    } catch (err) {
+      console.error(`[dogfood] WARN: fixture cleanup failed: ${err.message}`);
+      throw err;
+    }
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    const product = await db.product.create({
+      data: {
+        slug: `dogfood-m4-2b-callback-${uniq}`,
+        name: `Dogfood M4-2b Callback Fixture ${uniq}`,
+        category: "test",
+        brand: "DogfoodBrand",
+        images: [],
+        specs: {},
+      },
+    });
+    productId = product.id;
+    const variant = await db.productVariant.create({
+      data: {
+        productId,
+        sku: `DOGFOOD-M4-2B-SKU-${uniq}`,
+        name: "Dogfood M4-2b Callback Fixture Variant",
+        attributes: { Color: "Black" },
+        images: [],
+      },
+    });
+    const quantity = 1;
+    const inventory = await db.regionalInventory.create({
+      data: { variantId: variant.id, region: "KE", onHand: 10, reserved: quantity, safetyBuffer: 0 },
+    });
+    const address = await db.address.create({
+      data: {
+        fullName: "Dogfood M4-2b Callback Buyer",
+        phone: "+254700000003",
+        region: "KE",
+        city: "Nairobi",
+        postalCode: "00100",
+        street: "1 Dogfood Callback Street",
+      },
+    });
+    addressId = address.id;
+    const totalAmount = "1000.00";
+    const order = await db.order.create({
+      data: {
+        orderNumber: `HH-TEST-DOGFOOD-M4-2B-${uniq}`,
+        region: "KE",
+        currency: "KES",
+        subtotalAmount: totalAmount,
+        taxAmount: "0",
+        shippingAmount: "0",
+        totalAmount,
+        shippingAddressId: address.id,
+        paymentStatus: "PENDING",
+      },
+    });
+    await db.orderItem.create({
+      data: { orderId: order.id, variantId: variant.id, quantity, unitPrice: totalAmount, totalPrice: totalAmount },
+    });
+    await db.inventoryReservation.create({
+      data: {
+        orderId: order.id,
+        inventoryId: inventory.id,
+        variantId: variant.id,
+        quantity,
+        status: "ACTIVE",
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    const checkoutRequestId = `ws_CO_dogfood_${uniq}`;
+    const paymentTransaction = await db.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: "mpesa",
+        providerTxId: checkoutRequestId,
+        idempotencyKey: `dogfood-m4-2b-idem-${uniq}`,
+        amount: totalAmount,
+        currency: "KES",
+        status: "PENDING",
+        metadata: {
+          merchantRequestId: "dogfood-merch-req",
+          phoneNumber: "254700000003",
+          orderTotal: totalAmount,
+          amountRequested: totalAmount,
+          roundingDelta: "0.00",
+        },
+      },
+    });
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    async function countRows() {
+      const [pt, oe, dl] = await Promise.all([
+        db.paymentTransaction.count({ where: { orderId: order.id } }),
+        db.orderEvent.count({ where: { orderId: order.id } }),
+        db.mpesaCallbackDeadLetter.count(),
+      ]);
+      return { pt, oe, dl };
+    }
+
+    // (1) Wrong token -> byte-identical 404, zero DB writes of any kind.
+    const beforeWrongToken = await countRows();
+    const anyBody = { Body: { stkCallback: { CheckoutRequestID: checkoutRequestId, ResultCode: 0 } } };
+    const wrongTokenRes = await fetch(`${BASE_URL}/api/webhooks/mpesa/totally-wrong-token-value`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(anyBody),
+    });
+    const wrongTokenBody = await wrongTokenRes.json().catch(() => null);
+    if (wrongTokenRes.status !== 404 || JSON.stringify(wrongTokenBody) !== JSON.stringify({ error: "Not found" })) {
+      throw new Error(
+        `Expected byte-identical 404 {"error":"Not found"} for a wrong callback token, got ${wrongTokenRes.status}: ${JSON.stringify(wrongTokenBody)}`,
+      );
+    }
+    const afterWrongToken = await countRows();
+    if (JSON.stringify(afterWrongToken) !== JSON.stringify(beforeWrongToken)) {
+      throw new Error(
+        `A wrong-token callback caused a DB write: before=${JSON.stringify(beforeWrongToken)}, after=${JSON.stringify(afterWrongToken)}`,
+      );
+    }
+
+    // (2) Correct token, malformed body (missing Body.stkCallback) -> 400,
+    // zero writes.
+    const beforeMalformed = await countRows();
+    const malformedRes = await fetch(`${BASE_URL}/api/webhooks/mpesa/${callbackSecret}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Body: {} }),
+    });
+    const malformedBody = await malformedRes.json().catch(() => null);
+    if (malformedRes.status !== 400 || !malformedBody || malformedBody.ResultCode !== 1) {
+      throw new Error(
+        `Expected 400 with ResultCode:1 for a malformed callback body against the correct token, got ${malformedRes.status}: ${JSON.stringify(malformedBody)}`,
+      );
+    }
+    const afterMalformed = await countRows();
+    if (JSON.stringify(afterMalformed) !== JSON.stringify(beforeMalformed)) {
+      throw new Error(
+        `A malformed-body callback caused a DB write: before=${JSON.stringify(beforeMalformed)}, after=${JSON.stringify(afterMalformed)}`,
+      );
+    }
+
+    // (3) Correct token, real ResultCode:0 callback matching the fixture's
+    // providerTxId/amount -> genuine confirm, no Daraja call needed
+    // (Decision 5's CONFIRM path is fully local).
+    const realCallback = {
+      Body: {
+        stkCallback: {
+          MerchantRequestID: "dogfood-merch-req",
+          CheckoutRequestID: checkoutRequestId,
+          ResultCode: 0,
+          ResultDesc: "The service request is processed successfully.",
+          CallbackMetadata: {
+            Item: [
+              { Name: "Amount", Value: 1000 },
+              { Name: "MpesaReceiptNumber", Value: "DOGFOODRCPT1" },
+              { Name: "TransactionDate", Value: 20260831120000 },
+              { Name: "PhoneNumber", Value: 254700000003 },
+            ],
+          },
+        },
+      },
+    };
+    const confirmRes = await fetch(`${BASE_URL}/api/webhooks/mpesa/${callbackSecret}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(realCallback),
+    });
+    const confirmBody = await confirmRes.json().catch(() => null);
+    if (confirmRes.status !== 200 || confirmBody?.outcome !== "confirmed") {
+      const raw = confirmBody ? JSON.stringify(confirmBody) : "<unparseable body>";
+      throw new Error(
+        `Expected 200 with outcome "confirmed" for a real matched ResultCode:0 callback, got ${confirmRes.status}: ${raw} (redirected: ${confirmRes.redirected}, final url: ${confirmRes.url})`,
+      );
+    }
+
+    const orderAfterConfirm = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    if (orderAfterConfirm.paymentStatus !== "CONFIRMED") {
+      throw new Error(
+        `Expected Order.paymentStatus === "CONFIRMED" after a real M-Pesa callback delivery, got: ${orderAfterConfirm.paymentStatus}`,
+      );
+    }
+    const reservationAfterConfirm = await db.inventoryReservation.findFirstOrThrow({ where: { orderId: order.id } });
+    if (reservationAfterConfirm.status !== "CONFIRMED") {
+      throw new Error(`Expected InventoryReservation.status === "CONFIRMED", got: ${reservationAfterConfirm.status}`);
+    }
+    const transactionAfterConfirm = await db.paymentTransaction.findUniqueOrThrow({
+      where: { id: paymentTransaction.id },
+    });
+    if (transactionAfterConfirm.providerTxId !== checkoutRequestId) {
+      throw new Error(
+        `providerTxId must remain untouched by the callback — expected "${checkoutRequestId}", got "${transactionAfterConfirm.providerTxId}"`,
+      );
+    }
+    const inventoryAfterConfirm = await db.regionalInventory.findUniqueOrThrow({ where: { id: inventory.id } });
+    if (inventoryAfterConfirm.onHand !== 9 || inventoryAfterConfirm.reserved !== 0) {
+      throw new Error(
+        `Expected onHand 10 -> 9 and reserved ${quantity} -> 0 after a real callback confirm, got onHand=${inventoryAfterConfirm.onHand} reserved=${inventoryAfterConfirm.reserved}`,
+      );
+    }
+
+    // (4) Redelivery (Daraja can retry a callback) -> idempotent, "duplicate".
+    const redeliverRes = await fetch(`${BASE_URL}/api/webhooks/mpesa/${callbackSecret}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(realCallback),
+    });
+    const redeliverBody = await redeliverRes.json().catch(() => null);
+    if (redeliverRes.status !== 200 || redeliverBody?.outcome !== "duplicate") {
+      throw new Error(
+        `Expected 200 with outcome "duplicate" on redelivery, got ${redeliverRes.status}: ${JSON.stringify(redeliverBody)}`,
+      );
+    }
+    const inventoryAfterRedeliver = await db.regionalInventory.findUniqueOrThrow({ where: { id: inventory.id } });
+    if (inventoryAfterRedeliver.onHand !== 9 || inventoryAfterRedeliver.reserved !== 0) {
+      throw new Error(
+        `Expected onHand/reserved UNCHANGED after a duplicate redelivery, got onHand=${inventoryAfterRedeliver.onHand} reserved=${inventoryAfterRedeliver.reserved}`,
+      );
+    }
+
+    console.log(
+      "[dogfood] PASS: M-Pesa callback wrong-token 404 (zero writes) -> malformed-body 400 (zero writes) -> " +
+        "real ResultCode:0 callback CONFIRMED -> onHand 10->9 -> redelivery outcome 'duplicate', onHand unchanged",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
 await dogfoodRegisterLogin();
 await dogfoodHomepage();
 await dogfoodCatalogSearch();
@@ -1863,6 +2244,7 @@ await dogfoodCart();
 await dogfoodCheckout();
 await dogfoodStripeWebhook();
 await dogfoodMpesaRouteWiring();
+await dogfoodMpesaCallback();
 
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
@@ -1873,6 +2255,9 @@ console.log(
     "M4-1b real signed webhook delivery->CONFIRMED->onHand decremented->idempotent redelivery " +
     "(webhook-only leg; full click-through Stripe-payment journey still pending StripeCheckout.tsx " +
     "mounting) + M4-2 real HTTP route-wiring leg (400/400/404 on POST /api/checkout/create-mpesa-session, " +
-    "no Daraja call needed; full happy-path STK-push leg still pending real sandbox creds + mounted UI); " +
+    "no Daraja call needed; full happy-path STK-push leg still pending real sandbox creds + mounted UI) + " +
+    "M4-2b real M-Pesa callback delivery (wrong-token 404/malformed-body 400, both zero-write, then a real " +
+    "matched ResultCode:0 callback -> CONFIRMED -> onHand decremented -> idempotent redelivery, no Daraja " +
+    "mocking needed since the confirm path is fully local); " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

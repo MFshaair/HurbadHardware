@@ -149,6 +149,13 @@ variant (especially the per-region production ones nobody opens), and
 that shortens a TTL in dev may lengthen it in production. And when a
 ledger checkbox claims a mismatch is "resolved", verify the claim against
 every file carrying the value, not just the two the diff touched.
+**Corollary when re-verifying a FIX (M4-2b):** run the same sweep on the
+fix itself, not just on the original finding. A coercion/validation fix
+gets applied at the one line the finding cited; grep every other call site
+of the same primitive (`Number(`/`parseInt`) and read each one's sentinel
+before calling the class closed. Confirming the *unchanged* sibling env
+files stayed unchanged is part of the re-verification too — "production
+didn't need touching" is a claim to check by reading, not to accept.
 
 ## Ownership checks land on the parameter that was asked about, not the one that wasn't
 **Symptom (M3-2):** A money-path function ownership-checked
@@ -300,3 +307,92 @@ about an env var or secret-adjacent value, grep each gitignored env file
 by its explicit path (`.env.local`, `.env*.local`, any `.env.production*`)
 in addition to the repo-wide sweep — a clean default grep is not evidence
 those files are clean, only that they weren't checked.
+
+## A double-payment detector attached to one status arm misses the arm the other provider actually leaves behind
+**Symptom (M4-2b):** A callback handler implements a correct, provider-agnostic
+"is another CONFIRMED transaction on this order?" lookup — but only inside the
+FAILED/CANCELLED branch, because the ADR specified it there. The cross-provider
+double charge actually arrives on a still-PENDING row (the sibling provider's
+flow is correctly provider-scoped and never sweeps the foreign row), lands on
+the happy path, and is reported with the same benign outcome string as a
+webhook redelivery. Both provider variants of the double-payment test pass,
+because both seed the row in the one status that is covered.
+**Cause:** The staleness ceiling that unblocks the second provider does not
+change the first provider's row status. "Which statuses can this row be in when
+the late success arrives?" is a different question from "which status does the
+ADR's hardest-case section discuss?"
+**Rule going forward:** For any late-outcome handler, enumerate every row status
+reachable at that moment and confirm the double-payment/other-CONFIRMED lookup
+runs on ALL of them, not just the one the ADR narrates. Then check the test's
+fixture setup: if every variant of the double-payment test seeds the same
+starting status, the uncovered arm is where the bug is. Also treat a shared
+outcome string between "benign redelivery" and "two real debits" as a finding in
+itself — the ops queue keys on the event, and no event was written.
+**When re-verifying the fix (M4-2b, second pass):** a hoisted shared detector
+still only runs where it is *called*. Re-walk the switch and list the arms that
+return BEFORE reaching it — the two residuals here were (a) an early
+"order already CONFIRMED -> duplicate" return sitting above the detector in the
+CONFIRMED arm, which loses the signal if a crash lands between the CAS and the
+non-atomic event write, and (b) a pre-switch amount-reconciliation branch that
+terminates on its own and never consults the detector at all. Also check the
+event's idempotency guard uses the SAME payload key the writer emits — a guard
+querying the default key against a payload that names it differently never
+matches and silently duplicates the event on every redelivery.
+
+## "Safe to commit, it's dev-only" is false whenever the file also documents a public tunnel
+**Symptom (M4-2b):** A new authentication secret was committed as a real working
+value to a tracked `.env.development`, against the ADR's explicit REPLACE_ME
+instruction, with an in-file paragraph arguing it authenticates nothing outside
+the dev DB — eleven lines below a comment in the same file explaining that real
+callback delivery requires a public ngrok/cloudflared tunnel.
+**Cause:** The justification is written about the DB the secret guards, not about
+the network path the secret is presented on. The second premise ("tests can't run
+with a placeholder") is also usually false — the test file almost always already
+assigns process.env directly.
+**Rule going forward:** When a diff commits a real value with a justification
+comment, check the justification against the rest of that same file (does it
+document a tunnel/public endpoint?) and against the test file (does it already
+set the env var itself?). Both counter-evidence sources are usually in the diff.
+Also confirm the production posture separately: whether the framework loads
+`.env.development` in a prod build, and whether the fail-closed guard holds when
+the var is unset — the fix is still required, but it changes severity.
+**Accepting the fix (M4-2b):** the good shape is a placeholder in the tracked
+file plus a per-run generated value in the test setup. Verify three things
+before calling it closed: the setup file has no fs *write* (read-only imports
+only), the generated value is not logged, and the generation trigger
+(`unset || placeholder || too short`) makes the value STRONGER rather than
+lowering the production guard's own threshold. Check ordering too — generation
+must run after the dotenv load so a developer's real `.env.local` still wins.
+
+## Coercion guards that reject NaN still let falsy values become the success code
+**Symptom (M4-2b):** An envelope parser coerced a provider result code with
+`Number(...)` and rejected `undefined`/`null`/`NaN` — exactly as its ADR worded
+it — while `""`, `" "`, `false` and `[]` all coerce to `0`, which was the
+*success* code driving the confirm path on the money path.
+**Rule going forward:** Wherever `Number()`/`parseInt` output is compared against
+a meaningful sentinel (especially `0` = success), check the falsy-coercion set
+explicitly, not just NaN. Require a typeof/trim guard before coercion. An ADR
+that says "NaN -> malformed" is not a specification of the empty-string case.
+When verifying the fix, walk the whole falsy set against the new predicate by
+hand and also check `Infinity` (typeof "number", not NaN, so it passes any
+typeof+isNaN guard) — accept it only where the sentinel it produces routes to
+the SAFE branch.
+
+## An integrity cross-check is not an authentication control — don't overrate skipping it
+**Symptom (M4-2b):** A fix made a callback handler skip a
+`merchantRequestId` equality assertion when the provider omits that optional
+field (the previous behaviour was a permanent 500/redelivery loop that stranded
+a real payment). The obvious reviewer reflex is "an attacker will omit the field
+to dodge the check."
+**Cause:** Conflating a correlation/consistency assertion with an authorization
+factor. The value is not secret, is already known to anyone holding the
+envelope, and the caller must already possess the URL secret and a valid
+provider transaction id to reach the assertion at all — so omitting it grants
+nothing that sending the correct value wouldn't.
+**Rule going forward:** Before flagging a skipped check as a bypass, ask what
+capability the check actually gates and what an attacker must already hold to
+reach it. If the skipped value is non-secret and derivable by anyone who can
+reach the code, the skip is not a privilege gain — and a fail-closed loop that
+permanently strands real money is the worse failure mode. Confirm separately
+that the skip is narrow: the provider/type assertion and the exact-id row
+resolution around it must still run unconditionally.

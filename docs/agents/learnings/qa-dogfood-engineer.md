@@ -466,6 +466,74 @@ hit by whatever test the old comment points to (or a new one), THEN either
 split the wildcard into explicit filenames (preferred) or add a fresh
 comment explicitly extending the old justification to the new file.
 
+## A route's own new fail-closed guard added by a LATER item can break an EARLIER item's already-passing dogfood leg, even with zero changes to that earlier leg's own code
+
+**Symptom:** A clean `node scripts/agents/dogfood.mjs` run failed on
+`dogfoodMpesaRouteWiring()` (M4-2's own leg, unchanged) — case (3), "a
+syntactically-valid but non-existent orderId -> 404", got a 500 instead.
+That leg had passed on every prior run and nothing in its own code changed.
+
+**Cause:** M4-2b added a new fail-closed guard to `buildCallbackUrl()`
+(`mpesaService.ts`) that rejects an unset/short/`"REPLACE_ME"`
+`MPESA_CALLBACK_SECRET` — and that guard runs at the very top of
+`createMpesaStkPush`, BEFORE Phase A's order lookup (ADR M4-2b Decision 1:
+"fail-closed placement is load-bearing", deliberate and correct). Since
+`.env.development`'s committed `MPESA_CALLBACK_SECRET` is still the
+`"REPLACE_ME"` placeholder, and `dogfoodMpesaRouteWiring()`'s spawned server
+inherited that placeholder unmodified, the guard now throws before the order
+lookup this leg means to exercise ever runs — turning the intended
+`OrderNotFoundError` -> 404 into an uncaught-error -> 500. The leg's own
+assertion is still correct; the ENVIRONMENT it assumed (a secret that's
+"unset/placeholder but otherwise harmless for this leg's purposes") silently
+stopped being true once a later item added a new guard on that same env var.
+
+**Rule going forward:** When a builder item adds a new fail-closed
+env-var/config guard to a code path, check `git log`/`grep` for every
+EXISTING `dogfood.mjs` leg that already exercises that same code path (not
+just the new item's own leg) and re-verify each one still reaches the
+assertion it means to prove — a leg that used to reach deep into a function
+can be short-circuited by a new guard added earlier in that same function,
+even with zero changes to the leg itself. The fix here (generate a real
+random secret for that leg's own spawned server env, same pattern already
+used for `dogfoodStripeWebhook()`'s `STRIPE_WEBHOOK_SECRET`) is cheap and is
+now the standard pattern: never let a dogfood leg rely on a committed
+placeholder secret value staying "harmless" — generate a throwaway real one
+per leg instead. Caught by actually running the full `dogfood.mjs` end to
+end after adding a new leg, not just running the new leg in isolation —
+running only the new code never would have surfaced a break in an
+old, unrelated leg.
+
+## A money-path callback whose CONFIRM branch never calls the external provider can get a genuine full-journey dogfood leg with zero mocking, even when the sibling OUTBOUND route cannot
+
+**Symptom (not a bug — a design insight worth recording):** M4-2's own STK
+PUSH route dogfood leg (`dogfoodMpesaRouteWiring()`) is deliberately
+"route-wiring-only" (stops at the Phase A/B boundary) because Phase B calls
+Daraja's real network endpoint and no sandbox credentials exist. It would
+have been easy to pattern-match M4-2b's INBOUND callback route to the same
+narrower shape by default.
+
+**Cause/insight:** Reading the ADR closely (`M4-2b-mpesa-callback.md`
+Decision 4/5) showed the callback route's CONFIRM path (`ResultCode: 0`,
+amount matches) never calls Daraja at all — only the retry path (a `1037`
+result) does. That asymmetry (outbound push always calls the external
+provider; inbound callback's happy path never does) meant a FULL,
+genuinely end-to-end dogfood leg — seed a real fixture
+Order/PaymentTransaction/InventoryReservation via Prisma, POST a real
+matched `ResultCode:0` callback over real HTTP to a real spawned `next dev`
+server, assert genuine `Order.paymentStatus` CONFIRMED / onHand decrement /
+idempotent redelivery — was achievable with zero Daraja mocking, unlike the
+sibling outbound route.
+
+**Rule going forward:** Before defaulting a new webhook/callback route's
+dogfood leg to the same "route-wiring-only" shape as a sibling OUTBOUND
+route just because they're both payment-provider routes, check whether the
+INBOUND route's own happy path actually calls the external provider at
+all — an inbound callback's confirm logic frequently does not (it's usually
+pure local state-machine work), which can make a full real-HTTP happy-path
+leg cheap and genuine where the outbound direction's leg cannot be. Grep the
+service file's control flow (not just its imports) for the specific branch
+the leg would exercise before assuming a narrower leg is the ceiling.
+
 ## A resumed QA task should re-read the current file state before assuming the prior (interrupted) session's summary is still accurate
 
 **Symptom:** Picked up an interrupted M4-1b QA dispatch where the handoff

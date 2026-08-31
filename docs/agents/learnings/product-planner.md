@@ -374,3 +374,34 @@ infrastructure with no consumer — that violates "no ledger entry, no
 work" in reverse (manufacturing work instead of framing it). Revisit only
 when a future item actually scopes the consumer (e.g. a global nav/header
 with a live cart badge).
+
+## A named security mechanism carried forward from one provider's item can be factually wrong for a sibling provider
+**Symptom:** M4-2b's PRD/Linear-inherited acceptance criteria named "HMAC-
+SHA256 signature verification" for the M-Pesa Daraja callback route,
+apparently pattern-matched from the same shape Stripe's webhook uses
+(verified via `stripe-signature` + a real HMAC signing secret, built and
+tested in M4-1b). Carrying that bullet forward unexamined would have
+handed a builder a criterion to implement against a header/secret that
+Daraja's callback delivery simply does not provide — no signing mechanism,
+no signature header, nothing to verify at all.
+**Cause:** Ledger/PRD/Linear text often names a mechanism by analogy to a
+sibling item that already works ("webhooks get signature verification"),
+not by checking the specific third-party provider's actual delivery model.
+Two providers integrated back-to-back in the same milestone (M4-1b/Stripe,
+M4-2b/M-Pesa) can have genuinely different security models for the same
+conceptual step (inbound webhook/callback auth) — Stripe signs, Daraja
+does not.
+**Rule going forward:** Before carrying forward a named crypto/auth
+mechanism (HMAC, signature, specific algorithm) from one item's acceptance
+criteria into a sibling item for a different external provider, verify
+that the *new* provider's real API/delivery model actually supports that
+mechanism — don't assume "the same category of route (webhook/callback)
+implies the same auth pattern" just because a sibling item already built
+one. If the named mechanism doesn't apply, correct the criterion
+explicitly (name what the provider *does* offer — e.g. a shared secret
+embedded in the callback URL, IP allowlisting) rather than either building
+a check against a header that will never exist, or silently leaving the
+wrong bullet in place for a builder to discover mid-implementation. Flag
+the actual mechanism choice for platform-architect review if it interacts
+with an already-locked decision (e.g. a callback URL path fixed by a prior
+ADR for unrelated reasons).

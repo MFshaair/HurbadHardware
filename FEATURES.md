@@ -2329,6 +2329,17 @@ in scope to fix here.)
 
 **Verified:** `scripts/agents/gate-check.sh M4-1b` exit 0 on 2026-08-29. All checks GREEN: build, lint, test+coverage (94.35% statements/lines, 83.57% branches, 97.2% functions, all thresholds met), dogfood entrypoint (real signed Stripe webhook delivery over HTTP → Order.paymentStatus CONFIRMED → onHand decremented → redelivery idempotent), and security sign-off STATUS: CLEAR (`docs/agents/security-signoff/M4-1b.md`). All 10 ADR-required tests pass, with two critical branches empirically proven load-bearing during build: crash-gap-resume (naive "already-CONFIRMED → duplicate" made the test fail), and charge.failed-inert (wiring it to the fail path made the test fail). Dogfood webhook leg successfully extended `scripts/agents/dogfood.mjs` with real signed-webhook-delivery-over-HTTP proof.
 
+**QA follow-up (non-blocking, flagged 2026-08-31 during M4-2b's independent verification):**
+`tests/test22-stripe-webhook.test.ts`'s "concurrent stock-gone redelivery —
+dedup guard inside `recordStockUnavailable`" test is genuinely flaky under
+real Postgres concurrency (failed 1/3 isolated reruns with zero code
+changes in flight, not just under full-suite load). This is a race in the
+*test's* own two-concurrent-deliveries setup, not confirmed as a bug in
+`recordStockUnavailable`'s dedup guard itself — needs a
+`qa-dogfood-engineer` pass to root-cause and either fix the test's race or,
+if it exposes a real gap in the guard, fix the guard. Not in scope for
+M4-2b (`paymentWebhookService.ts` untouched by that dispatch).
+
 ### M4-2: M-Pesa Daraja OAuth & STK Push (HRH-49)
 **Status:** verified (gate-check.sh M4-2 exit 0 — 2026-08-30) · **Owner:** commerce-payments-engineer
 **Verified (production-readiness-gate, 2026-08-30):**
@@ -2668,42 +2679,214 @@ report. Findings:
   `ResponseCode` envelope assumptions are unverified against the real API).
 
 ### M4-2b: M-Pesa Callback Handler & Retry Logic (HRH-50)
-**Status:** planned, NOT dispatched · **Owner:** commerce-payments-engineer
-**Depends on M4-2 existing** (needs a real `PaymentTransaction` row and
-`CheckoutRequestID` to verify against), same sibling-blocking relationship
-M4-1b had on M4-1. Left at PRD granularity only — not sharpened yet, per
-the same convention M4-1b was left at until M4-1 was `verified` — because
-its actual criteria depend on decisions M4-2 hasn't made yet (exact
-`metadata` shape, `providerTxId` semantics, whether M4-2's OAuth-cache
-decision affects a retry's new STK push).
-- [ ] `app/api/webhooks/mpesa/route.ts` — HMAC-SHA256 signature
-      verification; idempotency via `PaymentTransaction.idempotencyKey`/
-      `providerTxId` lookup (duplicate delivery → 200 no-op, same shape as
-      M4-1b's CAS-gate-before-confirm pattern)
-- [ ] Retry up to 2x with backoff (5s, 10s) on customer timeout/ignore; a
-      new STK push is issued on each retry
-- [ ] After retries exhausted: fallback-to-Stripe option surfaced to the
-      customer
-- [ ] **Flagged, not confirmed in scope:** the PRD's U8 Approach
-      (`plans/Full PRD file.md:1746`) also names a background reconciliation
-      job (every 15 min, query Daraja for `PENDING` transactions older than
-      20 min) — this was the old bundled M4-2's third bullet, but HRH-50's
-      own Linear description (as given to this dispatch) names only HMAC/
-      idempotency/retry/fallback, not reconciliation. Carried forward here
-      so it isn't silently dropped; whoever picks this up should confirm
-      via Linear/human whether it's in HRH-50's scope or needs its own
-      ticket before building it.
-- [ ] **Inherited bindings from ADR M4-2** (do not re-derive): (i)
-      `providerTxId` holds `CheckoutRequestID` — **never overwrite it with
-      `MpesaReceiptNumber`**, despite what the `schema.prisma:265` comment
-      invites; the receipt goes in `metadata.mpesaReceiptNumber`. (ii)
-      Reconcile the callback `Amount` against **`PaymentTransaction.amount`**
-      (the ceil'd requested figure), not `Order.totalAmount`. (iii) A callback
-      whose `CheckoutRequestID` matches **no row** with `ResultCode: 0` is
-      money-received-against-no-attempt — persist it for ops, never
-      200-and-drop. (iv) A `ResultCode: 0` callback for a row already CAS'd
-      `FAILED` by M4-2's `PENDING_STALE_MS` sweep must still be confirmed, and
-      a double-payment flagged if a later attempt already CONFIRMED.
+**Status:** verified (gate-check.sh M4-2b exit 0 — 2026-08-31) · **Owner:** commerce-payments-engineer
+(backend-only, confirmed — no storefront-admin-engineer co-ownership needed;
+retry is either server auto-fired or a zero-new-code customer re-attempt via
+the existing `create-mpesa-session` route)
+
+**Verified (production-readiness-gate, 2026-08-31):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 369 passed / 2 skipped; statements 89.01% (1248/1402), branches 78.99% (786/995), functions 97.53% (198/203), lines 90.06% (1160/1288) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all 9 legs passed, including the new M4-2b M-Pesa callback delivery leg: wrong-token 404 (zero writes), malformed-body 400 (zero writes), real ResultCode:0 callback → CONFIRMED → onHand decremented → idempotent redelivery (outcome 'duplicate', onHand unchanged)
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M4-2b.md` STATUS: CLEAR (F1 HIGH double-payment-detection bug fixed, F2 MEDIUM committed secret fixed, F4/F6 LOW advisories fixed, F3/F5 deferred as design choices, F7/F8 NEW LOW advisories documented as non-blocking, all re-verified by security-reviewer 2026-08-31)
+
+**Verification note:** this item went through one security fix cycle (F1/F2 HIGH/MEDIUM findings found during initial review, fixed by commerce-payments-engineer, re-verified by security-reviewer who found two additional LOW advisories during the re-verification, all correctly documented as non-blocking follow-ups). qa-dogfood-engineer independently extended dogfood.mjs with a real M-Pesa callback leg (wrong-token 404, malformed-body 400, real ResultCode:0 callback confirming end-to-end with idempotent redelivery), proven non-trivial via break/fix/restore cycle. Gate-check.sh ran clean this session — all checks GREEN, exit 0. Pre-existing flake in test22-stripe-webhook.test.ts ("concurrent stock-gone redelivery" ~1/3 failure rate) was observed during gate run but is unrelated to M4-2b (paymentWebhookService.ts untouched by this diff).
+
+
+**Architect review: DONE (platform-architect, 2026-08-30).** Binding design
+is `docs/agents/arch-decisions/M4-2b-mpesa-callback.md` — 15 decisions
+covering: callback authentication (no Daraja HMAC exists — a secret path
+segment composed inside the existing `buildCallbackUrl()`, `MPESA_CALLBACK_URL`
+itself unchanged, one new env var `MPESA_CALLBACK_SECRET`), a new
+`MpesaCallbackDeadLetter` model for unmatched callbacks (`OrderEvent.orderId`
+is a required FK, so an orphan callback with no order handle cannot use it —
+**this item requires one additive migration**, new table only, no FK to
+existing tables), the amount-mismatch and late-success terminal states set to
+`CONFIRMED` not `FAILED` (only `CONFIRMED` blocks a subsequent attempt in
+`assertNoBlockingAttempt`; `FAILED` would let the customer be charged twice),
+`1037` auto-retries but `1032` (explicit customer cancel) does not, and the
+retry counter is derived from `PaymentTransaction` row count (never a new
+column, never in-memory — Vercel serverless has no cross-invocation memory).
+
+**Grounding note on scope (Linear) — reconfirmed by the orchestrator,
+2026-08-30, direct `list_issues` query on HRH-50:** description reads
+verbatim "`app/api/webhooks/mpesa/route.ts` — HMAC-SHA256 verification,
+idempotency, retry up to 2x with backoff (5s, 10s), fallback to Stripe
+after exhausted retries." **No mention of reconciliation.** The PRD's
+background reconciliation job (every 15 min, query Daraja for PENDING
+older than 20 min) is confirmed OUT OF SCOPE for HRH-50 — track separately
+as a future `M4-2c` ledger item if/when prioritized, do not build it here.
+
+- [ ] **Callback authentication — the PRD/Linear "HMAC-SHA256 signature
+      verification" bullet is carried forward incorrectly and must NOT be
+      built as literally stated.** Unlike Stripe (`stripe-signature` header,
+      HMAC over the raw body, verified in M4-1b), **Daraja does not sign
+      callbacks at all** — there is no signing secret, no signature header,
+      no HMAC of any kind in Safaricom's STK-push callback delivery. An
+      HMAC-SHA256 check built against a header that never exists would
+      either silently no-op (treat every payload as unverified/pass-through)
+      or 400-reject every real callback — either is worse than having no
+      check. **Real, available mechanisms, in order of strength — pick with
+      platform-architect, do not default silently:**
+      1. **Shared secret embedded in `MPESA_CALLBACK_URL` itself** (path
+         segment or query param, e.g.
+         `/api/webhooks/mpesa/<opaque-token>?k=<secret>`), validated
+         server-side against an env var (`MPESA_CALLBACK_SECRET`) with a
+         constant-time comparison; mismatch/missing → reject, zero DB
+         writes, same "unverified payload never touches data" rule M4-1b
+         established for Stripe's HMAC failure path. **Tension to resolve
+         with the architect, not silently override:** ADR M4-2 Decision 7
+         already fixed `MPESA_CALLBACK_URL` to the canonical
+         `/api/webhooks/mpesa` path (deployed to `.env.production.kenya`
+         and `docs/DEPLOYMENT.md` this milestone) for reasons unrelated to
+         auth (file convention, `vercel.json`'s `maxDuration` glob) —
+         adding a secret segment changes that value again and needs the
+         same fail-closed-if-unset treatment Decision 7 already applied to
+         the URL's `https://` requirement.
+      2. **Source-IP allowlisting against Safaricom's published Daraja
+         callback IP ranges**, as defense-in-depth only — flag to
+         platform-architect whether this is even verifiable at Vercel's
+         edge (same "in-memory/per-instance is best-effort, not a
+         correctness mechanism" caveat this milestone's ADR already applies
+         to `rateLimit.ts` and the OAuth token cache; a spoofed
+         `x-forwarded-for` is a known, already-tracked risk in this repo —
+         see M4-2 security finding F4).
+      3. Explicitly rejected as this item's mechanism: **HMAC/signature
+         verification of any kind** — there is nothing on the Daraja side
+         to verify it against.
+      Acceptance, once the mechanism is chosen: a callback with a
+      missing/wrong secret → rejected, **zero** `PaymentTransaction`/
+      `OrderEvent` writes of any kind (mirrors M4-1b's HMAC-failure test
+      shape); a callback with the correct secret proceeds to the checks
+      below. **Architect review required before build** — this is a new,
+      unprecedented-in-this-repo auth mechanism, not a copy of M4-1b's HMAC
+      pattern.
+- [ ] **Idempotency — CAS on `PaymentTransaction.status`, resolved by
+      `providerTxId = CheckoutRequestID`, NOT `idempotencyKey`.** Same
+      correction M4-1b made for Stripe: `idempotencyKey` is the outbound key
+      this repo sent *to* Daraja's ledger (there isn't one to send — Daraja
+      has no idempotency parameter at all, ADR M4-2 Context §1) and is never
+      echoed back on a callback. The callback's `CheckoutRequestID` is the
+      **only** identifier Daraja round-trips, and it is already the
+      `@unique`, indexed `providerTxId` column (ADR M4-2 Decision 7) —
+      resolve the target row by that column, direct lookup, no fuzzy match.
+      A duplicate delivery of an already-`CONFIRMED`/`FAILED` row → 200
+      no-op, zero additional writes. **Hard requirement, not optional:** a
+      `CheckoutRequestID` matching **no row at all** is the money-received-
+      against-no-attempt case (ADR M4-2 Decision 3's residual risk) — see
+      the binding bullet below, never silently 200-and-dropped.
+- [ ] **Outcome mapping — three distinct `ResultCode` classes, not a
+      binary success/failure.** `ResultCode: 0` = success (call
+      `confirmReservationsForOrder`, same function M4-1b's webhook already
+      calls for Stripe — do not reimplement it); `ResultCode: 1032` =
+      cancelled by the customer; `ResultCode: 1037` = timeout/unreachable
+      (Safaricom's own ~60s prompt expiry, reported through this same
+      `CallBackURL` per ADR M4-2 Decision 4 — there is no separate
+      `TimeOutURL` on this endpoint); any other non-zero code = generic
+      failure. **Amount reconciliation is a hard requirement:** the
+      callback's `CallbackMetadata.Amount` must be checked for exact
+      equality against **`PaymentTransaction.amount`** (the ceil'd
+      whole-KES figure M4-2 actually requested), **never**
+      `Order.totalAmount` (ADR M4-2 Decision 5 — checking the order total
+      would reject every correctly-paid, correctly-rounded order). A
+      mismatch is never silently accepted or silently dropped — persist it
+      (a distinctly-named `OrderEvent`, e.g. `PAYMENT_AMOUNT_MISMATCH`) and
+      do not advance `Order.paymentStatus`; remediation (refund/ops queue)
+      is out of scope here, same "detect-and-record honestly, defer the
+      remediation action" split M4-1b already established for the
+      money-taken-but-stock-gone case.
+- [ ] **Retry — concrete trigger, concrete mechanism, both named (not left
+      as "customer timeout/ignore").** Trigger: receiving a callback with
+      `ResultCode: 1037` (timeout/unreachable) or `1032` (cancelled) on a
+      `PENDING` row — a real, observable Daraja-reported signal, not a
+      guess about customer behavior. **This is a distinct mechanism from
+      M4-2's own `PENDING_STALE_MS` (180s) sweep** — that sweep exists so a
+      *never-delivered* callback doesn't permanently block a brand-new
+      checkout attempt; this item's retry fires on a callback that *was*
+      delivered and reported a negative outcome. Do not conflate the two or
+      let one silently substitute for the other. Up to 2 retries, backoff
+      5s then 10s; each retry follows ADR M4-2 Decision 3's established
+      precedent for M-Pesa (never replay/reuse a row — Daraja has no
+      idempotency key, so a fresh `PaymentTransaction` row with a fresh
+      `idempotencyKey` is created for each retry attempt, same as the
+      crash-recovery case, not a mutation of the original row).
+      **Open question for platform-architect + product, explicitly not
+      resolved here:** does the retry auto-fire server-side the instant the
+      1037/1032 callback arrives (no customer action, silently re-prompts a
+      phone that may already be put away), or does it require an explicit
+      customer-facing "Retry payment" action (a new storefront leg,
+      co-owned with storefront-admin-engineer)? This changes both the UX
+      and this item's owner list — decide before dispatch, don't default to
+      either silently.
+- [ ] **Fallback to Stripe — concrete contract at this layer, scoped
+      backend-only.** After retries are exhausted (2 failed retries, or a
+      3rd 1037/1032), this item does **not** build a new payment route or
+      a new UI — `POST /api/checkout/create-stripe-session` (M4-1,
+      `verified`) already accepts any order still in
+      `Order.paymentStatus: PENDING` and is provider-agnostic on the
+      `Order` side. This item's job is only to (a) leave the `Order` in
+      exactly that state (never advance `paymentStatus` off `PENDING` on
+      exhaustion, never leave a blocking `PENDING`/`INITIATED` mpesa row
+      that would trip ADR M4-2 Decision 2's cross-provider global block and
+      wrongly 409 a subsequent Stripe attempt), and (b) emit a
+      distinctly-named `OrderEvent` (e.g. `PAYMENT_MPESA_RETRIES_EXHAUSTED`)
+      that a future storefront surface can query to conditionally offer
+      "Pay with card instead." **Building that customer-facing prompt/
+      button is explicitly out of scope for this item** — flag it as a
+      likely M5/storefront follow-up rather than silently bundling it in.
+- [ ] **Flagged, not confirmed in scope: the 15-minute reconciliation job.**
+      PRD U8's Approach (`plans/Full PRD file.md:1746`) names a background
+      job (every 15 min, query Daraja's STK Query API for `PENDING`
+      transactions older than 20 min) as a third bullet. The prior M4-2
+      dispatch's direct Linear check found HRH-50's actual issue description
+      names only HMAC/idempotency/retry/fallback — reconciliation was not
+      in it (see the grounding note above; not re-verified live this
+      session). **Recommendation, not a unilateral decision:** if a human/
+      Linear confirms reconciliation is genuinely out of HRH-50's scope,
+      split it into its own follow-up ledger item (e.g. `M4-2c`) rather
+      than silently building it inside this dispatch or silently dropping
+      it — `providerTxId = CheckoutRequestID` (ADR M4-2 Decision 7) is
+      exactly the id the STK Query API needs, so nothing about this item's
+      design blocks doing that later. Whoever picks up M4-2b must confirm
+      via Linear/human before writing any reconciliation-job code under
+      this item's scope.
+- [ ] **Inherited bindings from ADR M4-2 — hard requirements, not just
+      references; each needs its own test:** (i) `providerTxId` holds
+      `CheckoutRequestID` — **never overwrite it with `MpesaReceiptNumber`**
+      despite what the `schema.prisma:265` comment ("Stripe charge ID,
+      M-Pesa tx ID") invites; the receipt number belongs in
+      `metadata.mpesaReceiptNumber` only. Test: a callback for an existing
+      row leaves `providerTxId` byte-identical to the pre-callback value.
+      (ii) Amount reconciliation against `PaymentTransaction.amount` (the
+      ceil'd figure), never `Order.totalAmount` — already restated above as
+      a hard requirement, not merely referenced. (iii) A callback whose
+      `CheckoutRequestID` matches **no row** and carries `ResultCode: 0` is
+      money-received-against-no-attempt (ADR M4-2 Decision 3's residual
+      risk) — must be persisted (an `OrderEvent` or dead-letter row) and
+      never 200-and-dropped; test: such a callback produces a durable,
+      queryable record and a non-200-and-silent response path. (iv) A
+      `ResultCode: 0` callback for a row already CAS'd `FAILED` by M4-2's
+      `PENDING_STALE_MS` sweep must still be confirmed (the money is real),
+      and if a *later* attempt on the same order has since `CONFIRMED`, a
+      double-payment must be flagged (distinctly-named `OrderEvent`, ops-
+      queryable) rather than silently accepted or silently dropped — this is
+      named in the ADR as "HRH-50's hardest case" and needs its own test,
+      not incidental coverage.
+
+**Architect review: explicit YES, before dispatch.** Two genuinely new,
+unprecedented-in-this-repo design questions are named above, not left for
+a builder to improvise: (1) the callback-authentication mechanism (no HMAC
+precedent transfers — Daraja's security model is fundamentally different
+from Stripe's, and the `MPESA_CALLBACK_URL` secret-embedding option
+directly interacts with ADR M4-2 Decision 7's already-deployed canonical
+path); (2) whether retry is server-auto-triggered or customer-action-
+triggered, which decides this item's owner list. Same class of item as
+M4-1's/M4-2's own ADRs, not M2-4/M3-3a's UI-wiring shape.
+
+**Not done, deliberately, per this task's scope:** no code written; only
+`FEATURES.md`'s M4-2b section and `docs/agents/run-state.md` were edited
+(no `src/`/`tests/` touched).
 
 ---
 

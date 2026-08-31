@@ -128,6 +128,100 @@ fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-30 — M4-2b (HRH-50, M-Pesa callback & retry) acceptance criteria sharpened; HMAC bullet corrected as factually wrong for Daraja
+`product-planner` was dispatched to sharpen M4-2b now that M4-2 (HRH-49) is
+`verified` and its ADR (`docs/agents/arch-decisions/M4-2-mpesa-stk-push.md`,
+read in full) locks the decisions M4-2b was blocked on. Turned the three
+PRD-granularity bullets into seven sharpened, testable criteria plus a
+restated set of ADR-inherited bindings, mirroring M4-1b's sharpening style.
+
+**No Linear MCP tool was available in this session** (only Read/Edit/Grep/
+Glob) — per this agent's own learnings file ("verify claimed tool access
+before trusting it"), this pass did **not** re-verify HRH-50's Linear
+description live. It is grounded instead in the prior M4-2 dispatch's own
+direct `get_issue` check (recorded in this file's 2026-08-30 M4-2-split
+entry below), which found HRH-50's real scope names only HMAC/idempotency/
+retry/fallback, not the PRD's reconciliation-job bullet — carried forward
+as "sourced but not re-verified this pass," not silently re-asserted as
+freshly confirmed.
+
+**A real factual correction, not a paraphrase:** the ledger's inherited
+"HMAC-SHA256 signature verification" bullet is wrong for Daraja. Unlike
+Stripe (verified via `stripe-signature` + a real signing secret, M4-1b),
+Safaricom's Daraja STK-push callback delivery has **no signing mechanism
+at all** — no header, no shared HMAC secret, nothing to verify a signature
+against. Building an HMAC check here would check a header that can never
+be present. Corrected to name the two mechanisms Daraja's actual delivery
+model does support — a shared secret embedded in `MPESA_CALLBACK_URL`
+itself (validated server-side, constant-time compare), or source-IP
+allowlisting as defense-in-depth only — and flagged an explicit tension: a
+secret-embedding fix would change `MPESA_CALLBACK_URL` again, which ADR
+M4-2 Decision 7 already fixed to a canonical value this milestone
+(deployed to `.env.production.kenya`/`docs/DEPLOYMENT.md`) for unrelated
+reasons (route convention, `vercel.json`'s `maxDuration` glob). Left as an
+explicit **architect decision, not resolved here** — this agent frames
+acceptance criteria, it does not pick the mechanism.
+
+**Retry logic sharpened with a concrete trigger:** `ResultCode: 1037`
+(timeout/unreachable) or `1032` (cancelled) on the callback itself — not a
+vague "customer timeout/ignore" — and explicitly distinguished from M4-2's
+own `PENDING_STALE_MS` (180s) sweep, which is a different mechanism
+(recovers a *never-delivered* callback so a new checkout attempt isn't
+blocked) that must not be conflated with this item's retry (which fires on
+a callback that *was* delivered with a negative outcome). One open
+question named, not resolved: whether the retry auto-fires server-side on
+receiving the timeout callback, or requires an explicit customer "Retry"
+action — this changes the item's owner list (backend-only vs. + storefront-
+admin-engineer) and is flagged for platform-architect + product, not
+defaulted either way.
+
+**"Fallback to Stripe" scoped concretely:** backend-only. M4-1's
+`create-stripe-session` route (`verified`) already accepts any order still
+`paymentStatus: PENDING`, provider-agnostically. This item's job on
+exhaustion is only to leave the `Order` in that state (never advance
+`paymentStatus`, never leave a blocking mpesa row that would trip ADR
+M4-2 Decision 2's cross-provider 409) and emit a queryable `OrderEvent` —
+building the actual "Pay with card instead" customer-facing UI is flagged
+as a likely M5/storefront follow-up, not silently bundled in here.
+
+**The four ADR-inherited bindings** (`providerTxId` never overwritten with
+`MpesaReceiptNumber`; amount reconciled against `PaymentTransaction.amount`
+not `Order.totalAmount`; an unmatched `CheckoutRequestID` with
+`ResultCode: 0` persisted for ops, never dropped; a `ResultCode: 0`
+callback for an already-`FAILED`/`PENDING_STALE_MS`-swept row still
+confirmed, with a double-payment flagged if a later attempt already
+`CONFIRMED`) were restated as hard, individually-tested requirements in
+the ledger entry itself, not left as bare cross-references a builder could
+skim past.
+
+**Architect review: explicit YES, before dispatch** — two genuinely new
+design questions named (callback-auth mechanism; retry auto-fire vs.
+customer-action, which decides ownership), same class as M4-1's/M4-2's own
+ADRs.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M4-2b
+section and this file were edited (no `src/`/`tests/` touched).
+
+### 2026-08-31 — Pre-existing flake found (not fixed, tracked): `test22-stripe-webhook.test.ts`'s concurrent stock-gone dedup test
+While independently re-verifying the M4-2b (HRH-50) builder handoff, the
+orchestrator's own `local-check.sh` run failed one test:
+`test22-stripe-webhook.test.ts > concurrent stock-gone redelivery — dedup
+guard inside recordStockUnavailable (Decision 5) > two concurrent
+deliveries both hitting EXPIRED: exactly one
+PAYMENT_CONFIRMED_STOCK_UNAVAILABLE OrderEvent is ever written`. Confirmed
+this is **unrelated to the M4-2b diff** — `paymentWebhookService.ts` (the
+file this test exercises) was not touched by the M4-2b builder; `git diff
+src/lib/reservationService.ts` shows the only change in that area is an
+additive `eventPayload` parameter on `confirmReservationsForOrder`, a
+different function writing a different `OrderEvent` type
+(`PAYMENT_CONFIRMED`, not `PAYMENT_CONFIRMED_STOCK_UNAVAILABLE`). Reran
+`tests/test22-stripe-webhook.test.ts` alone 3x with zero code changes in
+flight: failed 1/3 — a genuine real-Postgres concurrency race inside the
+test itself (two "concurrent" deliveries racing a dedup guard), not a
+correctness bug in the guard. Tracked as a QA follow-up
+(`FEATURES.md`, M4-1b's test suite) — not fixed here, out of scope for
+M4-2b's own dispatch.
+
 ### 2026-08-30 — Pre-existing dogfood flakiness found and fixed: `dogfoodHomepage()`'s unordered `findFirst` could pick a page-2 product
 `production-readiness-gate` returned RED on an M4-2 gate-check run because
 `node scripts/agents/dogfood.mjs` failed with "Clicking through the

@@ -11,7 +11,12 @@
  * `getMpesaAccessToken` keeps its EXACT original signature and `fetchImpl`
  * seam from the U1 stub (tests/test5-mpesa.test.ts asserts against it) — it
  * is wrapped by the module-scope cache below, not replaced (ADR Decision 4).
+ *
+ * `verifyMpesaCallbackToken`/`parseStkCallback`/`StkCallback`/
+ * `MpesaCallbackMalformedError` below are ADR M4-2b (HRH-50) additions —
+ * still pure, zero DB/Next imports, per that ADR's Decision 13.
  */
+import { createHash, timingSafeEqual } from "node:crypto";
 export interface MpesaTokenResponse {
   access_token: string;
   expires_in: string;
@@ -52,10 +57,13 @@ export class MpesaPushRejectedError extends Error {
   }
 }
 
-const MPESA_OAUTH_TIMEOUT_MS = 10_000;
+// Exported (ADR M4-2b Decision 12) so mpesaCallbackService.ts's retry hard
+// deadline can be derived from the SAME timeout budget this module actually
+// uses, rather than a second hardcoded copy that could drift.
+export const MPESA_OAUTH_TIMEOUT_MS = 10_000;
 // Changing either this or MPESA_OAUTH_TIMEOUT_MS -> revisit
 // paymentErrors.ts's IN_FLIGHT_GRACE_MS (ADR Decision 2/4).
-const MPESA_STK_TIMEOUT_MS = 15_000;
+export const MPESA_STK_TIMEOUT_MS = 15_000;
 
 // ADR Decision 1: token cache is refreshed with a safety margin so a token
 // close to expiry is never handed to a caller that might still be using it
@@ -287,4 +295,155 @@ export async function stkPush(
       (parsed?.ResponseDescription as string | undefined) ??
       "M-Pesa push rejected",
   );
+}
+
+// ---------------------------------------------------------------------------
+// ADR M4-2b Decision 1 — callback authentication. Daraja does not sign
+// callbacks (no header, no HMAC) — the entire trust boundary is an opaque
+// secret path segment composed into `MPESA_CALLBACK_URL` server-side (see
+// mpesaService.ts's `buildCallbackUrl`), verified here in constant time.
+
+/**
+ * Constant-time comparison of the callback URL's secret path segment.
+ * SHA-256 both sides FIRST so the compared buffers are always 32 bytes —
+ * `timingSafeEqual` THROWS on length mismatch, which would itself be a
+ * length oracle if the raw strings were compared. Fails closed: an unset
+ * `MPESA_CALLBACK_SECRET` or a missing token both return `false`, never
+ * "unset means allow."
+ */
+export function verifyMpesaCallbackToken(token: string | undefined): boolean {
+  const expected = process.env.MPESA_CALLBACK_SECRET;
+  if (!expected) return false;
+  if (!token) return false;
+  return timingSafeEqual(
+    createHash("sha256").update(token).digest(),
+    createHash("sha256").update(expected).digest(),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ADR M4-2b Decision 2 — the STK callback envelope, parsed and normalised.
+// Never trust the raw body past this function.
+
+export interface StkCallback {
+  merchantRequestId: string;
+  checkoutRequestId: string;
+  resultCode: number;
+  resultDesc: string;
+  /** Decimal-safe STRING, never a JS number (ADR Decision 2/8). */
+  amount: string | null;
+  mpesaReceiptNumber: string | null;
+  /** Raw "20260830143500", not parsed to a Date (ADR Decision 2). */
+  transactionDate: string | null;
+  /** PII — masked everywhere except metadata/dead-letter storage. */
+  phoneNumber: string | null;
+}
+
+export class MpesaCallbackMalformedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MpesaCallbackMalformedError";
+  }
+}
+
+/**
+ * Flattens Daraja's `CallbackMetadata.Item` array (unordered — flattened by
+ * `Name`, never by index) into a lookup map. Absent for every non-zero
+ * `ResultCode` — that is normal, not an error.
+ */
+function flattenCallbackMetadata(items: unknown): Map<string, unknown> {
+  const map = new Map<string, unknown>();
+  if (!Array.isArray(items)) return map;
+  for (const item of items) {
+    if (item && typeof item === "object" && "Name" in item) {
+      const name = (item as { Name?: unknown }).Name;
+      if (typeof name === "string") {
+        map.set(name, (item as { Value?: unknown }).Value);
+      }
+    }
+  }
+  return map;
+}
+
+/**
+ * Parses and validates a raw M-Pesa STK callback envelope. Never throws on
+ * *extra* unknown `Item` names (e.g. `Balance`) — they are discarded, not
+ * persisted. Throws `MpesaCallbackMalformedError` for anything that makes
+ * the envelope unusable (missing `Body.stkCallback`, missing/empty
+ * `CheckoutRequestID`, missing/non-numeric `ResultCode`).
+ */
+export function parseStkCallback(body: unknown): StkCallback {
+  if (!body || typeof body !== "object") {
+    throw new MpesaCallbackMalformedError("Callback body is not an object");
+  }
+  const stkCallback = (body as { Body?: { stkCallback?: unknown } }).Body?.stkCallback;
+  if (!stkCallback || typeof stkCallback !== "object") {
+    throw new MpesaCallbackMalformedError("Missing Body.stkCallback");
+  }
+
+  const raw = stkCallback as Record<string, unknown>;
+
+  const checkoutRequestId = raw.CheckoutRequestID;
+  // security-signoff M4-2b F3: checkoutRequestId is an unbounded @unique
+  // btree key on MpesaCallbackDeadLetter — an attacker holding the bearer
+  // token could otherwise write a value over Postgres's ~2704-byte btree
+  // limit, which would throw on insert (500 -> Daraja redelivers
+  // indefinitely). Real Daraja CheckoutRequestIDs are well under 64 chars
+  // (`ws_CO_<timestamp><digits>`); 256 is a generous ceiling, not a tight
+  // fit to the real format.
+  if (
+    typeof checkoutRequestId !== "string" ||
+    checkoutRequestId.length === 0 ||
+    checkoutRequestId.length > 256
+  ) {
+    throw new MpesaCallbackMalformedError("Missing/empty/oversized CheckoutRequestID");
+  }
+
+  const merchantRequestId = typeof raw.MerchantRequestID === "string" ? raw.MerchantRequestID : "";
+
+  // security-signoff M4-2b F4: JS coerces an empty/whitespace string,
+  // `false`, and `[]` to `0` via `Number(...)`, and 0 is the SUCCESS code
+  // that drives the confirm path — a garbled envelope with an empty
+  // ResultCode must be rejected as malformed, never processed as a
+  // successful payment. Explicit typeof/trim guard BEFORE the numeric
+  // coercion; keeps test 29's string-form ("0"/"1037") support intact.
+  const validResultCodeShape =
+    typeof raw.ResultCode === "number" ||
+    (typeof raw.ResultCode === "string" && raw.ResultCode.trim() !== "");
+  const resultCode = Number(raw.ResultCode);
+  if (!validResultCodeShape || Number.isNaN(resultCode)) {
+    throw new MpesaCallbackMalformedError("Missing/non-numeric ResultCode");
+  }
+
+  // security-signoff M4-2b F3: cap at the source (parse time) rather than
+  // only at each individual write site, so every consumer (dead-letter
+  // rawPayload's sibling resultDesc column, PaymentTransaction.metadata,
+  // failureMessage) inherits the same bound.
+  const resultDesc = typeof raw.ResultDesc === "string" ? raw.ResultDesc.slice(0, 500) : "";
+
+  const metaItems = (raw.CallbackMetadata as { Item?: unknown } | undefined)?.Item;
+  const meta = flattenCallbackMetadata(metaItems);
+
+  const amountValue = meta.get("Amount");
+  const amount = amountValue === undefined || amountValue === null ? null : String(amountValue);
+
+  const receiptValue = meta.get("MpesaReceiptNumber");
+  const mpesaReceiptNumber = typeof receiptValue === "string" ? receiptValue : receiptValue == null ? null : String(receiptValue);
+
+  const txDateValue = meta.get("TransactionDate");
+  const transactionDate = txDateValue === undefined || txDateValue === null ? null : String(txDateValue);
+
+  const phoneValue = meta.get("PhoneNumber");
+  const phoneNumber = phoneValue === undefined || phoneValue === null ? null : String(phoneValue);
+
+  return {
+    merchantRequestId,
+    checkoutRequestId,
+    resultCode,
+    resultDesc,
+    amount,
+    mpesaReceiptNumber,
+    transactionDate,
+    phoneNumber,
+  };
 }

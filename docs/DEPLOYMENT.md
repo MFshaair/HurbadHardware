@@ -89,9 +89,30 @@ secrets are still configured per-project as above.
    Lipa Na M-Pesa Online passkey (`MPESA_PASSKEY`) through Safaricom
 4. Set `MPESA_CALLBACK_URL` to the deployed Kenya domain's webhook route
    (`https://ke.hurbadhardware.com/api/webhooks/mpesa`)
-5. Add all M-Pesa variables to the **Kenya** Vercel project only —
+5. Generate `MPESA_CALLBACK_SECRET` with `openssl rand -hex 32` (>= 32 chars,
+   never the literal `REPLACE_ME`) and set it as a Vercel **encrypted** env
+   var on the Kenya project. Daraja does not sign callbacks — this secret,
+   composed as a path segment onto `MPESA_CALLBACK_URL` server-side
+   (`src/lib/mpesaService.ts`'s `buildCallbackUrl`), is the entire trust
+   boundary for `POST /api/webhooks/mpesa/[token]` (ADR M4-2b Decision 1).
+   **Rotation is not zero-downtime** with a single-value check: set the new
+   secret, then re-register the callback URL with Safaricom; in-flight
+   callbacks during that window 404 and must be recovered manually or during
+   a quiet-hours rotation (a dual-secret accept-both window is a documented,
+   not-yet-built follow-up — see the ADR's Known limits).
+6. Add all M-Pesa variables to the **Kenya** Vercel project only —
    Ethiopia/Somalia don't use M-Pesa (see `.env.production.ethiopia` /
    `.env.production.somalia`, which note Telebirr/EVC Plus as Phase 2 instead)
+7. **Ops refund/reconciliation queue** (ADR M4-2b Decision 7): a callback
+   whose `CheckoutRequestID` can't be matched to any `PaymentTransaction` is
+   durably recorded in `MpesaCallbackDeadLetter`, never dropped. The
+   money-received-and-unreconciled queue is:
+   ```sql
+   SELECT * FROM "MpesaCallbackDeadLetter"
+   WHERE "resultCode" = 0 AND "reviewedAt" IS NULL;
+   ```
+   There is no admin UI for this table yet — query it directly (read-only
+   Postgres access) until an M5-2 admin surface is built.
 
 ## 5. SendGrid
 
