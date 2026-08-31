@@ -673,6 +673,95 @@ yet triggering because both brands currently have fewer than
 `PAGE_SIZE` (20) active seeded products, but the same latent bug, waiting
 for the seed data to grow past that count.
 
+## An inbound cron/webhook route's own confirm path never calling the external provider makes a full real-HTTP dogfood leg achievable even when the route's OWN test suite calls the handler in-process only
+
+**Symptom (not a bug — a design pattern worth recording, M4-2c/HRH-51):**
+`tests/test25-mpesa-reconcile.test.ts`'s own "Cron route" describe blocks
+(required tests 20-29) call `route.GET(request)` directly, in-process —
+confirmed by grep (no `spawn`/`next dev` anywhere in that file) — the same
+gap-shape as M4-1b's Stripe webhook and M4-2b's M-Pesa callback routes
+before their own dogfood legs closed it: nothing had proven
+`src/app/api/cron/mpesa-reconcile/route.ts` is actually registered and
+reachable over real HTTP, that `src/middleware.ts`'s matcher doesn't
+intercept it, or that the real env-loaded `CRON_SECRET` (not vitest's own
+env) is read correctly by a genuinely running `next dev` server.
+
+**Cause/insight:** Per the binding ADR (`M4-2c-mpesa-reconciliation.md`
+Decision 4), population (b)'s dead-letter DB-rejoin path resolves entirely
+via one indexed Prisma lookup plus the existing `handleMpesaCallback` state
+machine — it makes **zero** outbound Daraja calls, unlike population (a)'s
+STK-Query path. That is the exact same "inbound confirm path that never
+calls the external provider" shape the M4-2b callback-route dogfood leg
+already exploited (see that entry above). It let a genuine, non-mocked,
+full happy-path leg be added for the cron route too: seed a real PENDING
+`PaymentTransaction` + a real matching `resultCode:0`
+`MpesaCallbackDeadLetter` row via Prisma, drive
+`GET /api/cron/mpesa-reconcile` with no/wrong/correct `CRON_SECRET` over
+real HTTP against a real spawned server, and assert the real DB-rejoin
+confirm (`Order.paymentStatus` CONFIRMED, dead letter `reviewedAt`
+stamped) — with zero sandbox credentials needed. Population (a)'s
+STK-Query path was deliberately left OUT of this leg (no `fetchImpl`
+injection seam reaches into a spawned child process's module state the way
+an in-process test's parameter does), and stays covered by test25's 45
+in-process tests instead.
+
+**One real, bounded risk worth flagging for any future leg built the same
+way:** the PRODUCTION route itself calls `runMpesaReconciliation()` with no
+`fetchImpl` override, so if an unrelated stale-eligible row happens to
+already exist in the shared dev DB when this leg's "correct secret" request
+fires, the route would attempt a REAL network call to Daraja's sandbox for
+it. Checked this is non-fatal by design (ADR Decision 6.4's 50s wall-clock
+deadline caps the run regardless of how many stray rows exist, and
+`indeterminate` never throws) — worth a comment in the leg itself, not
+worth a preflight guard given how bounded and low-probability it is; if
+this class of leg is ever added for a THIRD provider-facing cron/route, the
+same bounded-and-documented (not defensively guarded) treatment is fine as
+long as the underlying job has its own wall-clock deadline exactly like this
+one does — don't assume that's always true without checking the target
+route's own design first.
+
+**Rule going forward:** Before deciding a cron/webhook route doesn't need
+its own dogfood leg just because its test suite already covers the logic
+thoroughly in-process, check (1) whether that suite's route-level tests
+call the exported handler directly (`route.GET(request)`) rather than over
+real HTTP against a spawned server (same grep-for-`spawn` check as the
+M4-1b/M4-2b precedent), and (2) whether the route has at least one
+sub-path whose confirm logic never calls the external provider (grep the
+service's control flow, not just imports) — if both are true, a real
+HTTP leg exercising that specific sub-path is genuine signal for the
+route/middleware/env-loading wiring class of bug, not theater, even though
+the route has no UI and even though a sibling STK-Query-driven sub-path of
+the SAME route still can't be dogfooded without a mock injection seam the
+production entrypoint doesn't have.
+
+## An F1-class falsy/garbled-value coercion guard is a real, provable gate — confirmed by reverting it and watching all 6 of its own regression tests fail together
+
+**Symptom (verification, not a bug, M4-2c):** `src/lib/mpesa.ts`'s `stkQuery`
+had a guard (`validResultCodeShape` + `Number.isFinite`) added during the
+M4-2c security-fix cycle (security-signoff F1) to stop `Number("")`/
+`Number(" ")`/`Number(false)` — all of which coerce to `0`, the SUCCESS
+code, not `NaN` — from misclassifying a garbled/empty Daraja `ResultCode`
+as a genuine success. Reverted the guard to the naive
+`Number.isNaN(resultCode)`-only check it replaced, reran just the F1-tagged
+tests in `tests/test25-mpesa-reconcile.test.ts`: all 6 (empty string,
+whitespace, boolean `false`, `"\n"`, `"Infinity"`, plus the end-to-end
+"zero writes" case) failed immediately with clear, specific
+expected-vs-received diffs (e.g. `expected 'success' to be 'indeterminate'`)
+— none passed for the wrong reason. Restored the exact original guard and
+reconfirmed all 45 tests in that file green (`git diff --stat` on
+`src/lib/mpesa.ts` matched the pre-edit uncommitted M4-2c working-tree
+state exactly before the rerun, confirming a clean restore).
+
+**Rule going forward:** This class of guard (explicit `typeof`/`trim`
+validation before a numeric coercion, guarding against a falsy-but-valid-
+looking value like `""`/`false`/whitespace being silently accepted) is
+cheap to spot-check the same way as a concurrency/idempotency test: revert
+just the guard clause (not the whole function), rerun only the tests tagged
+for that regression, confirm they ALL fail with a specific message (not a
+timeout or unrelated error), then restore and reconfirm green. Six tests
+failing together for the reason the guard's own comment predicts is strong
+evidence the tests are load-bearing, not coincidentally green.
+
 **Rule going forward:** Any `findFirst`/`findMany` in `dogfood.mjs` (or any
 test) that picks a fixture row to then assert against a PAGINATED page's
 rendered HTML must use the EXACT SAME `orderBy` the real page/route uses

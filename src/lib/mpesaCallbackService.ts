@@ -70,6 +70,64 @@ export interface HandleMpesaCallbackOptions {
    * export" rule.
    */
   fetchImpl?: typeof fetch;
+  /**
+   * ADR M4-2c Decision 3.2. "callback" (default) preserves M4-2b behaviour
+   * byte-for-byte — a callback delivered by Daraja itself. "reconciliation"
+   * is set ONLY by mpesaReconcileService for a callback synthesized from an
+   * STK Query response or a re-joined dead-letter row: it disables
+   * `retryOrFallback`'s auto-retry (never ring a customer's phone minutes
+   * after they abandoned checkout) and tags every OrderEvent/metadata
+   * write on the path with `reconciled: true, reconciliationSource:
+   * "stk_query"` so ops can distinguish a polled confirm from a pushed one.
+   */
+  source?: "callback" | "reconciliation";
+  /**
+   * security-signoff M4-2c A3. Distinguishes WHICH reconciliation path
+   * produced this callback, purely for the ops-facing
+   * `reconciliationSource` tag on OrderEvent/metadata writes — it has no
+   * effect on control flow (auto-retry suppression is keyed on `source`
+   * alone). `"stk_query"` (default when `source: "reconciliation"`) = a
+   * live Daraja poll of a stale PENDING row (population a, or population
+   * b's own STK-Query fallback). `"dead_letter_rejoin"` = population (b)'s
+   * DB-only re-join of an already-captured dead-letter callback — no Daraja
+   * call was made for this specific confirm. Ignored when `source` is
+   * `"callback"` or unset.
+   */
+  reconciliationSource?: "stk_query" | "dead_letter_rejoin";
+  /**
+   * ADR M4-2c Decision 3.1. Set ONLY by mpesaReconcileService for a
+   * synthetic callback derived from an STK Query response, which carries no
+   * CallbackMetadata and therefore no Amount. Skips Decision 8's amount
+   * reconciliation entirely — it does NOT pass it, it does not run at all.
+   * Asserted: when true, `cb.amount` MUST be `null` (a defensive throw, not
+   * a silent branch) — never set for population (b), which has real
+   * captured amount data and must still be amount-checked.
+   */
+  amountUnavailable?: boolean;
+}
+
+/** Internal plumbing context threaded through every dispatch function below
+ * — bundles the two ADR M4-2c additive options plus the existing
+ * `fetchImpl` seam so call sites don't grow an ever-longer positional
+ * parameter list. `source` defaults to `"callback"` everywhere below,
+ * reproducing today's exact behaviour when unset. */
+interface CallbackCtx {
+  source: "callback" | "reconciliation";
+  reconciliationSource: "stk_query" | "dead_letter_rejoin";
+  fetchImpl: typeof fetch | undefined;
+}
+
+/** ADR M4-2c Decision 3.3 — the tag every reconciled write gets. Empty for
+ * the default `"callback"` source, so every existing OrderEvent/metadata
+ * shape is byte-identical to today when this item's new options are unset.
+ * security-signoff M4-2c A3: `reconciliationSource` now reflects which
+ * reconciliation path actually ran (`stk_query` = live Daraja poll,
+ * `dead_letter_rejoin` = DB-only re-join, no Daraja call made) rather than
+ * being hardcoded to `"stk_query"` for both. */
+function reconciliationTag(ctx: CallbackCtx): Record<string, unknown> {
+  return ctx.source === "reconciliation"
+    ? { reconciled: true, reconciliationSource: ctx.reconciliationSource }
+    : {};
 }
 
 // ADR Decision 4 — bounded re-lookup before declaring an orphan. Applies
@@ -282,14 +340,27 @@ async function recordOrphan(
 // NEVER included in any SET clause below — see casPendingToConfirmed/
 // casFailedToConfirmed, neither of which ever mention that column.
 
-function buildConfirmMetadataPatch(cb: StkCallback): Record<string, unknown> {
-  return {
+function buildConfirmMetadataPatch(
+  cb: StkCallback,
+  ctx: CallbackCtx,
+  amountUnavailable: boolean = false,
+): Record<string, unknown> {
+  const base = {
     mpesaReceiptNumber: cb.mpesaReceiptNumber,
     transactionDate: cb.transactionDate,
     callbackResultCode: cb.resultCode,
     callbackResultDesc: cb.resultDesc.slice(0, 500),
     callbackPhoneNumber: cb.phoneNumber,
   };
+  const tag = reconciliationTag(ctx);
+  if (Object.keys(tag).length === 0) return base;
+  // ADR M4-2c Decision 3.1 — record that this confirm was not
+  // amount-verified, so ops can always distinguish a polled confirm from a
+  // pushed one.
+  const amountFields = amountUnavailable
+    ? { amountVerified: false, amountUnavailableReason: "stk_query_carries_no_callback_metadata" }
+    : {};
+  return { ...base, ...tag, ...amountFields };
 }
 
 async function casPendingToConfirmed(
@@ -380,6 +451,7 @@ async function writeDoublePaymentEvent(
   row: PaymentTransactionRow,
   cb: StkCallback,
   otherConfirmed: { id: string; provider: string; amount: Prisma.Decimal; providerTxId: string | null },
+  ctx: CallbackCtx,
 ): Promise<void> {
   await db.orderEvent.create({
     data: {
@@ -397,6 +469,7 @@ async function writeDoublePaymentEvent(
         priorProviderTxId: otherConfirmed.providerTxId,
         priorAmount: otherConfirmed.amount.toFixed(2),
         refundRequired: true,
+        ...reconciliationTag(ctx),
       },
     },
   });
@@ -416,6 +489,7 @@ async function writeDoublePaymentEvent(
 async function detectAndFlagDoublePayment(
   row: PaymentTransactionRow,
   cb: StkCallback,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult | null> {
   const otherConfirmed = await findOtherConfirmedTransaction(row.orderId, row.id);
   if (!otherConfirmed) return null;
@@ -427,7 +501,7 @@ async function detectAndFlagDoublePayment(
     "lateePaymentTransactionId",
   );
   if (!existing) {
-    await writeDoublePaymentEvent(row, cb, otherConfirmed);
+    await writeDoublePaymentEvent(row, cb, otherConfirmed, ctx);
   }
   return { outcome: "double_payment_flagged" };
 }
@@ -442,7 +516,23 @@ async function dispatchConfirm(
   row: PaymentTransactionRow,
   cb: StkCallback,
   resolvedAfterRetries: number | undefined,
+  ctx: CallbackCtx,
+  amountUnavailable: boolean,
 ): Promise<MpesaCallbackHandlingResult> {
+  // ADR M4-2c Decision 3.1 — amount reconciliation is SKIPPED entirely
+  // (never passed, never failed) for a synthetic STK-Query callback, which
+  // carries no CallbackMetadata and therefore no Amount. Defensive throw,
+  // not a silent branch, if the invariant this flag depends on is ever
+  // violated.
+  if (amountUnavailable) {
+    if (cb.amount !== null) {
+      throw new Error(
+        "amountUnavailable=true but cb.amount is not null — reconciliation synthetic callback invariant violated",
+      );
+    }
+    return enterConfirmSwitch(row, cb, resolvedAfterRetries, ctx, true);
+  }
+
   // Step 0 (Decision 5): amount reconciliation FIRST. A mismatch never
   // enters the switch below — it takes its own terminal branch, compared
   // against PaymentTransaction.amount (the ceil'd figure), NEVER
@@ -452,20 +542,22 @@ async function dispatchConfirm(
   const mismatch = received === null || !received.equals(expected);
 
   if (mismatch) {
-    return amountMismatch(row, cb, expected, received ?? new Prisma.Decimal(0));
+    return amountMismatch(row, cb, expected, received ?? new Prisma.Decimal(0), ctx);
   }
 
-  return enterConfirmSwitch(row, cb, resolvedAfterRetries);
+  return enterConfirmSwitch(row, cb, resolvedAfterRetries, ctx, false);
 }
 
 async function enterConfirmSwitch(
   row: PaymentTransactionRow,
   cb: StkCallback,
   resolvedAfterRetries: number | undefined,
+  ctx: CallbackCtx,
+  amountUnavailable: boolean,
 ): Promise<MpesaCallbackHandlingResult> {
   switch (row.status) {
     case "PENDING": {
-      const metadataPatch = buildConfirmMetadataPatch(cb);
+      const metadataPatch = buildConfirmMetadataPatch(cb, ctx, amountUnavailable);
       const affected = await casPendingToConfirmed(row.id, metadataPatch);
       if (affected === 1) {
         // F1 fix: a late ResultCode:0 on a row that was STILL PENDING is
@@ -473,14 +565,14 @@ async function enterConfirmSwitch(
         // confirmed the order (nothing sweeps a stale mpesa PENDING row to
         // FAILED except another mpesa attempt) — check BEFORE calling
         // confirmReservationsForOrder, not after catching its throw.
-        const doublePayment = await detectAndFlagDoublePayment(row, cb);
+        const doublePayment = await detectAndFlagDoublePayment(row, cb, ctx);
         if (doublePayment) return doublePayment;
-        return runConfirm(row, cb, resolvedAfterRetries);
+        return runConfirm(row, cb, resolvedAfterRetries, ctx);
       }
       // Lost the CAS race — re-read and re-enter, never assume what it
       // became.
       const fresh = await refetchRow(row.id);
-      return enterConfirmSwitch(fresh, cb, resolvedAfterRetries);
+      return enterConfirmSwitch(fresh, cb, resolvedAfterRetries, ctx, amountUnavailable);
     }
 
     case "CONFIRMED": {
@@ -509,16 +601,16 @@ async function enterConfirmSwitch(
       // that's mid-resume, check whether a DIFFERENT PaymentTransaction has
       // already CONFIRMED the order; if so, this is a genuine double
       // payment, not this row's own resume.
-      const doublePayment = await detectAndFlagDoublePayment(row, cb);
+      const doublePayment = await detectAndFlagDoublePayment(row, cb, ctx);
       if (doublePayment) return doublePayment;
       // Neither a real duplicate nor already-flagged: a crash-gap resume.
       // Re-enter for real — do NOT no-op.
-      return runConfirm(row, cb, resolvedAfterRetries);
+      return runConfirm(row, cb, resolvedAfterRetries, ctx);
     }
 
     case "FAILED":
     case "CANCELLED":
-      return lateSuccess(row, cb, resolvedAfterRetries);
+      return lateSuccess(row, cb, resolvedAfterRetries, ctx, amountUnavailable);
 
     case "INITIATED":
       // Only reachable if Phase C committed providerTxId but not the
@@ -546,15 +638,18 @@ async function runConfirm(
   row: PaymentTransactionRow,
   cb: StkCallback,
   resolvedAfterRetries: number | undefined,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult> {
   try {
-    const eventPayload =
-      resolvedAfterRetries !== undefined ? { resolvedAfterRetries } : {};
+    const eventPayload = {
+      ...(resolvedAfterRetries !== undefined ? { resolvedAfterRetries } : {}),
+      ...reconciliationTag(ctx),
+    };
     await confirmReservationsForOrder(row.orderId, eventPayload);
   } catch (err) {
     if (err instanceof ReservationNotActiveError) {
       if (err.status === "EXPIRED" || err.status === "RELEASED") {
-        return recordStockUnavailable(row, cb, err);
+        return recordStockUnavailable(row, cb, err, ctx);
       }
       if (err.status === "CONFIRMED") {
         // F1 fix (defense in depth): the callers above already check
@@ -564,7 +659,7 @@ async function runConfirm(
         // possible — never assume a CONFIRMED reservation means "this is
         // just my own concurrent sibling" without checking whether a
         // DIFFERENT PaymentTransaction is the one that actually confirmed.
-        const doublePayment = await detectAndFlagDoublePayment(row, cb);
+        const doublePayment = await detectAndFlagDoublePayment(row, cb, ctx);
         if (doublePayment) return doublePayment;
         // No other CONFIRMED transaction exists — this really is a
         // concurrent sibling delivery of THIS row's own confirm that won
@@ -614,6 +709,7 @@ async function recordStockUnavailable(
   row: PaymentTransactionRow,
   cb: StkCallback,
   err: ReservationNotActiveError,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult> {
   const existing = await findEvent(row.orderId, "PAYMENT_CONFIRMED_STOCK_UNAVAILABLE", row.id);
   if (existing) {
@@ -631,6 +727,7 @@ async function recordStockUnavailable(
         reservationStatus: err.status,
         checkoutRequestId: cb.checkoutRequestId,
         mpesaReceiptNumber: cb.mpesaReceiptNumber,
+        ...reconciliationTag(ctx),
       },
     },
   });
@@ -648,26 +745,27 @@ async function amountMismatch(
   cb: StkCallback,
   expected: Prisma.Decimal,
   received: Prisma.Decimal,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult> {
   switch (row.status) {
     case "PENDING": {
       const metadataPatch = {
-        ...buildConfirmMetadataPatch(cb),
+        ...buildConfirmMetadataPatch(cb, ctx),
         amountMismatch: { expected: expected.toFixed(2), received: received.toFixed(2) },
       };
       const affected = await casPendingToConfirmed(row.id, metadataPatch);
       if (affected !== 1) {
         const fresh = await refetchRow(row.id);
-        return amountMismatch(fresh, cb, expected, received);
+        return amountMismatch(fresh, cb, expected, received, ctx);
       }
-      await writeAmountMismatchEvent(row, cb, expected, received);
+      await writeAmountMismatchEvent(row, cb, expected, received, ctx);
       return { outcome: "amount_mismatch" };
     }
 
     case "FAILED":
     case "CANCELLED": {
       const metadataPatch = {
-        ...buildConfirmMetadataPatch(cb),
+        ...buildConfirmMetadataPatch(cb, ctx),
         amountMismatch: { expected: expected.toFixed(2), received: received.toFixed(2) },
         supersededFailureCode: row.failureCode,
         supersededFailureMessage: row.failureMessage,
@@ -675,9 +773,9 @@ async function amountMismatch(
       const affected = await casFailedToConfirmed(row, metadataPatch);
       if (affected !== 1) {
         const fresh = await refetchRow(row.id);
-        return amountMismatch(fresh, cb, expected, received);
+        return amountMismatch(fresh, cb, expected, received, ctx);
       }
-      await writeAmountMismatchEvent(row, cb, expected, received);
+      await writeAmountMismatchEvent(row, cb, expected, received, ctx);
       return { outcome: "amount_mismatch" };
     }
 
@@ -686,7 +784,7 @@ async function amountMismatch(
       if (existing) return { outcome: "amount_mismatch" };
       // Crash-gap resume: the CAS committed on a prior delivery but the
       // event write didn't. Write it now rather than silently no-op.
-      await writeAmountMismatchEvent(row, cb, expected, received);
+      await writeAmountMismatchEvent(row, cb, expected, received, ctx);
       return { outcome: "amount_mismatch" };
     }
 
@@ -706,6 +804,7 @@ async function writeAmountMismatchEvent(
   cb: StkCallback,
   expected: Prisma.Decimal,
   received: Prisma.Decimal,
+  ctx: CallbackCtx,
 ): Promise<void> {
   await db.orderEvent.create({
     data: {
@@ -719,6 +818,7 @@ async function writeAmountMismatchEvent(
         mpesaReceiptNumber: cb.mpesaReceiptNumber,
         expected: expected.toFixed(2),
         received: received.toFixed(2),
+        ...reconciliationTag(ctx),
       },
     },
   });
@@ -732,12 +832,14 @@ async function lateSuccess(
   row: PaymentTransactionRow,
   cb: StkCallback,
   resolvedAfterRetries: number | undefined,
+  ctx: CallbackCtx,
+  amountUnavailable: boolean,
 ): Promise<MpesaCallbackHandlingResult> {
   // A. CAS this row FAILED/CANCELLED -> CONFIRMED, unconditionally — the
   // callback is the provider's statement of fact and outranks the timeout
   // heuristic that failed it.
   const metadataPatch = {
-    ...buildConfirmMetadataPatch(cb),
+    ...buildConfirmMetadataPatch(cb, ctx, amountUnavailable),
     supersededFailureCode: row.failureCode,
     supersededFailureMessage: row.failureMessage,
     confirmedAfterTimeout: true,
@@ -748,7 +850,7 @@ async function lateSuccess(
     // the confirm switch — amount was already validated as matching before
     // this function was reached.
     const fresh = await refetchRow(row.id);
-    return enterConfirmSwitch(fresh, cb, resolvedAfterRetries);
+    return enterConfirmSwitch(fresh, cb, resolvedAfterRetries, ctx, amountUnavailable);
   }
 
   // B. Was this order paid by some OTHER attempt? (F1: this check must run
@@ -758,7 +860,7 @@ async function lateSuccess(
   // order — DO NOT call confirmReservationsForOrder in that case; the
   // prior attempt already did, and calling it again would only throw
   // ReservationNotActiveError(CONFIRMED) and add nothing.
-  const doublePayment = await detectAndFlagDoublePayment(row, cb);
+  const doublePayment = await detectAndFlagDoublePayment(row, cb, ctx);
   if (doublePayment) return doublePayment;
 
   await db.orderEvent.create({
@@ -772,12 +874,13 @@ async function lateSuccess(
         checkoutRequestId: cb.checkoutRequestId,
         mpesaReceiptNumber: cb.mpesaReceiptNumber,
         supersededFailureCode: row.failureCode,
+        ...reconciliationTag(ctx),
       },
     },
   });
   // Normal path; STOCK_GONE (inside runConfirm) handles an expired
   // reservation truthfully.
-  return runConfirm(row, cb, resolvedAfterRetries);
+  return runConfirm(row, cb, resolvedAfterRetries, ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -788,7 +891,7 @@ async function dispatchFail(
   row: PaymentTransactionRow,
   cb: StkCallback,
   requestStartMs: number,
-  fetchImpl: typeof fetch | undefined,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult> {
   switch (row.status) {
     case "PENDING": {
@@ -809,12 +912,12 @@ async function dispatchFail(
       `;
       if (affected !== 1) {
         const fresh = await refetchRow(row.id);
-        return dispatchFail(fresh, cb, requestStartMs, fetchImpl);
+        return dispatchFail(fresh, cb, requestStartMs, ctx);
       }
       // `releaseReservationsForOrder` is deliberately NOT called (ADR
       // Decision 10) — a failed prompt is one attempt of <= 3 inside one
       // reservation TTL, not the end of the checkout.
-      return retryOrFallback(row, cb, requestStartMs, fetchImpl);
+      return retryOrFallback(row, cb, requestStartMs, ctx);
     }
 
     case "FAILED":
@@ -851,7 +954,9 @@ async function fallback(
     | "not_retryable"
     | "attempt_cap_reached"
     | "reservation_expired"
-    | "retry_push_failed",
+    | "retry_push_failed"
+    | "reconciled_terminal",
+  ctx: CallbackCtx,
   attemptCount?: number,
 ): Promise<MpesaCallbackHandlingResult> {
   const count =
@@ -869,6 +974,7 @@ async function fallback(
         attemptCount: count,
         reason,
         fallback: "stripe",
+        ...reconciliationTag(ctx),
       },
     },
   });
@@ -879,17 +985,26 @@ async function retryOrFallback(
   row: PaymentTransactionRow,
   cb: StkCallback,
   requestStartMs: number,
-  fetchImpl: typeof fetch | undefined,
+  ctx: CallbackCtx,
 ): Promise<MpesaCallbackHandlingResult> {
+  // ADR M4-2c Decision 3.2 — auto-retry must be disabled by construction
+  // for a reconciliation-sourced callback: a `1037` discovered ~20 minutes
+  // after checkout was abandoned must never ring the customer's phone
+  // again. Checked BEFORE the AUTO_RETRY_RESULT_CODES check — a
+  // reconciliation source never reaches it.
+  if (ctx.source === "reconciliation") {
+    return fallback(row, cb, "reconciled_terminal", ctx);
+  }
+
   if (!AUTO_RETRY_RESULT_CODES.has(cb.resultCode)) {
-    return fallback(row, cb, "not_retryable");
+    return fallback(row, cb, "not_retryable", ctx);
   }
 
   const attemptCount = await db.paymentTransaction.count({
     where: { orderId: row.orderId, provider: "mpesa" },
   });
   if (attemptCount >= MPESA_MAX_ATTEMPTS) {
-    return fallback(row, cb, "attempt_cap_reached", attemptCount);
+    return fallback(row, cb, "attempt_cap_reached", ctx, attemptCount);
   }
 
   const backoffMs = attemptCount === 1 ? 5_000 : 10_000;
@@ -905,7 +1020,7 @@ async function retryOrFallback(
     },
   });
   if (activeReservations === 0) {
-    return fallback(row, cb, "reservation_expired", attemptCount);
+    return fallback(row, cb, "reservation_expired", ctx, attemptCount);
   }
 
   // Hard deadline guard (ADR Decision 12): never let the function be
@@ -914,7 +1029,7 @@ async function retryOrFallback(
   // state.
   const deadline = requestStartMs + RETRY_HARD_DEADLINE_MS;
   if (Date.now() + backoffMs + RETRY_DEADLINE_SAFETY_MARGIN_MS > deadline) {
-    return fallback(row, cb, "retry_push_failed", attemptCount);
+    return fallback(row, cb, "retry_push_failed", ctx, attemptCount);
   }
 
   await db.orderEvent.create({
@@ -939,7 +1054,7 @@ async function retryOrFallback(
       orderId: row.orderId,
       userId: null,
       systemInitiated: true,
-      fetchImpl,
+      fetchImpl: ctx.fetchImpl,
     });
     return { outcome: "retry_sent" };
   } catch (err) {
@@ -961,7 +1076,7 @@ async function retryOrFallback(
         },
       },
     });
-    return fallback(row, cb, "retry_push_failed", attemptCount);
+    return fallback(row, cb, "retry_push_failed", ctx, attemptCount);
   }
 }
 
@@ -979,6 +1094,11 @@ export async function handleMpesaCallback(
   opts: HandleMpesaCallbackOptions = {},
 ): Promise<MpesaCallbackHandlingResult> {
   const requestStartMs = opts.requestStartMs ?? Date.now();
+  const ctx: CallbackCtx = {
+    source: opts.source ?? "callback",
+    reconciliationSource: opts.reconciliationSource ?? "stk_query",
+    fetchImpl: opts.fetchImpl,
+  };
 
   const { row, resolvedAfterRetries } = await resolveRow(cb);
 
@@ -987,7 +1107,7 @@ export async function handleMpesaCallback(
   }
 
   if (cb.resultCode === 0) {
-    return dispatchConfirm(row, cb, resolvedAfterRetries);
+    return dispatchConfirm(row, cb, resolvedAfterRetries, ctx, opts.amountUnavailable === true);
   }
-  return dispatchFail(row, cb, requestStartMs, opts.fetchImpl);
+  return dispatchFail(row, cb, requestStartMs, ctx);
 }

@@ -396,3 +396,33 @@ reach the code, the skip is not a privilege gain — and a fail-closed loop that
 permanently strands real money is the worse failure mode. Confirm separately
 that the skip is narrow: the provider/type assertion and the exact-id row
 resolution around it must still run unconditionally.
+
+## A falsy-coercion fix must be swept across sibling protocol parsers in the same module
+**Symptom (M4-2c):** A new `stkQuery` in the same file as an
+already-fixed `parseStkCallback` reproduced the pre-fix `Number()` guard
+(typeof + isNaN, no trim), so `""`/`" "` coerced to the success sentinel `0`.
+**Cause:** The prior fix was applied at the cited line; the new sibling
+function was written from the ADR's mapping table, which said "missing/NaN".
+**Rule going forward:** When a module gains a SECOND parser for the same
+provider's codes, diff its guard against the already-hardened one in the same
+file, line by line. Treat the hardened sibling as the spec, not the ADR prose.
+Escalate severity when a companion flag (e.g. an amount-skip) removes the
+secondary gate that caught the class last time.
+
+## Per-row try/catch is a per-PASS claim, not a per-file one
+**Symptom (M4-2c):** A two-pass batch job wrapped every row body in pass A and
+none in pass B; a throw there aborted the run AND skipped the aggregate
+ops-money alert, and with `ORDER BY createdAt ASC` one poison row starves the
+refund queue forever.
+**Rule going forward:** For any multi-pass batch job, check the try/catch
+placement in EACH loop separately, and ask what the stable ordering means for
+a permanently-failing row. Also check whether the end-of-run aggregate alert
+is inside the throw path — losing the alert is worse than losing the row.
+When re-verifying such a fix, confirm the aggregate alert is computed from a
+fresh global query rather than the in-memory run report — only a fresh query
+survives a row that threw mid-run. Also check whether the fixed pass and a
+sibling pass that already "happens to pass" enforce resilience at the same
+structural level (loop-level catch vs. per-call catches inside the row
+function) — the latter holds only by construction and silently regresses on
+the next edit; flag it as a non-blocking advisory rather than leaving it
+unrecorded.

@@ -7,6 +7,9 @@
   "functions": {
     "app/api/webhooks/**/*.ts": {
       "maxDuration": 30
+    },
+    "app/api/cron/mpesa-reconcile/route.ts": {
+      "maxDuration": 60
     }
   },
   "git": {
@@ -15,7 +18,8 @@
     }
   },
   "crons": [
-    { "path": "/api/cron/release-expired-reservations", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/release-expired-reservations", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/mpesa-reconcile", "schedule": "*/15 * * * *" }
   ],
   "cleanUrls": true,
   "trailingSlash": false,

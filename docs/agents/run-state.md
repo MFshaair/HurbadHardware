@@ -128,6 +128,71 @@ fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-08-31 — M4-2c (HRH-51, M-Pesa reconciliation job) added to the ledger, planned/NOT dispatched
+`product-planner` was dispatched on HRH-51 ("Background job every 15 min
+querying Daraja for pending transactions older than 20 min"), the PRD
+bullet both ADR M4-2 and ADR M4-2b had already named-but-deferred as
+`M4-2c`. Added `### M4-2c` to `FEATURES.md` between M4-2b and M5, status
+`planned, NOT dispatched, Owner: commerce-payments-engineer`, pending an
+explicit platform-architect design pass (same guardrail M4-2b was held to
+before its own dispatch).
+
+**Grounded, not paraphrased, on two points:**
+1. **The real Daraja mechanism is STK Query
+   (`POST /mpesa/stkpushquery/v1/query`)**, keyed on `CheckoutRequestID` —
+   a genuine, separate Daraja endpoint from OAuth/push/callback, and the
+   only one that answers "what happened to this specific push" outside a
+   callback. Its response shape is unverified against the real sandbox
+   (same standing `REPLACE_ME`-credentials risk as M4-2/M4-2b) and must be
+   mocked via the existing `fetchImpl` seam in tests.
+2. **A previously-unflagged real gap, found by reading
+   `src/lib/mpesaService.ts:41,355-372` and `src/lib/paymentErrors.ts:34-105`
+   directly:** M4-2's `PENDING_STALE_MS` (180s) sweep is **lazy** — it only
+   runs inside `assertNoBlockingAttempt`/Phase A when a *new* attempt is
+   made on the same order. There is no standalone process that ever
+   revisits an existing `PENDING` row on its own. A customer who abandons
+   checkout after the STK prompt (never retries, callback lost) leaves that
+   row `PENDING` forever, untouched by anything else in this repo. That is
+   the real target of the Linear description's "pending transactions older
+   than 20 min," not a duplicate of the 180s sweep. A **second**, separately
+   real target is `MpesaCallbackDeadLetter` rows (`resultCode: 0`,
+   unreviewed) — ADR M4-2b's own Known limits already name joining these
+   back to `PaymentTransaction` by `checkoutRequestId` as "the durable fix"
+   this item should provide. Both populations were named explicitly in the
+   ledger entry, with separate acceptance criteria for each, rather than
+   left as one undifferentiated "pending" query.
+
+**Cron wiring grounded against the existing precedent:** `vercel.json`
+already has one cron (M3-2's `/api/cron/release-expired-reservations`,
+`CRON_SECRET`-gated `GET` route) — confirmed this repo has no queue
+(no Redis/Upstash/`@vercel/kv` in `package.json`, per ADR M4-2 Decision 1),
+so this is correctly scoped as a plain serverless cron endpoint reusing
+that same pattern, not new infrastructure. Flagged, not resolved: the new
+route path (`/api/cron/mpesa-reconcile`) does not match `vercel.json`'s
+existing `"app/api/webhooks/**/*.ts"` → `maxDuration: 30` glob, so a
+builder must either add an explicit `functions` entry or bound the run
+with a per-invocation row-count limit.
+
+**Genuinely hard open question, deliberately NOT resolved by this agent
+and flagged for platform-architect:** if STK Query reports success for a
+`PENDING` row that never got a callback, does this job itself write
+`CONFIRMED` and call `confirmReservationsForOrder` (colliding with ADR
+M4-2b Decision 9's `LATE_SUCCESS`/double-payment machinery, since an
+unattended polling job is a new kind of actor on the money-state machine),
+or does it only durably record the finding for a human? Also flagged: this
+may be the point ADR M4-2b's deliberately-deferred
+`linkedPaymentTransactionId` column on `MpesaCallbackDeadLetter` actually
+becomes needed. Named as an open design question, not defaulted either way
+— this agent frames acceptance criteria, it does not pick the mechanism.
+
+**Architect review: explicit YES, before dispatch** — same class as
+M4-2/M4-2b's own ADRs (new external API integration + reuse of an existing
+state machine in a new non-request-driven context), not a UI-wiring item.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s new
+M4-2c section and this file were edited (no `src/`/`tests/` touched). HRH-51
+stays Backlog in Linear.
+
 ### 2026-08-30 — M4-2b (HRH-50, M-Pesa callback & retry) acceptance criteria sharpened; HMAC bullet corrected as factually wrong for Daraja
 `product-planner` was dispatched to sharpen M4-2b now that M4-2 (HRH-49) is
 `verified` and its ADR (`docs/agents/arch-decisions/M4-2-mpesa-stk-push.md`,

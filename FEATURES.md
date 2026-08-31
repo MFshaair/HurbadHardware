@@ -2890,6 +2890,162 @@ M4-1's/M4-2's own ADRs, not M2-4/M3-3a's UI-wiring shape.
 
 ---
 
+### M4-2c: M-Pesa Payment Reconciliation Job (HRH-51)
+**Status:** verified (gate-check.sh M4-2c exit 0 — 2026-08-31) · **Owner:** commerce-payments-engineer
+
+
+**Verified (production-readiness-gate, 2026-08-31):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 414 passed / 2 skipped; statements 89% (1401/1574), branches 79.64% (892/1120), functions 97.65% (208/213), lines 90.02% (1308/1453) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all 10 legs passed, including new M4-2c M-Pesa reconciliation cron leg: no-auth/wrong-bearer 401 (zero writes) → correct secret → real dead-letter DB-rejoin reconciliation pass → Order.paymentStatus CONFIRMED → reviewedAt stamped, zero Daraja calls needed
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M4-2c.md` STATUS: CLEAR (F1 HIGH stkQuery ResultCode coercion fixed, F2 MEDIUM pass-B loop error-handling fixed, A3 fixed, A1/A2/A4/A5 plus new A6/A7/A8 retained as documented non-blocking follow-ups, all re-verified by security-reviewer 2026-08-31)
+
+**Verification note:** this item went through one fix cycle (security-reviewer's initial review found F1 HIGH and F2 MEDIUM, fixed by commerce-payments-engineer, re-verified by security-reviewer who confirmed both fixes and documented remaining advisories as non-blocking). qa-dogfood-engineer independently extended dogfood.mjs with a real M-Pesa reconciliation cron leg (no-auth/wrong-bearer 401, correct secret → real dead-letter DB-rejoin confirming end-to-end with Order.paymentStatus CONFIRMED and reviewedAt stamped). Gate-check.sh ran clean this session — all checks GREEN, exit 0. Schema/migrations/test24 confirmed untouched via `git diff --stat` (no changes, per ADR). Pre-existing flake in test22-stripe-webhook.test.ts ("concurrent stock-gone redelivery" ~1/3 failure rate) was not observed during this gate run but remains unrelated to M4-2c.
+
+**Architect review: DONE (platform-architect, 2026-08-31).** Binding design
+is `docs/agents/arch-decisions/M4-2c-mpesa-reconciliation.md` — 11 decisions.
+Consequential ones: reuses the existing `handleMpesaCallback` CAS ladder
+rather than a parallel writer (gated by two new optional, default-preserving
+options: `source` and `amountUnavailable`); amount reconciliation is
+**skipped, not passed or failed**, for STK-Query-derived confirms, since
+STK Query carries no `Amount` and M4-2b's amount-mismatch rule would
+otherwise silently confirm-but-never-fulfil every reconciled order; auto-retry
+is disabled for reconciliation-sourced callbacks (a stale customer's phone
+must not ring 20 minutes after checkout was abandoned); **zero schema
+changes, zero migrations** — the deferred `linkedPaymentTransactionId`
+column is still not needed, the dead-letter/PaymentTransaction join is one
+indexed lookup on existing unique columns; an unresolvable dead-letter row
+is ops alerting only, never an automatic state transition, and `reviewedAt`
+is never stamped on a row the job did not actually resolve (this is the
+single most dangerous mistake the ADR flags — stamping it would silently
+empty the refund queue); a negative STK Query against a `ResultCode: 0`
+dead letter is treated as a contradiction and escalated to a human, not
+auto-resolved, since it's also the signature of a forged callback; the cron
+route reuses the existing `CRON_SECRET` convention verbatim (no new secret)
+with a `maxDuration` override, a row cap, AND a wall-clock deadline (the row
+cap alone is provably insufficient — 25 rows × 15s per-row Daraja timeout
+worst case exceeds `maxDuration`).
+
+**Linear description (verbatim, HRH-51, status Backlog):** "Background job
+every 15 min querying Daraja for pending transactions older than 20 min."
+
+**Provenance — this is the PRD bullet both prior ADRs already deferred by
+name.** ADR M4-2's Known limits ("No STK Query / reconciliation is built
+here... already flagged on the M4-2b ledger entry as scope-unconfirmed")
+and ADR M4-2b's Context/Known limits ("the durable fix is M4-2c's STK-Query
+reconciliation joining dead-letter rows back to `PaymentTransaction` by
+`checkoutRequestId`", and separately "in-flight callbacks 404 during the
+[secret-rotation] window and are recovered only by the not-yet-built M4-2c
+reconciliation job") both name this exact item as `M4-2c` and both leave
+real, unbuilt integration points for it. HRH-50's own Linear scope
+(re-confirmed live, not re-verified this session — see M4-2b's grounding
+note) explicitly excluded it. This is that bullet, now with its own Linear
+issue.
+
+- [ ] **The concrete Daraja API this job calls: STK Query
+      (`POST /mpesa/stkpushquery/v1/query`), keyed on `CheckoutRequestID`.**
+      This is a real, separate Daraja endpoint from OAuth (`/oauth/v1/
+      generate`), STK push (`/mpesa/stkpush/v1/processrequest`), and the
+      inbound callback — it is the only Daraja-side mechanism to ask "what
+      happened to this specific push" outside of waiting for a callback.
+      `CheckoutRequestID` is the only identifier it accepts, which is
+      exactly what `providerTxId` already stores (ADR M4-2 Decision 7) — no
+      new identifier needs to be invented. **Mocking boundary, same as
+      M4-2/M4-2b:** `MPESA_CONSUMER_KEY`/`SECRET`/`PASSKEY` are still
+      `REPLACE_ME` (`.env.example`, confirmed) and no real Daraja sandbox
+      has ever been exercised by this repo. Tests must mock this call
+      through the same `fetchImpl` injection seam `src/lib/mpesa.ts`
+      already establishes — never real network. The exact STK-Query
+      response envelope shape is therefore **unverified against the real
+      API**, same standing risk already flagged for the push/callback
+      shapes; the first real sandbox call is the moment to confirm it.
+- [ ] **Two distinct row populations, not one "pending" query — name both
+      explicitly, because they need different queries and different
+      actions.** Grounded by direct read of `src/lib/mpesaService.ts:41,
+      355-372` and `src/lib/paymentErrors.ts:34-105`: M4-2's
+      `MPESA_PENDING_STALE_MS` (180s) sweep is **lazy** — it is evaluated
+      only inside `assertNoBlockingAttempt`/Phase A when a customer (or a
+      retry) initiates a *new* `mpesa` attempt on the same order. **There
+      is no standalone process that ever visits an existing `PENDING` row
+      on its own.** A customer who receives the STK prompt, abandons the
+      checkout (never retries), and whose callback is lost leaves that
+      `PaymentTransaction` `PENDING` forever, invisible to everything else
+      in this repo. That is the genuine, previously-unflagged class of row
+      this job's "pending transactions older than 20 min" language maps
+      onto — not a duplicate of M4-2's 180s sweep (20 min is well past that
+      threshold and is not reachable by it, precisely because nothing
+      besides a fresh attempt ever runs the 180s check). The **second**,
+      separately-real population is `MpesaCallbackDeadLetter` rows
+      (`resultCode: 0`, `reviewedAt IS NULL`) — money received against no
+      matching `PaymentTransaction` (ADR M4-2b Decision 7), which STK
+      Query does not directly resolve (the money fact is already known from
+      the callback itself) but which this job **should** re-attempt to join
+      back to a `PaymentTransaction` by `checkoutRequestId`, per ADR M4-2b's
+      own Known-limits forward reference — ADR M4-2b Decision 4's 2-second
+      Phase-C race window only catches this at callback time; a wider,
+      periodic re-join catches slower races or transient failures that
+      window misses. **Acceptance:** the job's query and write path for
+      each population must be specified separately, and a test for each.
+- [ ] **Cron wiring — a straightforward Vercel Cron entry, same pattern as
+      the existing sweeper, not new infrastructure.** `vercel.json` today
+      has exactly one cron
+      (`{ "path": "/api/cron/release-expired-reservations", "schedule":
+      "*/5 * * * *" }`, built by M3-2/catalog-inventory-engineer, same
+      `CRON_SECRET`-gated `GET` route pattern this item should reuse). No
+      queue exists (`package.json` has no Redis/Upstash/`@vercel/kv`,
+      confirmed by ADR M4-2 Decision 1 and re-confirmed here) — this must
+      be a plain serverless cron endpoint, not a job-queue design. New
+      entry: `{ "path": "/api/cron/mpesa-reconcile", "schedule":
+      "*/15 * * * *" }`. **Duration guard, named explicitly:**
+      `vercel.json`'s `functions` block currently grants `maxDuration: 30`
+      only to `"app/api/webhooks/**/*.ts"` — a `/api/cron/...` route does
+      **not** match that glob and gets the platform default. If this job's
+      per-row Daraja round-trip time × row count can plausibly exceed the
+      default, either add an explicit `functions` entry for the new route
+      or bound the run with a hard row-count `LIMIT` per invocation (never
+      an unbounded scan) — a builder must pick one, not silently assume
+      the default duration is enough.
+- [ ] **Idempotency/safety of a retroactive CONFIRM — flagged as a genuinely
+      hard open design question for platform-architect, not resolved
+      here.** If STK Query reports `ResultCode: 0` for a `PENDING` row that
+      never received a callback, does this job itself CAS the row to
+      `CONFIRMED` and call `confirmReservationsForOrder` (money real, but
+      by 20 minutes the 15-minute reservation TTL has likely already
+      expired — the same `STOCK_GONE` shape ADR M4-2b Decision 5 already
+      built for late callbacks could apply), or does it only durably record
+      the finding (dead-letter-style) and defer the write to a human/ops
+      queue? This directly collides with ADR M4-2b Decision 9's
+      `LATE_SUCCESS`/double-payment machinery — an unattended polling job
+      writing `CONFIRMED` outside of a live customer request is a new kind
+      of actor on the money-state machine, and a naive parallel write path
+      (not reusing `handleMpesaCallback`'s existing CAS/resume logic) risks
+      exactly the double-payment/lost-update races M4-2b spent nine
+      decisions closing for the callback path. **Explicitly not decided
+      here:** whether this job should synthesize a "callback" and feed it
+      through the *existing* `handleMpesaCallback` state machine (treating
+      an STK-Query success as morally identical to a real Daraja callback)
+      rather than building a second, parallel write path. Also flagged:
+      resolving a dead-letter row's orphan status may need the nullable
+      `linkedPaymentTransactionId` column ADR M4-2b Decision 7 explicitly
+      deferred ("M4-2c can add it with its own migration when
+      reconciliation actually needs it") — confirm with platform-architect
+      whether this item is the point that migration is actually needed.
+
+**Architect review: explicit YES, before dispatch.** This item both reuses
+an existing state machine in a new, non-request-driven context (the
+retroactive-CONFIRM question above) and introduces a new external API call
+(STK Query) with an unverified response shape — same class as M4-2/M4-2b's
+own architect passes, not a UI-wiring item.
+
+**Not done, deliberately, per this task's scope:** no code written; only
+`FEATURES.md`'s new M4-2c section and `docs/agents/run-state.md` were
+edited (no `src/`/`tests/` touched). HRH-51 stays Backlog in Linear and
+`planned`/NOT dispatched on this ledger until platform-architect has run a
+design pass, per the same guardrail M4-2b was held to.
+
+---
+
 ## M5 — Orders, Admin & Notifications (blocked on M4)
 **Integration checkpoint:** admin mark-shipped → email sent → customer
 sees updated status, dogfooded end to end.

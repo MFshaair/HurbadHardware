@@ -113,6 +113,46 @@ secrets are still configured per-project as above.
    ```
    There is no admin UI for this table yet — query it directly (read-only
    Postgres access) until an M5-2 admin surface is built.
+8. **Reconciliation cron** (`GET /api/cron/mpesa-reconcile`, ADR
+   M4-2c/HRH-51, `docs/agents/arch-decisions/M4-2c-mpesa-reconciliation.md`):
+   runs every 15 minutes (`vercel.json`'s `crons` entry), authenticated the
+   same way as `/api/cron/release-expired-reservations` — Vercel
+   auto-sends `Authorization: Bearer $CRON_SECRET` on scheduled
+   invocations; **no new env var is required**, `CRON_SECRET` (already
+   provisioned per `.env.example`) covers both cron routes. It polls Daraja
+   (STK Query) for two populations the callback route can never revisit on
+   its own: `PaymentTransaction` rows stuck `PENDING` for 20+ minutes (the
+   callback was likely lost), and unresolved `MpesaCallbackDeadLetter` rows
+   (money received against no known attempt). Response body is
+   counts-only — no order ids, receipt numbers, or phone numbers — safe to
+   read directly from the Vercel cron log UI.
+   - **`reviewNote` semantics on `MpesaCallbackDeadLetter`** (read this
+     before treating a queue row as "resolved" or "safe to ignore"):
+     - `reviewedAt` is **only ever stamped by this job after it actually
+       resolves a row into a real `PaymentTransaction`** (a late-arriving
+       callback finally matched one that didn't exist when it first
+       arrived). A row with `reviewedAt` set has real money, correctly
+       reconciled — no ops action needed.
+     - A row that **stays in the queue** (`reviewedAt IS NULL`) but now has
+       a `reviewNote` starting `"stk_query corroborates ResultCode=0"` means
+       Safaricom has independently confirmed the money arrived and there is
+       still no matching order — **this is the queue's clearest "refund a
+       real customer" signal**, not a false positive to dismiss.
+     - A `reviewNote` starting `"CONTRADICTION"` means the stored callback
+       claims success but a fresh STK Query says it never succeeded —
+       treat as a possible forged/replayed callback (Daraja has no signing
+       mechanism; see ADR M4-2b Decision 1's residual risk) and **do not
+       refund without manually verifying against the Safaricom merchant
+       portal first**.
+     - A `reviewNote` starting `"stk_query indeterminate"` means Daraja
+       could not give a definitive answer this run — it will be re-queried
+       on a later run (bounded to the first 24h of the row's life to avoid
+       an unbounded Daraja call volume on permanently-stuck rows); no
+       action needed yet.
+     - This job **never** deletes a dead-letter row and never mutates
+       `resultCode`/`amount`/`rawPayload`/`checkoutRequestId` — it only
+       ever appends to `reviewNote` (or stamps `reviewedAt` on an actual
+       resolve).
 
 ## 5. SendGrid
 

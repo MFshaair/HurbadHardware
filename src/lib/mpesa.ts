@@ -298,6 +298,151 @@ export async function stkPush(
 }
 
 // ---------------------------------------------------------------------------
+// ADR M4-2c Decision 2 — STK Query (`/mpesa/stkpushquery/v1/query`). Purely
+// additive; reuses `buildDarajaTimestampAndPassword` and the module-scope
+// token cache/401-retry-once idiom verbatim. Zero DB/Next imports preserved.
+
+// Mirrors MPESA_STK_TIMEOUT_MS — a query has the same latency budget as a
+// push.
+export const MPESA_QUERY_TIMEOUT_MS = 15_000;
+
+export type StkQueryOutcome = "success" | "failed" | "indeterminate";
+
+export interface StkQueryResult {
+  outcome: StkQueryOutcome;
+  checkoutRequestId: string;
+  merchantRequestId: string | null;
+  /** The ORIGINAL PUSH's outcome code. null iff outcome === "indeterminate". */
+  resultCode: number | null;
+  resultDesc: string;
+  /** Bounded diagnostic copy for logs/events. Never persisted to
+   * PaymentTransaction.metadata. */
+  raw: Record<string, unknown>;
+}
+
+/**
+ * Queries Daraja for the outcome of a previously-sent STK push, keyed by
+ * `CheckoutRequestID`. Three-valued and NEVER THROWS for a business/
+ * transport outcome (ADR Decision 2) — it throws only on missing
+ * `MPESA_SHORTCODE`/`MPESA_PASSKEY` config, same as `stkPush`. A single
+ * unreachable row must never abort a reconciliation batch.
+ *
+ * `indeterminate` is the safe default: a "still processing"/unreachable
+ * answer must never be misread as failure (would terminalize a live
+ * payment) or as success (would confirm an order nobody paid for) — callers
+ * must never write a PaymentTransaction status for `indeterminate`.
+ */
+export async function stkQuery(
+  checkoutRequestId: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<StkQueryResult> {
+  const shortcode = process.env.MPESA_SHORTCODE;
+  const passkey = process.env.MPESA_PASSKEY;
+  const baseUrl = process.env.MPESA_BASE_URL ?? "https://sandbox.safaricom.co.ke";
+  if (!shortcode || !passkey) {
+    throw new Error("MPESA_SHORTCODE / MPESA_PASSKEY are not set");
+  }
+
+  const { timestamp, password } = buildDarajaTimestampAndPassword(shortcode, passkey);
+
+  const requestBody = {
+    BusinessShortCode: shortcode,
+    Password: password,
+    Timestamp: timestamp,
+    CheckoutRequestID: checkoutRequestId,
+  };
+
+  async function attempt(forceFreshToken: boolean): Promise<Response> {
+    if (forceFreshToken) cached = null;
+    const token = await getCachedAccessToken(fetchImpl);
+    return fetchImpl(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(MPESA_QUERY_TIMEOUT_MS),
+    });
+  }
+
+  const indeterminate = (raw: Record<string, unknown>): StkQueryResult => ({
+    outcome: "indeterminate",
+    checkoutRequestId,
+    merchantRequestId: null,
+    resultCode: null,
+    resultDesc: typeof raw.resultDesc === "string" ? raw.resultDesc : "",
+    raw,
+  });
+
+  let res: Response;
+  try {
+    res = await attempt(false);
+    if (res.status === 401 || res.status === 403) {
+      // ADR Decision 2 / M4-2 Decision 1's mandatory rule — invalidate-and-
+      // retry-once, reproduced verbatim from `stkPush`.
+      res = await attempt(true);
+    }
+  } catch (err) {
+    // Network error / AbortError / timeout — never a throw out of this
+    // function.
+    return indeterminate({
+      transportError: err instanceof Error ? err.name : "unknown",
+    });
+  }
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = (await res.json()) as Record<string, unknown>;
+  } catch {
+    parsed = null;
+  }
+
+  if (!res.ok) {
+    return indeterminate({ httpStatus: res.status, ...(parsed ?? {}) });
+  }
+
+  // HTTP 200 with an error envelope — e.g. "500.001.1001: transaction is
+  // being processed" / "unable to lock subscriber". Two levels of code:
+  // ResponseCode says whether the QUERY was accepted; ResultCode says what
+  // happened to the ORIGINAL PUSH. Conflating them is the bug to design
+  // against.
+  if (parsed?.errorCode !== undefined || parsed?.ResponseCode !== "0") {
+    return indeterminate({ ...(parsed ?? {}) });
+  }
+
+  // security-signoff M4-2c F1: same falsy-coercion trap as M4-2b F4
+  // (`parseStkCallback` above) — `Number("")`/`Number(" ")` are `0`, not
+  // `NaN`, which is the SUCCESS code. Reuse that guard verbatim: explicit
+  // typeof/trim BEFORE the numeric coercion, plus Number.isFinite so a
+  // garbled "Infinity" (typeof "string", not NaN) still can't slip past as
+  // a false negative of this guard — it is still separately routed to the
+  // safe `failed` branch below by `resultCode === 0` being false, but we
+  // must not treat it as validated.
+  const resultCodeRaw = parsed?.ResultCode;
+  const validResultCodeShape =
+    typeof resultCodeRaw === "number" ||
+    (typeof resultCodeRaw === "string" && resultCodeRaw.trim() !== "");
+  const resultCode = Number(resultCodeRaw);
+  if (!validResultCodeShape || !Number.isFinite(resultCode)) {
+    return indeterminate({ ...(parsed ?? {}) });
+  }
+
+  const resultDesc = typeof parsed?.ResultDesc === "string" ? parsed.ResultDesc.slice(0, 500) : "";
+  const merchantRequestId =
+    typeof parsed?.MerchantRequestID === "string" ? parsed.MerchantRequestID : null;
+
+  return {
+    outcome: resultCode === 0 ? "success" : "failed",
+    checkoutRequestId,
+    merchantRequestId,
+    resultCode,
+    resultDesc,
+    raw: { ...(parsed ?? {}) },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // ADR M4-2b Decision 1 — callback authentication. Daraja does not sign
 // callbacks (no header, no HMAC) — the entire trust boundary is an opaque
 // secret path segment composed into `MPESA_CALLBACK_URL` server-side (see

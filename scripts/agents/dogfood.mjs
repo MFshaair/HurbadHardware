@@ -49,6 +49,12 @@
 // FEATURES.md M3-1's own scope note — correctly NOT dogfooded here either,
 // since dogfooding an unwired code path would be theater.
 //
+// PLUS M4-2c's cron-wiring + real dead-letter DB-rejoin reconciliation leg
+// (added 2026-08-31 for M4-2c/HRH-51, qa-dogfood-engineer — see the
+// "M4-2c STATUS" header comment above dogfoodMpesaReconcileCron() below for
+// the full account of why this is a genuine leg, not theater, and why it
+// deliberately stops short of exercising population (a)'s STK-Query path).
+//
 // Extending this script to cover the real flow for each milestone is
 // qa-dogfood-engineer's explicit responsibility — see FEATURES.md and
 // docs/agents/run-state.md for which milestone is current. Do NOT let this
@@ -2237,6 +2243,350 @@ async function dogfoodMpesaCallback() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// M4-2c STATUS (added 2026-08-31, qa-dogfood-engineer, M4-2c/HRH-51):
+// this is a cron route (`src/app/api/cron/mpesa-reconcile/route.ts`, GET,
+// `Authorization: Bearer $CRON_SECRET`), not a browser-clicked journey — same
+// "no UI to wait for" situation as `release-expired-reservations`'s own
+// cron route (which, note, still has NO dogfood leg at all as of this
+// writing; this item is not blocked on that precedent existing first).
+//
+// tests/test25-mpesa-reconcile.test.ts's own cron-route tests (Decision 11
+// required tests 20-29) call `route.GET(request)` DIRECTLY, in-process
+// (confirmed by reading the file directly — no `spawn`, no `next dev`,
+// anywhere in it) — the exact same class of gap dogfoodStripeWebhook() and
+// dogfoodMpesaCallback() each closed for their own routes: nothing in this
+// repo has ever proven the cron route is actually registered and reachable
+// over real HTTP against a genuinely running `next dev` server, that
+// src/middleware.ts's matcher doesn't intercept `/api/cron/mpesa-reconcile`,
+// or that the real env-loaded `CRON_SECRET` (not vitest's own env) is read
+// and compared correctly by a real running server.
+//
+// Per the ADR (Decision 4, Decision 4.1/4.2), population (b)'s DB-rejoin
+// path resolves a dead letter against a real matching PaymentTransaction
+// with ZERO Daraja calls — same "an inbound confirm path that never calls
+// the external provider" shape dogfoodMpesaCallback()'s own header comment
+// already exploited for the sibling callback route. That makes a FULL,
+// genuine happy-path leg achievable here too, with no sandbox credentials:
+// seed a real PENDING mpesa PaymentTransaction + a real matching
+// resultCode:0 dead letter via Prisma, then drive the route over real HTTP
+// with no/wrong/correct `CRON_SECRET` and assert the real DB-rejoin
+// confirm (Order.paymentStatus CONFIRMED, dead letter reviewedAt stamped).
+//
+// Deliberately NOT exercised here: population (a)'s STK-Query path (would
+// need a mocked Daraja response, and the production route accepts no
+// `fetchImpl` injection from outside its own process — there is no seam to
+// reach into the spawned child server's module state the way test25's
+// in-process `fetchImpl` parameter does) — that logic is already
+// exhaustively covered by test25's 45 in-process tests against real
+// Postgres; this leg's job is ONLY to prove the route/middleware/env wiring
+// a real HTTP request depends on, which in-process tests structurally
+// cannot prove. Because the production route calls
+// `runMpesaReconciliation()` with no `fetchImpl` override, if any OTHER
+// stale-eligible mpesa PENDING row happens to exist in the shared dev DB
+// (population (a), age > 20 min — none of THIS leg's own fixtures qualify,
+// by construction, since its PaymentTransaction is deliberately left
+// fresh), the route would attempt a real network call to Daraja's sandbox
+// for it; this is bounded and non-fatal by the ADR's own design (Decision
+// 6.4's 50s wall-clock deadline caps the run regardless, and `indeterminate`
+// never throws), so it cannot hang this leg indefinitely even in the
+// unlikely event it happens, but it is worth knowing about if this leg is
+// ever slower than expected.
+// ---------------------------------------------------------------------------
+async function dogfoodMpesaReconcileCron() {
+  const PORT = process.env.DOGFOOD_MPESA_RECONCILE_PORT ?? "3111";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const BOOT_TIMEOUT_MS = 60_000;
+  const cronSecret = randomBytes(32).toString("hex");
+
+  console.log(
+    "[dogfood] M-Pesa reconciliation cron: no/wrong secret -> 401 (zero writes) -> correct secret -> " +
+      "real dead-letter DB-rejoin reconciliation pass, via real HTTP against a real running server...",
+  );
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development", CRON_SECRET: cronSecret },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  const uniq = Date.now();
+  let productId;
+  let addressId;
+  let checkoutRequestId;
+
+  async function cleanup() {
+    try {
+      // Same FK-ordering discipline as dogfoodMpesaCallback()'s cleanup:
+      // MpesaCallbackDeadLetter has no FK to Order/PaymentTransaction at
+      // all (ADR Decision 4.1 — the join is a lookup, not a stored
+      // relation), so it can be deleted independently; Order -> Address has
+      // no cascade, so delete the Order (which DOES cascade its own
+      // children) before the Address it points at.
+      if (checkoutRequestId) {
+        await db.mpesaCallbackDeadLetter.deleteMany({ where: { checkoutRequestId } });
+      }
+      if (addressId) {
+        await db.order.deleteMany({ where: { shippingAddressId: addressId } });
+        await db.address.delete({ where: { id: addressId } });
+      }
+      if (productId) {
+        await db.product.delete({ where: { id: productId } });
+      }
+    } catch (err) {
+      console.error(`[dogfood] WARN: fixture cleanup failed: ${err.message}`);
+      throw err;
+    }
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    const product = await db.product.create({
+      data: {
+        slug: `dogfood-m4-2c-reconcile-${uniq}`,
+        name: `Dogfood M4-2c Reconcile Fixture ${uniq}`,
+        category: "test",
+        brand: "DogfoodBrand",
+        images: [],
+        specs: {},
+      },
+    });
+    productId = product.id;
+    const variant = await db.productVariant.create({
+      data: {
+        productId,
+        sku: `DOGFOOD-M4-2C-SKU-${uniq}`,
+        name: "Dogfood M4-2c Reconcile Fixture Variant",
+        attributes: { Color: "Black" },
+        images: [],
+      },
+    });
+    const quantity = 1;
+    const inventory = await db.regionalInventory.create({
+      data: { variantId: variant.id, region: "KE", onHand: 10, reserved: quantity, safetyBuffer: 0 },
+    });
+    const address = await db.address.create({
+      data: {
+        fullName: "Dogfood M4-2c Reconcile Buyer",
+        phone: "+254700000004",
+        region: "KE",
+        city: "Nairobi",
+        postalCode: "00100",
+        street: "1 Dogfood Reconcile Street",
+      },
+    });
+    addressId = address.id;
+    const totalAmount = "1000.00";
+    const order = await db.order.create({
+      data: {
+        orderNumber: `HH-TEST-DOGFOOD-M4-2C-${uniq}`,
+        region: "KE",
+        currency: "KES",
+        subtotalAmount: totalAmount,
+        taxAmount: "0",
+        shippingAmount: "0",
+        totalAmount,
+        shippingAddressId: address.id,
+        paymentStatus: "PENDING",
+      },
+    });
+    await db.orderItem.create({
+      data: { orderId: order.id, variantId: variant.id, quantity, unitPrice: totalAmount, totalPrice: totalAmount },
+    });
+    await db.inventoryReservation.create({
+      data: {
+        orderId: order.id,
+        inventoryId: inventory.id,
+        variantId: variant.id,
+        quantity,
+        status: "ACTIVE",
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    // Deliberately left FRESH (updatedAt not backdated) so this row is
+    // never itself eligible for population (a)'s stale-PENDING scan — this
+    // leg means to prove ONLY the population (b) DB-rejoin path.
+    checkoutRequestId = `ws_CO_dogfood_reconcile_${uniq}`;
+    const paymentTransaction = await db.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: "mpesa",
+        providerTxId: checkoutRequestId,
+        idempotencyKey: `dogfood-m4-2c-idem-${uniq}`,
+        amount: totalAmount,
+        currency: "KES",
+        status: "PENDING",
+        metadata: {
+          merchantRequestId: "dogfood-m4-2c-merch-req",
+          phoneNumber: "254700000004",
+          orderTotal: totalAmount,
+          amountRequested: totalAmount,
+          roundingDelta: "0.00",
+        },
+      },
+    });
+
+    // Population (b) fixture: a resultCode:0 dead letter whose
+    // checkoutRequestId matches the PENDING PaymentTransaction above (the
+    // Phase-C race M4-2b's own ~3s orphan-resolve window missed) — the
+    // DB-rejoin path (ADR M4-2c Decision 4.1/4.2) resolves this with ZERO
+    // Daraja calls needed, which is what makes a full real-HTTP happy-path
+    // leg possible with no sandbox credentials.
+    const deadLetter = await db.mpesaCallbackDeadLetter.create({
+      data: {
+        checkoutRequestId,
+        merchantRequestId: "dogfood-m4-2c-merch-req",
+        resultCode: 0,
+        resultDesc: "The service request is processed successfully.",
+        amount: totalAmount,
+        mpesaReceiptNumber: "DOGFOODM42CRCPT1",
+        transactionDate: "20260831120000",
+        phoneNumber: "254700000004",
+        rawPayload: {
+          Body: { stkCallback: { CheckoutRequestID: checkoutRequestId, ResultCode: 0 } },
+        },
+      },
+    });
+    // Backdate past DEADLETTER_MIN_AGE_MS (2 min) — same TZ-safe raw-SQL
+    // idiom as tests/test25-mpesa-reconcile.test.ts's own
+    // backdatePaymentTransaction() helper (never a precomputed JS Date
+    // bound as a raw-SQL parameter — this repo's Postgres session runs a
+    // +03 `TimeZone` GUC that would silently shift a bound JS Date by 3
+    // hours).
+    await db.$executeRaw`
+      UPDATE "MpesaCallbackDeadLetter"
+      SET "createdAt" = (now() AT TIME ZONE 'UTC') - (300000 * INTERVAL '1 millisecond')
+      WHERE id = ${deadLetter.id}
+    `;
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // (1) No Authorization header -> byte-identical 401, zero writes.
+    const noAuthRes = await fetch(`${BASE_URL}/api/cron/mpesa-reconcile`);
+    const noAuthBody = await noAuthRes.json().catch(() => null);
+    if (
+      noAuthRes.status !== 401 ||
+      JSON.stringify(noAuthBody) !== JSON.stringify({ error: "Unauthorized" })
+    ) {
+      throw new Error(
+        `Expected byte-identical 401 {"error":"Unauthorized"} with no Authorization header, got ${noAuthRes.status}: ${JSON.stringify(noAuthBody)}`,
+      );
+    }
+    const ptxAfterNoAuth = await db.paymentTransaction.findUniqueOrThrow({ where: { id: paymentTransaction.id } });
+    const dlAfterNoAuth = await db.mpesaCallbackDeadLetter.findUniqueOrThrow({ where: { id: deadLetter.id } });
+    if (ptxAfterNoAuth.status !== "PENDING" || dlAfterNoAuth.reviewedAt !== null) {
+      throw new Error("An unauthenticated cron request caused a DB write");
+    }
+
+    // (2) Wrong bearer -> 401, zero writes.
+    const wrongAuthRes = await fetch(`${BASE_URL}/api/cron/mpesa-reconcile`, {
+      headers: { Authorization: "Bearer totally-wrong-value" },
+    });
+    const wrongAuthBody = await wrongAuthRes.json().catch(() => null);
+    if (
+      wrongAuthRes.status !== 401 ||
+      JSON.stringify(wrongAuthBody) !== JSON.stringify({ error: "Unauthorized" })
+    ) {
+      throw new Error(
+        `Expected byte-identical 401 {"error":"Unauthorized"} with a wrong bearer, got ${wrongAuthRes.status}: ${JSON.stringify(wrongAuthBody)}`,
+      );
+    }
+    const ptxAfterWrongAuth = await db.paymentTransaction.findUniqueOrThrow({ where: { id: paymentTransaction.id } });
+    if (ptxAfterWrongAuth.status !== "PENDING") {
+      throw new Error("A wrong-bearer cron request caused a DB write");
+    }
+
+    // (3) Correct secret -> a genuine reconciliation pass over real HTTP
+    // against a real running server: the dead letter joins back to the
+    // PENDING PaymentTransaction (population b, Decision 4.2) and is
+    // confirmed via the full amount-checked path, with ZERO Daraja calls.
+    const okRes = await fetch(`${BASE_URL}/api/cron/mpesa-reconcile`, {
+      headers: { Authorization: `Bearer ${cronSecret}` },
+    });
+    const okBody = await okRes.json().catch(() => null);
+    if (okRes.status !== 200 || !okBody || typeof okBody.deadLetterResolved !== "number") {
+      throw new Error(
+        `Expected 200 with a counts body from an authorized cron request, got ${okRes.status}: ${JSON.stringify(okBody)}`,
+      );
+    }
+    // No checkoutRequestId, receipt number, order id, MSISDN, or amount, and
+    // definitely never the secret itself (ADR Decision 6.5).
+    const bodySerialized = JSON.stringify(okBody);
+    if (bodySerialized.includes(checkoutRequestId) || bodySerialized.includes(cronSecret)) {
+      throw new Error(
+        `Cron response body leaked a secret/identifier it must never carry (ADR Decision 6.5): ${bodySerialized}`,
+      );
+    }
+    if (okBody.deadLetterResolved < 1) {
+      throw new Error(
+        `Expected the seeded dead letter to be resolved (deadLetterResolved >= 1), got: ${JSON.stringify(okBody)}`,
+      );
+    }
+
+    const orderAfterReconcile = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    if (orderAfterReconcile.paymentStatus !== "CONFIRMED") {
+      throw new Error(
+        `Expected Order.paymentStatus === "CONFIRMED" after a real reconciliation pass, got: ${orderAfterReconcile.paymentStatus}`,
+      );
+    }
+    const ptxAfterReconcile = await db.paymentTransaction.findUniqueOrThrow({ where: { id: paymentTransaction.id } });
+    if (ptxAfterReconcile.status !== "CONFIRMED") {
+      throw new Error(`Expected PaymentTransaction.status === "CONFIRMED", got: ${ptxAfterReconcile.status}`);
+    }
+    const dlAfterReconcile = await db.mpesaCallbackDeadLetter.findUniqueOrThrow({ where: { id: deadLetter.id } });
+    if (dlAfterReconcile.reviewedAt === null || !dlAfterReconcile.reviewNote?.includes(paymentTransaction.id)) {
+      throw new Error(
+        `Expected the dead letter row to be stamped reviewedAt with a reviewNote naming the joined PaymentTransaction id, got: ${JSON.stringify(dlAfterReconcile)}`,
+      );
+    }
+
+    console.log(
+      "[dogfood] PASS: M-Pesa reconciliation cron no-auth/wrong-bearer 401 (zero writes) -> correct " +
+        "secret -> real dead-letter DB-rejoin -> Order.paymentStatus CONFIRMED -> reviewedAt stamped, " +
+        "zero Daraja calls needed",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
 await dogfoodRegisterLogin();
 await dogfoodHomepage();
 await dogfoodCatalogSearch();
@@ -2245,6 +2595,7 @@ await dogfoodCheckout();
 await dogfoodStripeWebhook();
 await dogfoodMpesaRouteWiring();
 await dogfoodMpesaCallback();
+await dogfoodMpesaReconcileCron();
 
 console.log(
   "[dogfood] ALL PASS (M0 baseline + M1 register->login + M2-4 homepage/category-card/" +
@@ -2258,6 +2609,11 @@ console.log(
     "no Daraja call needed; full happy-path STK-push leg still pending real sandbox creds + mounted UI) + " +
     "M4-2b real M-Pesa callback delivery (wrong-token 404/malformed-body 400, both zero-write, then a real " +
     "matched ResultCode:0 callback -> CONFIRMED -> onHand decremented -> idempotent redelivery, no Daraja " +
-    "mocking needed since the confirm path is fully local); " +
+    "mocking needed since the confirm path is fully local) + " +
+    "M4-2c real reconciliation cron wiring (no-auth/wrong-bearer 401 zero-write, then a real dead-letter " +
+    "DB-rejoin reconciliation pass -> Order.paymentStatus CONFIRMED -> reviewedAt stamped, no Daraja " +
+    "mocking needed for this path either; population (a)'s STK-Query path deliberately NOT dogfooded here " +
+    "— see dogfoodMpesaReconcileCron()'s own header comment — and remains covered by test25's 45 " +
+    "in-process tests instead); " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

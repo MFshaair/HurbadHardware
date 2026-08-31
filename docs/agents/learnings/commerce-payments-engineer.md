@@ -515,6 +515,97 @@ fail-closed path with a value that actually satisfies it. Confirm with
 that nothing else in the suite silently depended on the file's old
 committed value.
 
+## A fixture that "ages" a row via raw SQL must never bind a JS `Date` as the parameter — it silently shifts by the session's `TimeZone` GUC offset
+
+**Symptom:** M4-2c's reconciliation job (`mpesaReconcileService.ts`) selects
+`PaymentTransaction`/`MpesaCallbackDeadLetter` rows by `updatedAt`/
+`createdAt` age. The natural test fixture is `db.$executeRaw\`UPDATE ...
+SET "updatedAt" = ${new Date(Date.now() - ageMs)} WHERE id = ${id}\`` — this
+looks identical to the safe, already-established pattern this codebase uses
+for READS (`mpesaCallbackService.ts:904`'s `expiresAt: { gt: new
+Date(Date.now() + needMs) }`, a Prisma-typed `where` filter). Used as a raw
+`$executeRaw` WRITE parameter instead, it silently stored a value 3 hours
+in the FUTURE of what was intended (this repo's dev Postgres runs a +03
+`TimeZone` GUC) — every "backdated 25-minute-old row" fixture was actually
+only ~2h35m in the future relative to the real target, and every single
+reconciliation test that depended on the row clearing the staleness
+threshold failed with `report.confirmed`/`scannedPending` etc. silently 0,
+with no error thrown anywhere to point at the cause.
+
+**Cause:** Prisma's typed query builder (used for `where` filters) always
+serializes a JS `Date` as UTC before sending it to Postgres, regardless of
+the session's `TimeZone` GUC — this is the TZ-safety this repo's docs
+already praise it for. But `$executeRaw`'s tagged-template parameter
+binding goes through the raw `pg` driver's own parameter serialization,
+which formats a JS `Date` bound against a `timestamp` (no time zone) column
+using the **session's local `TimeZone`**, not UTC — a completely different
+code path with the opposite behavior for the exact same JS type. This is
+the same root bug class as the already-known "never write bare `now()` in
+raw SQL" trap (ADR M4-2c's own grounding section calls it out by name), but
+manifests on the PARAMETER side, not the SQL-text side, so grepping for
+`now()` in the raw SQL string doesn't catch it.
+
+**Rule going forward:** for any raw-SQL fixture helper that needs to set a
+timestamp column to an arbitrary past/future instant (not "now"), never
+bind a precomputed JS `Date` as the parameter. Instead, compute the target
+via SQL-side interval arithmetic off the same TZ-safe anchor production
+code already uses: `(now() AT TIME ZONE 'UTC') - (${ms}::float * INTERVAL
+'1 millisecond')`. This is the exact idiom `mpesaCallbackService.ts`'s own
+CAS statements already use for `updatedAt` — reusing it for a TEST fixture
+too closes the only gap where a JS `Date` still reaches a raw SQL
+parameter. Verify empirically with a throwaway one-off script (`node -e
+"..."` against the real dev DB) that a fixture's backdated value round-trips
+through a `findUnique` at the offset you expect BEFORE trusting a whole
+test file built on it — this bug produced zero thrown errors and looked
+identical to "the production code just isn't finding the row," which is a
+much more expensive hypothesis to debug from.
+
+## A GLOBAL-scan background job's test file needs its OWN row-quarantine `afterEach`, not just an `afterAll` cleanup list
+
+**Symptom:** M4-2c's reconciliation job selects rows by `status`/`resultCode`
++ age criteria across the ENTIRE table — unlike every prior payment test
+file in this repo (test18/20/23/24), which only ever touch rows reachable
+via a specific `checkoutRequestId`/`orderId` the test itself created and
+passes in. Following the established `cleanupOrderIds`/
+`cleanupCheckoutRequestIds` + single `afterAll` deletion pattern verbatim
+left every test's deliberately-"stale" fixture row (a row a test leaves
+`PENDING`/unresolved on purpose, e.g. the `indeterminate`/`abandon`/orphan
+tests) sitting in the real dev Postgres for the rest of the file's run —
+picked up again by every LATER test's own `runMpesaReconciliation()` call,
+which has no way to distinguish "a row THIS test seeded" from "a row a
+PRIOR test in the same file seeded and never got quarantined," and
+corrupting that later test's counts (`scannedPending`/`confirmed`/etc. off
+by however many leaked rows existed, `queried.has(...)` sets missing
+expected ids because the row cap got consumed by earlier leftovers first).
+Worse: because `afterAll` only runs once the process reaches the end of the
+file, any run that gets interrupted (a timeout, a killed process) leaves
+those rows in the shared dev database PERMANENTLY, silently corrupting
+every future run of this file (and any other file that also does a global
+scan) until manually cleaned up — which is exactly what happened here and
+required a one-off cleanup script before tests would pass reproducibly.
+
+**Cause:** the `afterAll`-only cleanup pattern is correct for a test file
+whose production code under test only ever reads/writes rows by an
+explicit id the test supplies — cross-test pollution is structurally
+impossible there. It is NOT sufficient for a test file covering a job whose
+whole job is "find rows nobody told me about, by scanning."
+
+**Rule going forward:** for any test file covering a global-scan
+background job (a cron/sweep/reconciliation job — this repo now has two:
+M3-2's reservation-release sweep and this item), add an `afterEach` that
+actively quarantines every row the file has created SO FAR (not just at the
+end) by bumping its age-relevant timestamp column(s) back to "fresh" via
+the SAME TZ-safe SQL idiom above — this makes each test's own
+`runMpesaReconciliation()` call see ONLY the rows that specific test itself
+backdated within its own body, regardless of what earlier tests in the same
+file left behind. Do this in addition to, not instead of, the `afterAll`
+hard-delete cleanup (which still matters for final DB hygiene and for
+`docker-compose`/CI environments that don't persist between runs). If a
+run is ever interrupted before `afterAll` fires, immediately re-verify with
+a direct DB query (`SELECT count(*) FROM "X" WHERE <this file's stale
+criteria>`) before trusting the next run's results — don't assume a clean
+slate.
+
 ## Existing mocked-SDK fallback pattern (context, not yet a lesson)
 
 `tests/test4-stripe.test.ts` already establishes the pattern for this
@@ -525,3 +616,66 @@ fall back to a mocked SDK and test request shape instead. Follow this
 same pattern for any new Stripe/M-Pesa test rather than inventing a new
 one — it's how this repo lets tests run meaningfully without requiring
 real sandbox credentials to be present.
+
+## A new protocol parser in a file with an already-hardened sibling parser must be diffed against that sibling, not just against the ADR's prose
+
+**Symptom:** M4-2c (`security-signoff/M4-2c.md` F1) added `stkQuery`'s
+`ResultCode` coercion to `src/lib/mpesa.ts` and reintroduced the EXACT bug
+class that `parseStkCallback`'s `ResultCode` coercion, three functions
+above it in the same file, had already been hardened against in the prior
+item (M4-2b F4): `Number("")`/`Number(" ")`/`Number("\n")` coerce to `0`
+(the SUCCESS code), not `NaN`, so a bare `typeof x === "string" &&
+!Number.isNaN(Number(x))` guard lets an empty/whitespace `ResultCode`
+through as a confirmed payment. Writing the new function from the ADR's
+decision table alone (which says "missing/NaN -> indeterminate") missed
+the fix that only exists in the sibling function's code + its inline
+"security-signoff M4-2b F4" comment, not in the ADR text itself.
+
+**Cause:** ADRs capture the DESIGN decision ("indeterminate is the safe
+default"); they don't always capture every hardening detail a prior
+security review forced into the code (a `.trim() !== ""` guard is an
+implementation fix, not a design decision, so it never made it into the
+ADR's prose). A second parser for the same wire protocol, written against
+the ADR alone, silently regresses past a fix that already exists three
+functions above it.
+
+**Rule going forward:** when adding a second parser/coercion for a field
+that an existing function in the SAME FILE already parses/coerces
+(especially anything reachable from Daraja/Stripe's untrusted response
+body feeding a money-path boolean), grep the file for the field name
+first (`grep -n "ResultCode" src/lib/mpesa.ts`), read every existing
+guard around it end to end, and copy the guard verbatim rather than
+re-deriving it from the ADR. If the two guards end up different, that
+difference must be a deliberate, commented decision — not an oversight.
+Also: `Number.isFinite`, not just `!Number.isNaN`, is the correct
+completeness check for any coercion whose FAILED branch (not just its
+SUCCESS branch) still gets used downstream (`"Infinity"` is not `NaN` but
+is nonsense as a `resultCode` value) — bare `Number.isNaN` only protects
+the equality check immediately following it, not every later consumer of
+the coerced number.
+
+## A cron job's second processing pass needs its OWN per-row try/catch at the loop, not just inside the functions it calls
+
+**Symptom:** M4-2c (`security-signoff/M4-2c.md` F2) — pass A of
+`runMpesaReconciliation` (stale-PENDING sweep) wrapped its entire per-row
+body in try/catch inside `reconcilePendingRow` itself. Pass B (dead-letter
+re-join/corroboration) had SOME internal try/catch (around
+`handleMpesaCallback`) but three other DB calls in the same function
+(`findUnique` at the top, and two of the three unresolved-orphan
+`update` calls) were unwrapped — a throw from any of them propagated out
+of the per-row function, out of the loop, and silently skipped every
+remaining row for that run (createdAt ASC ordering meant a single
+permanently-throwing row could starve the run's refund queue forever) AND
+suppressed the end-of-run aggregate alert that ops depends on.
+
+**Rule going forward:** for any loop that must satisfy "one bad row never
+aborts the batch," don't trust that wrapping SOME of the row's internal
+calls is equivalent to wrapping all of them — put the try/catch at the
+LOOP itself, around the entire per-row function call
+(`try { await processRow(row) } catch (err) { report.errors++; log; }`),
+so it's structurally impossible for a future edit inside `processRow` to
+add a new unwrapped call and reopen the same class of bug. Then write a
+test that forces the throw from the DEEPEST unwrapped call the finding
+identified (not just the shallowest), and assert BOTH that later rows in
+the same run still get processed AND that any end-of-run aggregate/alert
+step still executes.

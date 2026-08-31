@@ -375,6 +375,37 @@ work" in reverse (manufacturing work instead of framing it). Revisit only
 when a future item actually scopes the consumer (e.g. a global nav/header
 with a live cart badge).
 
+## A "sweep" or "stale-row cleanup" named in an ADR may be lazy, not periodic — check the trigger, not just the threshold
+**Symptom:** M4-2c's Linear description ("pending transactions older than
+20 min") could easily have been dismissed as fully redundant with M4-2's
+already-verified `PENDING_STALE_MS` (180s) sweep — same shape of row
+(`PaymentTransaction`, `PENDING`, mpesa), just a longer threshold, so "why
+would a 20-minute-old PENDING row even exist, the 180s sweep already
+handles it."
+**Cause:** Reading `src/lib/mpesaService.ts:41,355-372` and
+`src/lib/paymentErrors.ts:34-105` directly showed the 180s sweep is
+**lazy** — it is evaluated only inside `assertNoBlockingAttempt`/Phase A,
+i.e. only when a *new* payment attempt is initiated on the same order.
+There is no standalone process that ever revisits an existing `PENDING`
+row on its own. A customer who receives the STK prompt, abandons checkout,
+and never retries leaves that row `PENDING` forever — a real, previously
+unflagged gap that a threshold-only reading of the ADR's "stale sweep"
+language would have hidden. An ADR describing a stale-row rule by its
+threshold value alone doesn't tell you whether the rule is periodic
+(visits every row on a schedule) or lazy (only fires as a side effect of
+some other action touching that specific row) — those have very different
+failure modes, and only the second needs an unattended job to ever close
+the gap at all.
+**Rule going forward:** Before treating a new item's "background job" as
+redundant with an existing "sweep"/"stale-row cleanup" named in a prior
+ADR, read the actual trigger site of that sweep (not just its threshold
+constant) — grep for where the check is called from. If it only runs
+inside a request handler triggered by a *different* future action (a new
+attempt, a page load, a user click), it is lazy and does not close the gap
+a periodic job would; name that distinction explicitly in the new item's
+acceptance criteria rather than assuming threshold-order alone ("20 min is
+longer than 180s, so it's covered") settles the question.
+
 ## A named security mechanism carried forward from one provider's item can be factually wrong for a sibling provider
 **Symptom:** M4-2b's PRD/Linear-inherited acceptance criteria named "HMAC-
 SHA256 signature verification" for the M-Pesa Daraja callback route,
