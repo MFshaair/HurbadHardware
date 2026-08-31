@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, after } from "next/server";
 import { verifyMpesaCallbackToken, parseStkCallback, MpesaCallbackMalformedError, type StkCallback } from "@/lib/mpesa";
 import { handleMpesaCallback } from "@/lib/mpesaCallbackService";
 
@@ -57,7 +57,18 @@ export async function POST(
   }
 
   try {
-    const { outcome } = await handleMpesaCallback(cb, { requestStartMs, rawBody });
+    // M5-1a Decision 8: `deadlineAt: requestStartMs + 28_000`. Note the
+    // collision — M4-2b Decision 12's retry path may already have consumed
+    // 27s of the 30s budget on a redelivery; the email dispatch's own
+    // deadline guard then correctly declines to start and records
+    // `no_time_budget` rather than risk being killed mid-send. Accepted,
+    // per the ADR: that path is the "Daraja is already down" pathological
+    // case.
+    const { outcome } = await handleMpesaCallback(cb, {
+      requestStartMs,
+      rawBody,
+      emailDeps: { schedule: after, deadlineAt: requestStartMs + 28_000 },
+    });
     return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted", outcome }, { status: 200 });
   } catch (err) {
     console.error(`[mpesa-callback] ${cb.checkoutRequestId} failed`, err);

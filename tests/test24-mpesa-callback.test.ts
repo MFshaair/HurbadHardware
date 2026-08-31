@@ -51,6 +51,21 @@ vi.mock("next/headers", () => ({
 vi.mock("@/lib/auth", () => ({ auth: { api: { getSession: async () => null } } }));
 vi.mock("@/lib/cartCookie", () => ({ getCartSessionId: async () => undefined }));
 
+// M5-1a (HRH-52) regression note: `handleMpesaCallback` now unconditionally
+// calls `dispatchOrderConfirmationEmail` on every observed CONFIRMED
+// transition (ADR Decision 2/2.1). This file never passes `opts.emailDeps`
+// (email behavior is out of scope here —
+// tests/test26-order-confirmation-email.test.ts owns it), so the function
+// would otherwise default to `inlineAfterResponse`, which is genuinely
+// fire-and-forget and fired a REAL, unawaited background
+// ORDER_CONFIRMATION_EMAIL_DISPATCHED `OrderEvent` write that landed
+// asynchronously and broke this file's own required test 9's strict
+// "zero PaymentTransaction/OrderEvent writes" count (confirmed empirically
+// — this was NOT the pre-existing documented flake). Mocked out entirely.
+vi.mock("../src/lib/orderNotificationService", () => ({
+  dispatchOrderConfirmationEmail: vi.fn(async () => {}),
+}));
+
 let mpesaLib: typeof import("../src/lib/mpesa");
 let callbackService: typeof import("../src/lib/mpesaCallbackService");
 let paymentService: typeof import("../src/lib/paymentService");

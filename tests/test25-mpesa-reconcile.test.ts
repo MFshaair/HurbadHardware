@@ -22,6 +22,20 @@ import { PrismaClient, Prisma, Region } from "@prisma/client";
 
 const db = new PrismaClient();
 
+// M5-1a (HRH-52) regression note: `handleMpesaCallback`/
+// `runMpesaReconciliation` now unconditionally call
+// `dispatchOrderConfirmationEmail` on every observed CONFIRMED transition
+// (ADR Decision 2/2.1). This file never passes `opts.emailDeps` (email
+// behavior is out of scope here —
+// tests/test26-order-confirmation-email.test.ts owns it), so it would
+// otherwise default to `inlineAfterResponse` (genuinely fire-and-forget)
+// and fire a REAL, unawaited background OrderEvent write that can land
+// asynchronously across this file's own row-count/event-count assertions.
+// Mocked out entirely — same fix as test22/test24.
+vi.mock("../src/lib/orderNotificationService", () => ({
+  dispatchOrderConfirmationEmail: vi.fn(async () => {}),
+}));
+
 let mpesaLib: typeof import("../src/lib/mpesa");
 let reconcileService: typeof import("../src/lib/mpesaReconcileService");
 let route: typeof import("../src/app/api/cron/mpesa-reconcile/route");

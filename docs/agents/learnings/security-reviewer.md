@@ -426,3 +426,27 @@ structural level (loop-level catch vs. per-call catches inside the row
 function) — the latter holds only by construction and silently regresses on
 the next edit; flag it as a non-blocking advisory rather than leaving it
 unrecorded.
+
+## A pre-check guard separated from its guarded action by a DB round trip
+**Symptom (M5-1a):** A "if zero attempts fit the budget, do not write the
+claim" rule was implemented as a `Date.now()` guard immediately above the
+claim transaction — but the claim itself is a DB round trip, so the retry
+loop's own re-check can fail right after the claim commits, producing exactly
+the claim-with-zero-attempts state the rule forbids.
+**Cause:** The ADR words the rule as a single decision point; the code has two,
+separated by latency the guard doesn't account for.
+**Rule going forward:** Whenever a budget/TTL/deadline guard protects an action
+that is not the very next statement, measure what sits between them. If it is
+I/O, require either a re-check that can undo the intermediate write, or that
+the guard subtract the intermediate step's worst-case cost.
+
+## Retry-classification labels drift from the retryable flag they were derived from
+**Symptom (M5-1a):** `classifyError` returned `permanent_${status}` for every
+HTTP-status-bearing error including retryable 429/5xx, because the permanent
+case was the one the ADR's table named. A transient 500 is then durably
+recorded as "permanent" in the ops failure row — and the failure-event dedup
+guard was keyed on that same reason string.
+**Rule going forward:** Where an error carries both a `retryable` boolean and a
+human-readable `reason`, check the reason is derived FROM the boolean, not
+from a sibling field. Then check what else keys on the reason string (dedup
+guards, ops queries) — a mislabel there silently changes grouping too.

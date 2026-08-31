@@ -30,6 +30,24 @@ import type Stripe from "stripe";
 import StripeSDK from "stripe";
 import { NextRequest } from "next/server";
 
+// M5-1a (HRH-52) regression note: `handleStripeWebhookEvent` now
+// unconditionally calls `dispatchOrderConfirmationEmail` on every observed
+// CONFIRMED transition (ADR Decision 2/2.1). When a caller here doesn't
+// pass `opts.emailDeps` (every call in this file — email behavior is out
+// of THIS file's scope, tests/test26-order-confirmation-email.test.ts owns
+// it), the function defaults to `inlineAfterResponse`, which is genuinely
+// fire-and-forget (`void task()` — see this domain's own learnings file).
+// That fired a REAL, unawaited background write (an
+// ORDER_CONFIRMATION_EMAIL_DISPATCHED `OrderEvent` + a console-logged
+// send) that could land asynchronously during or after a LATER test's own
+// assertions, corrupting any strict "zero additional writes" count in this
+// file or a sibling file sharing the same dev Postgres. Mocked out
+// entirely here — this file is exclusively about the payment/webhook
+// state machine, never about email delivery.
+vi.mock("../src/lib/orderNotificationService", () => ({
+  dispatchOrderConfirmationEmail: vi.fn(async () => {}),
+}));
+
 const REGION = Region.KE;
 const db = new PrismaClient();
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET!;

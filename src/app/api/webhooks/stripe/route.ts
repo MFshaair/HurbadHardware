@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, after } from "next/server";
 import type Stripe from "stripe";
 import { constructStripeWebhookEvent, WebhookSignatureError } from "@/lib/stripe";
 import { handleStripeWebhookEvent } from "@/lib/paymentWebhookService";
@@ -20,6 +20,12 @@ import { handleStripeWebhookEvent } from "@/lib/paymentWebhookService";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  // M5-1a Decision 8: captured at the very top — the confirmation email's
+  // hard deadline is a budget on the WHOLE request's lifetime under
+  // vercel.json's maxDuration: 30, not just the time spent inside the
+  // handler below.
+  const requestStart = Date.now();
+
   // FIRST and ONLY read of the body. Never request.json() — that would
   // consume the stream and/or re-serialize it, producing different bytes
   // than what Stripe signed, so verification would fail 100% of the time.
@@ -40,7 +46,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await handleStripeWebhookEvent(event);
+    const result = await handleStripeWebhookEvent(event, {
+      emailDeps: { schedule: after, deadlineAt: requestStart + 25_000 },
+    });
     return NextResponse.json({ received: true, outcome: result.outcome }, { status: 200 });
   } catch (err) {
     console.error(`[stripe-webhook] event ${event.id} (${event.type}) failed`, err);

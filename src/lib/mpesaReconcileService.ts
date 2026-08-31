@@ -18,6 +18,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { stkQuery, type StkQueryResult, type StkCallback } from "./mpesa";
 import { handleMpesaCallback } from "./mpesaCallbackService";
+import type { DispatchOrderConfirmationEmailDeps } from "./orderNotificationService";
 
 // ---------------------------------------------------------------------------
 // ADR Decision 1 — two populations, two independent passes, both bounded.
@@ -73,10 +74,19 @@ export interface RunMpesaReconciliationOptions {
   maxDeadLetterRows?: number;
   deadlineMs?: number;
   startMs?: number;
+  /**
+   * M5-1a (additive, HRH-52) Decision 8: threaded to `handleMpesaCallback`
+   * -> `dispatchOrderConfirmationEmail` for both populations below. The
+   * cron route passes `{ schedule: after, deadlineAt: requestStart + 55_000,
+   * maxAttempts: 1 }` — capped to 1 attempt because up to 25 rows x 3
+   * attempts x 5s would blow this job's 60s maxDuration.
+   */
+  emailDeps?: DispatchOrderConfirmationEmailDeps;
 }
 
 interface ReconcileCtx {
   fetchImpl: typeof fetch | undefined;
+  emailDeps: DispatchOrderConfirmationEmailDeps | undefined;
 }
 
 interface PendingReconcileRow {
@@ -205,6 +215,7 @@ async function reconcilePendingRow(
       amountUnavailable: q.outcome === "success",
       rawBody: q.raw,
       fetchImpl: ctx.fetchImpl,
+      emailDeps: ctx.emailDeps,
     });
   } catch (err) {
     report.errors++;
@@ -280,6 +291,7 @@ async function reconcileDeadLetterRow(
         reconciliationSource: "dead_letter_rejoin",
         rawBody: row.rawPayload,
         fetchImpl: ctx.fetchImpl,
+        emailDeps: ctx.emailDeps,
       });
       outcome = result.outcome;
     } catch (err) {
@@ -375,7 +387,7 @@ export async function runMpesaReconciliation(
   const deadlineMs = opts.deadlineMs ?? RECONCILE_DEADLINE_MS;
   const maxPendingRows = opts.maxPendingRows ?? RECONCILE_MAX_PENDING_ROWS;
   const maxDeadLetterRows = opts.maxDeadLetterRows ?? RECONCILE_MAX_DEADLETTER_ROWS;
-  const ctx: ReconcileCtx = { fetchImpl: opts.fetchImpl };
+  const ctx: ReconcileCtx = { fetchImpl: opts.fetchImpl, emailDeps: opts.emailDeps };
 
   const report: ReconcileReport = {
     scannedPending: 0,

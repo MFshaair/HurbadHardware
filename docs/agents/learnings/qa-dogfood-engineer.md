@@ -762,6 +762,50 @@ timeout or unrelated error), then restore and reconfirm green. Six tests
 failing together for the reason the guard's own comment predicts is strong
 evidence the tests are load-bearing, not coincidentally green.
 
+## A dogfood fixture missing the field a NEW downstream feature reads on can produce a real, specific, correctly-failing assertion that is nonetheless YOUR bug, not a regression
+
+**Symptom (M5-1a/HRH-52):** Extending `dogfoodStripeWebhook()` to poll for a
+real `ORDER_CONFIRMATION_EMAIL_DISPATCHED` `OrderEvent` after a real signed
+webhook delivery failed with a clean, specific timeout error on the very
+first run — looked exactly like a genuine "the real `after()`/route wiring
+never fires" gap the whole point of the addition was to catch. It was not:
+`dispatchOrderConfirmationEmail`'s recipient resolution
+(`order.guestEmail ?? order.user.email`, ADR Decision 6) correctly took the
+`no_recipient` path and wrote a `FAILED` event instead, because this leg's
+long-standing fixture `Order` (originally built for M4-1b, before this
+field existed) has never set `guestEmail` or `userId` — a field no test in
+this repo's fixture had ever needed until this specific new downstream
+consumer read it.
+
+**Cause:** A fixture built to satisfy an OLDER feature's requirements
+(M4-1b's webhook/inventory assertions, none of which touch
+`guestEmail`/`userId`) can silently fail to satisfy a NEWER feature's
+requirements layered on top of the same fixture later — the fixture's
+"looks complete" state is relative to what it was originally built to prove,
+not to everything that will ever read it.
+
+**Rule going forward:** When extending an EXISTING dogfood leg's fixture to
+also exercise a newer feature that reads additional fields from the same
+row (rather than adding a brand-new leg with its own fresh fixture), grep
+the new feature's own data-load query (here, `orderNotificationService.ts`'s
+`db.order.findUnique` select list, or equivalently its ADR's "Recipient
+resolution"/"Data load" decision) for every field it reads, and check each
+one is actually populated by the existing fixture-creation code — don't
+assume a fixture that has passed every OTHER assertion for months is
+complete for a new consumer's needs too. This is the same class of gap as
+this file's "unordered findFirst" and "ACTUAL response shape" entries: a
+new assertion failing on its very first run is exactly as likely to be a
+fixture gap as a real regression, and the fast, cheap check (re-read the
+fixture's own field list against the new consumer's actual query) should
+happen before concluding either way. Once fixed (added `guestEmail` to the
+fixture), the same real end-to-end assertion (poll for the DISPATCHED
+event, `payload.status === "sent"` via `ConsoleEmailService`, no live
+SendGrid credentials, plus a re-check of the event count staying at exactly
+1 after the duplicate redelivery) passed cleanly and is now a genuine gate
+on the real `after()`/route-wiring/claim-transaction seam that this repo's
+in-process test suite (a capturing scheduler it drains manually) cannot
+prove on its own.
+
 **Rule going forward:** Any `findFirst`/`findMany` in `dogfood.mjs` (or any
 test) that picks a fixture row to then assert against a PAGINATED page's
 rendered HTML must use the EXACT SAME `orderBy` the real page/route uses

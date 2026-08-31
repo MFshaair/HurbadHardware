@@ -23,6 +23,22 @@ import {
   releaseReservationsForOrder,
   ReservationNotActiveError,
 } from "./reservationService";
+import {
+  dispatchOrderConfirmationEmail,
+  type DispatchOrderConfirmationEmailDeps,
+} from "./orderNotificationService";
+
+// M5-1a Decision 2/2.1: dispatch the confirmation email whenever THIS
+// handler has observed Order.paymentStatus === "CONFIRMED" for the order
+// it just processed — the fresh-confirm success path below AND every
+// "duplicate"/crash-gap-resume arm that re-reads the same durable fact.
+// Never on PAYMENT_CONFIRMED_STOCK_UNAVAILABLE (recordStockUnavailable) —
+// the Order is not actually CONFIRMED there. `emailDeps` is additive and
+// optional on every call site; absent means the default (inline scheduler,
+// getEmailService()) — no existing signature becomes required-breaking.
+function maybeDispatchEmail(orderId: string, emailDeps: DispatchOrderConfirmationEmailDeps | undefined): void {
+  void dispatchOrderConfirmationEmail(orderId, emailDeps ?? {});
+}
 
 export type WebhookOutcome =
   | "confirmed"
@@ -103,6 +119,7 @@ async function confirmRow(
   session: Stripe.Checkout.Session,
   event: Stripe.Event,
   paymentIntentId: string | null,
+  emailDeps: DispatchOrderConfirmationEmailDeps | undefined,
 ): Promise<WebhookHandlingResult> {
   if (row.status === "PENDING") {
     const metadata = JSON.stringify({
@@ -118,7 +135,7 @@ async function confirmRow(
       WHERE id = ${row.id} AND status = 'PENDING'::"PaymentTransactionStatus"
     `;
     if (affected === 1) {
-      return runConfirm(row.id, row.orderId, event, session, paymentIntentId);
+      return runConfirm(row.id, row.orderId, event, session, paymentIntentId, emailDeps);
     }
     // Lost the CAS race to a concurrent sibling delivery — re-read the
     // row's now-current status and re-enter the state machine rather than
@@ -127,7 +144,7 @@ async function confirmRow(
       where: { id: row.id },
       select: { id: true, orderId: true, status: true },
     });
-    return confirmRow(fresh, session, event, paymentIntentId);
+    return confirmRow(fresh, session, event, paymentIntentId, emailDeps);
   }
 
   if (row.status === "CONFIRMED") {
@@ -137,6 +154,11 @@ async function confirmRow(
       select: { paymentStatus: true },
     });
     if (order.paymentStatus === "CONFIRMED") {
+      // M5-1a Decision 2.1: a redelivery/resume observing an
+      // already-CONFIRMED order still dispatches — the DB claim (Decision
+      // 4) makes this safe, and it's the only recovery path for an
+      // original invocation that crashed mid-email.
+      maybeDispatchEmail(row.orderId, emailDeps);
       return { outcome: "duplicate" };
     }
     const flagged = await findStockUnavailableEvent(row.orderId, row.id);
@@ -147,7 +169,7 @@ async function confirmRow(
     // resume (PaymentTransaction was CASed to CONFIRMED but the process
     // died before confirmReservationsForOrder ran/committed). Re-enter for
     // real — do NOT no-op.
-    return runConfirm(row.id, row.orderId, event, session, paymentIntentId);
+    return runConfirm(row.id, row.orderId, event, session, paymentIntentId, emailDeps);
   }
 
   // INITIATED / FAILED / CANCELLED: never a valid predecessor for a
@@ -174,6 +196,7 @@ async function runConfirm(
   event: Stripe.Event,
   session: Stripe.Checkout.Session,
   paymentIntentId: string | null,
+  emailDeps: DispatchOrderConfirmationEmailDeps | undefined,
 ): Promise<WebhookHandlingResult> {
   try {
     await confirmReservationsForOrder(orderId);
@@ -191,6 +214,7 @@ async function runConfirm(
           select: { paymentStatus: true },
         });
         if (order.paymentStatus === "CONFIRMED") {
+          maybeDispatchEmail(orderId, emailDeps);
           return { outcome: "duplicate" };
         }
         console.error(
@@ -220,6 +244,9 @@ async function runConfirm(
     );
     throw new Error("Order was not confirmed after confirmReservationsForOrder");
   }
+  // M5-1a Decision 2: dispatch strictly AFTER this post-condition assert
+  // has proven Order.paymentStatus === "CONFIRMED" from the DB.
+  maybeDispatchEmail(orderId, emailDeps);
   return { outcome: "confirmed" };
 }
 
@@ -362,8 +389,17 @@ async function releaseGuarded(orderId: string): Promise<WebhookHandlingResult> {
  * the ADR Decision 1 for why `charge.failed` is deliberately NOT wired to
  * release (it fires mid-session on a card decline while the customer is
  * still actively retrying).
+ *
+ * `opts.emailDeps` (M5-1a, additive) threads Decision 8's route-supplied
+ * `{ schedule, deadlineAt }` (or a test's capturing scheduler) down to
+ * every confirm-path call site above. Optional — absent means the
+ * emailService/scheduler defaults in orderNotificationService.ts.
  */
-export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<WebhookHandlingResult> {
+export async function handleStripeWebhookEvent(
+  event: Stripe.Event,
+  opts?: { emailDeps?: DispatchOrderConfirmationEmailDeps },
+): Promise<WebhookHandlingResult> {
+  const emailDeps = opts?.emailDeps;
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -371,11 +407,11 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<Web
         // Delayed-notification payment method: wait for the async event.
         return { outcome: "ignored" };
       }
-      return handleConfirm(session, event);
+      return handleConfirm(session, event, emailDeps);
     }
     case "checkout.session.async_payment_succeeded": {
       const session = event.data.object as Stripe.Checkout.Session;
-      return handleConfirm(session, event);
+      return handleConfirm(session, event, emailDeps);
     }
     case "checkout.session.async_payment_failed": {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -393,11 +429,12 @@ export async function handleStripeWebhookEvent(event: Stripe.Event): Promise<Web
 async function handleConfirm(
   session: Stripe.Checkout.Session,
   event: Stripe.Event,
+  emailDeps: DispatchOrderConfirmationEmailDeps | undefined,
 ): Promise<WebhookHandlingResult> {
   const row = await resolveRow(session, event);
   if (!row) return { outcome: "unknown_session" };
   const paymentIntentId = extractPaymentIntentId(session);
-  return confirmRow(row, session, event, paymentIntentId);
+  return confirmRow(row, session, event, paymentIntentId, emailDeps);
 }
 
 async function handleFail(

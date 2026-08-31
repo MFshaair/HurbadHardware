@@ -55,6 +55,38 @@
 // the full account of why this is a genuine leg, not theater, and why it
 // deliberately stops short of exercising population (a)'s STK-Query path).
 //
+// PLUS M5-1a's real end-to-end order-confirmation-email assertion, folded
+// INTO dogfoodStripeWebhook() rather than as a new leg (added 2026-08-31 for
+// M5-1a/HRH-52, qa-dogfood-engineer): that leg already drives a real signed
+// webhook delivery over real HTTP against a real spawned `next dev` server
+// to a genuine Order.paymentStatus CONFIRMED transition — the exact
+// production entry point (`stripe/route.ts`) that now also schedules
+// `dispatchOrderConfirmationEmail` via a real `after()` call. test26's own
+// 29 in-process tests inject a CAPTURING scheduler and drain it manually,
+// which cannot prove the real `after()` seam (post-response-flush timing,
+// real route wiring, real claim transaction) actually fires in a genuinely
+// running server — so this addition polls for the real
+// `ORDER_CONFIRMATION_EMAIL_DISPATCHED` OrderEvent after the first real
+// delivery, asserts `payload.status === "sent"`, then re-checks after the
+// duplicate redelivery that the count is still exactly 1 (real end-to-end
+// exactly-once dispatch, not just the in-process claim-transaction proof).
+// Uses ConsoleEmailService (no live SENDGRID_API_KEY — .env.development's
+// committed "SG.REPLACE_ME" placeholder plus NODE_ENV=development is
+// exactly ADR M5-1a Decision 7's "usable in dev" branch), same "no live
+// credentials, only the confirm-path wiring matters" precedent as
+// M4-2/M4-2b/M4-2c's own dogfood legs. A NEW top-level leg was deliberately
+// NOT added: there is no separate user-facing entry point for this feature
+// to click through (it fires as a side effect of the same webhook delivery
+// dogfoodStripeWebhook() already drives), so extending the existing leg is
+// more honest than a parallel leg that would just re-deliver the same event
+// a second time for no new reason. The M-Pesa callback/reconciliation call
+// sites share the exact same dispatchOrderConfirmationEmail/claim code path
+// (see the ADR's Decision 2 file-change manifest — one function, three call
+// sites) and are NOT separately dogfooded here; that would be redundant
+// coverage of the same claim-transaction/after()-wiring code, not a new
+// gap, and test26's table-driven tests already cover per-path trigger
+// correctness in-process.
+//
 // Extending this script to cover the real flow for each milestone is
 // qa-dogfood-engineer's explicit responsibility — see FEATURES.md and
 // docs/agents/run-state.md for which milestone is current. Do NOT let this
@@ -1602,6 +1634,12 @@ async function dogfoodStripeWebhook() {
     const order = await db.order.create({
       data: {
         orderNumber: `HH-TEST-DOGFOOD-M4-1B-${uniq}`,
+        // M5-1a addition: dispatchOrderConfirmationEmail's recipient
+        // resolution is `order.guestEmail ?? order.user.email` (ADR
+        // Decision 6) — without a guestEmail this fixture would correctly
+        // hit the "no_recipient" FAILED path, not a real send, which would
+        // make this leg's new email assertion below prove nothing.
+        guestEmail: `dogfood-m5-1a-${uniq}@example.test`,
         region: "KE",
         currency: "KES",
         subtotalAmount: "2000.00",
@@ -1731,6 +1769,55 @@ async function dogfoodStripeWebhook() {
       );
     }
 
+    // M5-1a/HRH-52 addition (2026-08-31, qa-dogfood-engineer): the route
+    // response above proves the CONFIRM transition happened, but says
+    // nothing about the real `after()` -> dispatchOrderConfirmationEmail
+    // wiring this item adds — test26's own in-process tests inject a
+    // CAPTURING scheduler (`schedule.push`) and drain it manually, which
+    // can never prove the real production seam (`stripe/route.ts` passing
+    // `schedule: after` to a genuinely running `next dev` server, whose
+    // `after()` executes post-response-flush on its own clock) actually
+    // fires. Poll (rather than a fixed sleep) for the claim OrderEvent,
+    // since `after()`'s completion timing relative to this script's own
+    // fetch() return is not something to assume. No SENDGRID_API_KEY is
+    // configured for this spawned server's env beyond .env.development's
+    // committed "SG.REPLACE_ME" placeholder, and NODE_ENV is "development"
+    // (not "production") — per ADR M5-1a Decision 7's resolution table that
+    // is exactly the ConsoleEmailService branch (a real send, logged to the
+    // spawned server's own stdout, counted as "sent"), so this proves the
+    // real end-to-end claim+send wiring without needing live SendGrid
+    // credentials, same "no live credentials, only the confirm-path wiring
+    // matters" precedent as M4-2/M4-2b/M4-2c's own dogfood legs.
+    const EMAIL_POLL_TIMEOUT_MS = 15_000;
+    let dispatchedEvent = null;
+    {
+      const pollDeadline = Date.now() + EMAIL_POLL_TIMEOUT_MS;
+      while (Date.now() < pollDeadline) {
+        const rows = await db.orderEvent.findMany({
+          where: { orderId: order.id, eventType: "ORDER_CONFIRMATION_EMAIL_DISPATCHED" },
+        });
+        if (rows.length > 0) {
+          dispatchedEvent = rows[0];
+          break;
+        }
+        await delay(300);
+      }
+    }
+    if (!dispatchedEvent) {
+      throw new Error(
+        `Expected a real ORDER_CONFIRMATION_EMAIL_DISPATCHED OrderEvent to appear within ${EMAIL_POLL_TIMEOUT_MS}ms of ` +
+          `the real webhook response, via the real after()-scheduled dispatchOrderConfirmationEmail call — got none. ` +
+          `This means the real production after()/route wiring (not test26's in-process capturing-scheduler stand-in) ` +
+          `never actually dispatched.`,
+      );
+    }
+    if (dispatchedEvent.payload?.status !== "sent") {
+      throw new Error(
+        `Expected the real dispatched OrderEvent's payload.status === "sent" (ConsoleEmailService, no live ` +
+          `SendGrid credentials needed), got: ${JSON.stringify(dispatchedEvent.payload)}`,
+      );
+    }
+
     // Second, identical delivery (Stripe redelivers 2-5x in practice) — must
     // be a real, byte-identical HTTP redelivery, not an in-process re-call,
     // to actually prove idempotency holds over the real route, not just the
@@ -1758,9 +1845,28 @@ async function dogfoodStripeWebhook() {
       );
     }
 
+    // M5-1a addition, continued: the duplicate delivery's own `after()` (if
+    // the route schedules one on the duplicate/resume arm at all, per ADR
+    // Decision 2.1) must find the existing claim and dispatch nothing new —
+    // give it the same poll window's worth of settling time, then assert
+    // the DISPATCHED event count is still exactly 1 over real HTTP, not
+    // just in test26's in-process claim-transaction tests.
+    await delay(2_000);
+    const dispatchedEventsAfterSecond = await db.orderEvent.findMany({
+      where: { orderId: order.id, eventType: "ORDER_CONFIRMATION_EMAIL_DISPATCHED" },
+    });
+    if (dispatchedEventsAfterSecond.length !== 1) {
+      throw new Error(
+        `Expected exactly 1 ORDER_CONFIRMATION_EMAIL_DISPATCHED event after a duplicate real webhook redelivery ` +
+          `(claim-based exactly-once dispatch), got ${dispatchedEventsAfterSecond.length}`,
+      );
+    }
+
     console.log(
       "[dogfood] PASS: real signed Stripe webhook delivery -> Order.paymentStatus CONFIRMED -> " +
-        "InventoryReservation CONFIRMED -> onHand 10->8 -> redelivery outcome 'duplicate', onHand unchanged",
+        "InventoryReservation CONFIRMED -> onHand 10->8 -> real after()-scheduled order-confirmation email " +
+        "genuinely dispatched (ConsoleEmailService, payload.status 'sent') -> redelivery outcome 'duplicate', " +
+        "onHand unchanged, email dispatched exactly once",
     );
   } finally {
     await cleanup();
@@ -2605,7 +2711,9 @@ console.log(
     "(M3 milestone integration checkpoint: full cart->reservation dogfood exits 0 — MET) + " +
     "M4-1b real signed webhook delivery->CONFIRMED->onHand decremented->idempotent redelivery " +
     "(webhook-only leg; full click-through Stripe-payment journey still pending StripeCheckout.tsx " +
-    "mounting) + M4-2 real HTTP route-wiring leg (400/400/404 on POST /api/checkout/create-mpesa-session, " +
+    "mounting) + M5-1a real after()-scheduled order-confirmation email dispatch (folded into the same " +
+    "webhook leg: real ORDER_CONFIRMATION_EMAIL_DISPATCHED event, payload.status 'sent' via " +
+    "ConsoleEmailService, exactly-once across the duplicate redelivery) + M4-2 real HTTP route-wiring leg (400/400/404 on POST /api/checkout/create-mpesa-session, " +
     "no Daraja call needed; full happy-path STK-push leg still pending real sandbox creds + mounted UI) + " +
     "M4-2b real M-Pesa callback delivery (wrong-token 404/malformed-body 400, both zero-write, then a real " +
     "matched ResultCode:0 callback -> CONFIRMED -> onHand decremented -> idempotent redelivery, no Daraja " +

@@ -22,6 +22,21 @@ import {
 } from "./mpesa";
 import { createMpesaStkPush, PaymentAttemptInFlightError } from "./mpesaService";
 import { confirmReservationsForOrder, ReservationNotActiveError } from "./reservationService";
+import {
+  dispatchOrderConfirmationEmail,
+  type DispatchOrderConfirmationEmailDeps,
+} from "./orderNotificationService";
+
+// M5-1a Decision 2/2.1: dispatch the confirmation email whenever THIS
+// handler has observed Order.paymentStatus === "CONFIRMED" for the order
+// it just processed — the fresh-confirm success path (runConfirm) AND
+// every "duplicate"/crash-gap-resume arm that re-reads the same durable
+// fact. Never on PAYMENT_CONFIRMED_STOCK_UNAVAILABLE (recordStockUnavailable)
+// — the Order is not actually CONFIRMED there. `emailDeps` is additive and
+// optional; absent means the orderNotificationService.ts defaults.
+function maybeDispatchEmail(orderId: string, emailDeps: DispatchOrderConfirmationEmailDeps | undefined): void {
+  void dispatchOrderConfirmationEmail(orderId, emailDeps ?? {});
+}
 
 export type MpesaCallbackOutcome =
   | "confirmed"
@@ -104,6 +119,15 @@ export interface HandleMpesaCallbackOptions {
    * captured amount data and must still be amount-checked.
    */
   amountUnavailable?: boolean;
+  /**
+   * M5-1a (additive, HRH-52). Threaded to `dispatchOrderConfirmationEmail`
+   * from every confirm-observing branch below (Decision 2/2.1). Absent
+   * means the orderNotificationService.ts defaults (inline scheduler,
+   * getEmailService()). Set by the route (`{ schedule: after, deadlineAt
+   * }`) or by mpesaReconcileService.ts's `ReconcileCtx` for the
+   * reconciliation path.
+   */
+  emailDeps?: DispatchOrderConfirmationEmailDeps;
 }
 
 /** Internal plumbing context threaded through every dispatch function below
@@ -115,6 +139,7 @@ interface CallbackCtx {
   source: "callback" | "reconciliation";
   reconciliationSource: "stk_query" | "dead_letter_rejoin";
   fetchImpl: typeof fetch | undefined;
+  emailDeps: DispatchOrderConfirmationEmailDeps | undefined;
 }
 
 /** ADR M4-2c Decision 3.3 — the tag every reconciled write gets. Empty for
@@ -583,6 +608,11 @@ async function enterConfirmSwitch(
         select: { paymentStatus: true },
       });
       if (order.paymentStatus === "CONFIRMED") {
+        // M5-1a Decision 2.1: a redelivery/resume observing an
+        // already-CONFIRMED order still dispatches — the DB claim
+        // (Decision 4) makes this safe, and it's the only recovery path
+        // for an original invocation that crashed mid-email.
+        maybeDispatchEmail(row.orderId, ctx.emailDeps);
         return { outcome: "duplicate" };
       }
       const doublePaymentFlag = await findEvent(
@@ -670,6 +700,7 @@ async function runConfirm(
           select: { paymentStatus: true },
         });
         if (order.paymentStatus === "CONFIRMED") {
+          maybeDispatchEmail(row.orderId, ctx.emailDeps);
           return { outcome: "duplicate" };
         }
         console.error(
@@ -698,6 +729,12 @@ async function runConfirm(
     );
     throw new Error("Order was not confirmed after confirmReservationsForOrder");
   }
+  // M5-1a Decision 2: dispatch strictly AFTER this post-condition assert
+  // has proven Order.paymentStatus === "CONFIRMED" from the DB. This
+  // single shared runConfirm covers the PENDING->CONFIRMED fresh path, the
+  // CONFIRMED crash-gap resume path, AND lateSuccess's FAILED/CANCELLED ->
+  // CONFIRMED path — one dispatch site for all three.
+  maybeDispatchEmail(row.orderId, ctx.emailDeps);
   return { outcome: "confirmed" };
 }
 
@@ -1098,6 +1135,7 @@ export async function handleMpesaCallback(
     source: opts.source ?? "callback",
     reconciliationSource: opts.reconciliationSource ?? "stk_query",
     fetchImpl: opts.fetchImpl,
+    emailDeps: opts.emailDeps,
   };
 
   const { row, resolvedAfterRetries } = await resolveRow(cb);

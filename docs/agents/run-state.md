@@ -25,8 +25,10 @@ scope for autonomous execution — see OPEN RISKS.
 
 ### MILESTONE PLAN + current position
 Current milestone: **M5 — Orders, Admin & Notifications**, started
-2026-08-31 via `/hurbad-team` on HRH-52 (M5-1, order confirmation email
-flow). M0-M4 are all `verified`/checkpoint-tagged — see the table below
+2026-08-31 via `/hurbad-team` on HRH-52. The original bundled `M5-1` ledger
+item was split 2026-08-31 into `M5-1a` (HRH-52, order-confirmation email)
+and `M5-1b` (HRH-53, customer order dashboard/status timeline) — see Tier 2.
+M0-M4 are all `verified`/checkpoint-tagged — see the table below
 and `checkpoint/m4` (this milestone's own predecessor, tagged 2026-08-31
 after M4's integration checkpoint dogfood re-ran GREEN). M2-3 (non-blocking
 M2-1 security advisories), M3-2's/M3-3's tracked non-blocking follow-ups,
@@ -136,6 +138,98 @@ can't be cheaply fixed forward.
 ---
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
+
+### 2026-08-31 — M5-1 split into M5-1a (HRH-52, order-confirmation email) + M5-1b (HRH-53, customer order dashboard/timeline), acceptance criteria sharpened
+`product-planner` was dispatched to split the bundled `M5-1` ("Customer
+order tracking + async email," two undifferentiated bullets) along the same
+Linear-issue seam the M4-1/M4-1b and M4-2/M4-2b splits already used. **No
+Linear MCP tool was available in this session** (only Read/Edit/Grep/Glob);
+per this agent's own learnings file, HRH-52/HRH-53's Linear descriptions and
+HRH-13's full description were taken as relayed by the dispatching
+orchestrator, not independently re-fetched — flagged, not silently treated
+as freshly verified. Everything else below is grounded in direct repo/PRD
+reads.
+
+**HRH-52 (M5-1a) scoped narrowly against HRH-13's full description
+(`plans/Full PRD file.md` U13, read in full):** HRH-13's real shape is a
+four-template, swappable `IEmailService` (`lib/emailService.ts`,
+`OrderConfirmation`/`ShippingNotification`/`DeliveryConfirmation`/
+`PasswordReset` templates, `jobs/emailQueue.ts` async worker). HRH-52 is
+explicitly only the order-confirmation slice — the other three templates
+and interface methods are named as HRH-13's remaining, not-yet-ledgered
+scope, not silently bundled into M5-1a.
+
+**Two real, previously-unflagged gaps found by direct grep, both folded
+into M5-1a's criteria rather than left implicit:**
+1. **No `SENDGRID_*` env var exists anywhere** (`.env.example`,
+   `.env.development` both checked directly) despite
+   `docs/DEPLOYMENT.md:157-163` already documenting the intended names
+   (`SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`) as a future setup step —
+   this item must add both, reusing those exact names, same
+   `REPLACE_ME`-placeholder pattern as Stripe/M-Pesa.
+2. **"Queued asynchronously" has no real mechanism to point to.** Same
+   standing finding as ADR M4-2/M4-2b/M4-2c: this repo has zero job-queue
+   infrastructure (`package.json` has no Redis/Upstash/`@vercel/kv`).
+   U13's PRD language ("`jobs/emailQueue.ts`, async queue worker") names
+   infrastructure this repo does not have. Left as an **explicit,
+   unresolved architect question** — fire-and-forget (un-awaited) vs.
+   awaited-with-timeout vs. a `waitUntil`-style primitive if this repo's
+   runtime actually offers one — not defaulted to any of them here.
+
+**Trigger point corrected against the actual `OrderEvent` writes, not
+"order creation":** grepped every `eventType:` write in `src/lib` directly
+— the real order-confirmation trigger is `"PAYMENT_CONFIRMED"`
+(`reservationService.ts:623`, inside `confirmReservationsForOrder`, called
+from both `paymentWebhookService.ts` and `mpesaCallbackService.ts`), not
+`"CREATED"` (order placement). Matches the M3-2/M4-1b/M4-2b precedent that
+payment confirmation, not order creation, is the money-real event.
+
+**HRH-53 (M5-1b) sharpened against the real `OrderEvent` population, not
+the PRD's four-state list at face value:** the same grep found **no code
+path anywhere writes a `SHIPPED` or `DELIVERED` `OrderEvent`** — only
+`CREATED` ("PLACED") and `PAYMENT_CONFIRMED` ("CONFIRMED") are real today.
+`prisma/schema.prisma:405`'s `SHIPPED`/`DELIVERED` are comment-only,
+aspirational values on a free-form `eventType String` column, never
+written by any function in this repo. HRH-53's criteria require the
+timeline component to render only the states that actually have a matching
+event and treat the rest as "not yet reached," not fabricate progress.
+
+**A real, pre-existing ledger gap surfaced, not fixed unilaterally:** the
+M5 milestone's own Integration Checkpoint line ("admin mark-shipped → email
+sent → customer sees updated status") names a capability — an admin
+mark-order-shipped action — that **`M5-2`'s current three bullets do not
+cover at all** (RBAC/2FA + audit log, product/variant CRUD + bulk upload,
+low-stock flag; no order-management or mark-shipped bullet anywhere). This
+predates this split; it means `SHIPPED`/`DELIVERED` can never be produced
+by any currently-ledgered item, and the milestone's own integration
+checkpoint cannot be fully dogfooded as written. Per this agent's mandate
+(frame acceptance criteria, don't unilaterally invent new ledger scope),
+this was **flagged in both `FEATURES.md` (M5 header note + M5-1b's own
+criterion) and here**, not resolved by adding a bullet to `M5-2` — the
+orchestrator should decide whether that's a `M5-2` amendment or a new
+`M5-2b` before M5-2 is dispatched.
+
+**Owners assigned per existing repo convention, not invented:** M5-1a →
+commerce-payments-engineer (order-confirmation email is triggered from the
+payment-confirmation path, in that owner's existing files — same
+convention as M4's Stripe/M-Pesa `lib/` wrappers); flagged a coordination
+note in case the trigger ends up placed inside
+`reservationService.ts::confirmReservationsForOrder` itself, which is
+catalog-inventory-engineer's file per M3-2/M3-3 (same "binding fix in
+another agent's files" pattern already logged in this agent's learnings).
+M5-1b → storefront-admin-engineer (Next.js pages/components — same
+UI-ownership convention as M2/M3's storefront-admin-engineer items).
+
+**Architect review: explicit YES for M5-1a** (async-send mechanism given
+the confirmed no-queue serverless architecture; `IEmailService` interface
+signature stability for HRH-13's later methods) — same class as M4-1's/
+M4-2's own ADRs. **Explicit NO for M5-1b's two-state (PLACED/CONFIRMED)
+version** — closer to M2-4/M3-3a's UI-wiring shape, reading an
+already-designed `OrderEvent` log with no new lock/concurrency/schema
+question; a future mark-shipped item should get its own architect pass.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M5-1a/
+M5-1b sections and this file were edited (no `src/`/`tests/` touched).
 
 ### 2026-08-31 — M4-2c (HRH-51, M-Pesa reconciliation job) added to the ledger, planned/NOT dispatched
 `product-planner` was dispatched on HRH-51 ("Background job every 15 min

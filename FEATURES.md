@@ -3046,14 +3046,261 @@ design pass, per the same guardrail M4-2b was held to.
 
 ---
 
-## M5 — Orders, Admin & Notifications (blocked on M4)
+## M5 — Orders, Admin & Notifications
+**M4 is verified, checkpoint tagged (`checkpoint/m4`) — no longer blocking.**
 **Integration checkpoint:** admin mark-shipped → email sent → customer
-sees updated status, dogfooded end to end.
+sees updated status, dogfooded end to end. **Note (2026-08-31):** the
+"admin mark-shipped" half of this checkpoint has no ledger item yet — see
+M5-1b's flagged gap below and M5-2's bullet list, which currently has no
+"mark order shipped" action at all. This checkpoint cannot be fully
+dogfooded until that gap is closed by a future ledger item; flagged to the
+orchestrator, not resolved here.
 
-### M5-1: Customer order tracking + async email
-**Status:** planned · **Owner:** commerce-payments-engineer + storefront-admin-engineer
-- [ ] Order confirmation email queued asynchronously, never blocks the checkout response
-- [ ] Customer dashboard shows status timeline (PLACED → CONFIRMED → SHIPPED → DELIVERED) from the `OrderEvent` log
+### M5-1a: Order Confirmation Email Flow (HRH-52)
+**Status:** verified (gate-check.sh M5-1a exit 0 — 2026-09-01) · **Owner:** commerce-payments-engineer
+
+**Architect review: DONE (platform-architect, 2026-08-31).** Binding design
+is `docs/agents/arch-decisions/M5-1a-order-confirmation-email.md` — 12
+decisions. **Coordination flag resolved: `reservationService.ts` is
+untouched by this item** — dispatch is wired into `paymentWebhookService.ts`
+and `mpesaCallbackService.ts`'s `runConfirm` paths (both already this
+owner's files), not into the shared confirm transaction, since dispatching
+inside a `db.$transaction` holding inventory locks would either block
+concurrent checkouts or fire before commit. Consequential decisions: the
+async mechanism is Next's `after()` (not fire-and-forget, which M4-2b
+Decision 12 already rejected for the identical "work after the response
+isn't guaranteed to run" reason — `after()` is the primitive that
+guarantee explicitly doesn't apply to), injected via an `AfterResponse`
+seam so it stays testable; exactly-once is enforced by an `OrderEvent`
+row-lock claim (`Order FOR UPDATE` + check + insert), **zero schema
+change, zero migration**; retry is bounded to 3 in-process attempts
+inside one `after()` window with a hard deadline guard (mirroring M4-2b
+Decision 12's pattern) — a durable cross-invocation worker is explicitly
+deferred to HRH-64, not built here; `IEmailService` is a generic
+`send(...)` transport (not per-message-type methods) so HRH-62's SES
+swap and HRH-63's three remaining templates stay fully orthogonal to this
+item's code; ships with a real `SendGridEmailService` behind a
+`fetchImpl` seam (same pattern as Stripe/M-Pesa mocking) plus a
+`ConsoleEmailService` fallback so the flow is fully dogfoodable without
+real SendGrid credentials, which join `.env.development`'s standing
+`REPLACE_ME` list. `dispatchOrderConfirmationEmail` never throws — an
+email failure can never affect `Order.paymentStatus`,
+`PaymentTransaction.status`, or inventory state. Explicitly deferred to
+HRH-62/HRH-63/HRH-64 (not built here): AWS SES, the other three
+templates, and any durable/cross-invocation retry — see the ADR's scope
+table.
+
+**Scope, explicitly narrowed from HRH-13's full description (read in full
+via the orchestrator-supplied context, not independently re-verified here —
+no Linear MCP tool was available in this session; grounded instead in
+`plans/Full PRD file.md` U9/U13, read directly):** this item builds ONLY the
+order-confirmation email. `emails/ShippingNotification.tsx`,
+`emails/DeliveryConfirmation.tsx`, `emails/PasswordReset.tsx`, and the full
+`IEmailService` interface's `sendShippingNotification`/`sendPasswordReset`
+methods are HRH-13's broader scope and are explicitly **not** part of this
+item — do not build them here, and do not treat this item as "done" for
+HRH-13 as a whole. No ledger item currently exists for HRH-13's remaining
+scope; flag to the orchestrator if/when it's prioritized.
+
+**Verified (production-readiness-gate, 2026-09-01):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 443 passed / 2 skipped / 0 failed; statements 89.31% (1529/1712), branches 79.47% (945/1189), functions 97.48% (233/239), lines 90.35% (1433/1586) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all legs passed, including the M5-1a order-confirmation email leg: real signed Stripe webhook delivery → ORDER_CONFIRMATION_EMAIL_DISPATCHED OrderEvent → ConsoleEmailService.send() → payload.status 'sent' → duplicate redelivery idempotent (exactly once across the duplicate redelivery)
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M5-1a.md` STATUS: CLEAR (five non-blocking LOW advisories A1-A5; none affecting money path; verified as-is on first pass, no fix cycle)
+
+**Verification note:** shipped with NO fix cycle — security-reviewer's review returned STATUS: CLEAR on first pass with five non-blocking LOW advisories (A1 doc accuracy, A2 ops mislabelling, A3 non-atomic dedup, A4 narrow deadline window, A5 data residency). qa-dogfood-engineer independently extended scripts/agents/dogfood.mjs's webhook leg with a real end-to-end order-confirmation email assertion (real signed Stripe webhook → after()-scheduled dispatch → real claim transaction → ConsoleEmailService send → assert ORDER_CONFIRMATION_EMAIL_DISPATCHED OrderEvent with payload.status === "sent" → duplicate redelivery still exactly 1 email) and independently proved the claim-based idempotency is load-bearing via real break/fix/restore cycle on test26. Two QA follow-ups (A2 ops-mislabelling, A4 claim-then-zero-attempts race, both LOW/non-blocking) recorded as tracked follow-ups in FEATURES.md, not fixed — out of scope. Both local-check.sh and dogfood.mjs ran clean: 443 tests passed / 2 skipped, full dogfood suite green including the new email assertion. One known pre-existing flake (unrelated): tests/test22-stripe-webhook.test.ts's "concurrent stock-gone redelivery" test fails ~1/3 of isolated reruns — not a regression of M5-1a.
+
+- [ ] **Trigger point, named exactly — not "on order creation."** Grepped
+      every `eventType:` write in `src/lib` directly: the only two
+      order-lifecycle events any code path actually writes today are
+      `"CREATED"` (`reservationService.ts:515`, at order/reservation
+      creation) and `"PAYMENT_CONFIRMED"` (`reservationService.ts:623`,
+      written inside `confirmReservationsForOrder`, called from both
+      `paymentWebhookService.ts` (Stripe) and `mpesaCallbackService.ts`
+      (M-Pesa) once a payment is actually confirmed). The PRD's U9 Test 1
+      ("Order confirmed → email job queued") and the M3-2/M4-1b/M4-2b
+      precedent both point to **`PAYMENT_CONFIRMED`, not order creation
+      (`CREATED`/"PLACED")** as the trigger — a customer whose payment never
+      confirms must never receive a confirmation email. Acceptance: the
+      email is queued/sent only on the code path that writes
+      `eventType: "PAYMENT_CONFIRMED"`, proven by a test that creates an
+      order (`CREATED` only, no confirm) and asserts zero email attempts,
+      then confirms the same order and asserts exactly one.
+- [ ] **"Queued asynchronously" — a genuine open design question for
+      platform-architect, not assumed here.** This repo deploys to Vercel
+      serverless functions with **no job queue of any kind** — confirmed by
+      direct grep (no Redis/Upstash/`@vercel/kv` in `package.json`, same
+      finding ADR M4-2/M4-2b/M4-2c already made and reused across three
+      milestones). U13's PRD language ("`jobs/emailQueue.ts`, async queue
+      worker") describes infrastructure this repo does not have and this
+      item alone should not invent. Two real options exist at this repo's
+      actual scale, neither silently assumed correct: (a) fire-and-forget —
+      call the email send without `await`-ing it inside the webhook
+      request handler (risks the serverless function being frozen/killed
+      before the call completes, since Vercel does not guarantee
+      post-response execution outside `waitUntil`); (b) `await` the send
+      with a short hard timeout (e.g. 3-5s) inside the request, accepting a
+      small latency cost on the webhook response in exchange for actually
+      knowing whether it succeeded. **Architect must pick one and name the
+      mechanism (e.g. Next.js/Vercel `waitUntil` if available in this
+      repo's runtime) before dispatch** — "queued asynchronously" is not
+      itself a mechanism. Acceptance, once chosen: a test proves the
+      webhook's own response time/status is unaffected by a slow or failing
+      email send (mock the email client to hang/reject and assert the
+      webhook still returns its normal 200 within its existing latency
+      budget).
+- [ ] **SendGrid credentials — do not exist yet; must be added.** Grepped
+      `.env.example`/`.env.development` directly: there is no
+      `SENDGRID_*` variable anywhere in this repo today, despite
+      `docs/DEPLOYMENT.md:157-163` already documenting the intended names
+      (`SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`) as a future setup step.
+      This item must add both (as `REPLACE_ME` placeholders, same pattern
+      as `STRIPE_SECRET_KEY`/`MPESA_CONSUMER_KEY`) to `.env.example` and
+      `.env.development`, reusing `docs/DEPLOYMENT.md`'s existing names
+      verbatim rather than inventing new ones. **Mocking boundary, same
+      standing rule as Stripe/M-Pesa:** tests must mock the SendGrid
+      client/`IEmailService` implementation, never make a real network call
+      or depend on real credentials — this item ships with mocked-only
+      email dogfooding until a human supplies a real SendGrid API key (same
+      standing OPEN RISK already tracked for Stripe/M-Pesa).
+- [ ] **`IEmailService` interface — scoped to this item's one method only.**
+      Per HRH-13's swappability requirement, define the interface
+      (`lib/emailService.ts`) with at minimum a
+      `sendOrderConfirmation(order): Promise<void>` method and a concrete
+      SendGrid implementation — do not build the full four-method interface
+      HRH-13 eventually needs (`sendShippingNotification`,
+      `sendPasswordReset` are out of scope, see above); the interface shape
+      should not preclude adding those methods later, but this item is not
+      responsible for stubbing them.
+- [ ] **Content — variant names/attributes/pricing, not a generic
+      "order confirmed" line.** Per U9 Test 2 / U13's approach note, the
+      email must include each ordered variant's display name (e.g. "iPhone
+      15 Pro — 256GB Black") and the order's pricing breakdown, sourced
+      from the same `Order`/`OrderItem`/variant data the order-detail page
+      (M5-1b) renders — not a placeholder "your order has been confirmed"
+      email with no line items.
+- [ ] **Retry — 3x on transient send failure; Sentry alert on exhaustion
+      is out of scope, flagged not silently dropped.** U13's approach names
+      "retry up to 3 times on transient failure; alert to Sentry on
+      exhausted retries." Sentry itself is not wired anywhere in this repo
+      yet (M6-2, `planned`, not started) — this item must implement the 3x
+      retry, but on exhaustion must durably record the failure as a
+      distinctly-named `OrderEvent` (e.g. `EMAIL_CONFIRMATION_FAILED`)
+      instead of assuming a Sentry call that would silently no-op or throw
+      against nothing configured. Wiring the eventual Sentry alert is M6-2's
+      job, not this item's — do not block this item on M6-2.
+
+**Architect review: explicit YES, before dispatch.** Two genuinely
+unresolved design questions named above, not left to a builder to
+improvise: (1) the async-send mechanism given this repo's confirmed
+no-queue serverless architecture (fire-and-forget vs. awaited-with-timeout,
+and whether a `waitUntil`-style primitive is actually available); (2) the
+`IEmailService` interface's exact method signature, since it needs to
+remain stable for HRH-13's later methods to extend without a breaking
+rewrite. Same class as M4-1's/M4-2's own ADRs, not a UI-wiring item.
+
+**QA follow-up (non-blocking, flagged 2026-08-31 by qa-dogfood-engineer
+during independent test-suite/dogfood verification, security sign-off
+STATUS: CLEAR with advisories A1-A5 in
+`docs/agents/security-signoff/M5-1a.md`):** two of the five LOW advisories
+are worth a tracked regression test later, neither blocking:
+- **A2 (ops mislabelling):** `orderNotificationService.ts`'s `classifyError`
+  fallback in `sendWithRetry` (the `lastReason` path taken when the retry
+  loop exits via the deadline guard rather than exhausting `maxAttempts`)
+  durably records a transient `5xx`/`429` as `permanent_<status>` in
+  `ORDER_CONFIRMATION_EMAIL_FAILED`, which also skews `writeFailedEvent`'s
+  reason-keyed dedup grouping. No money-path effect (confirmed: this module
+  never writes `Order`/`PaymentTransaction`/inventory state). Worth a
+  regression test asserting the reason is `retryable_<status>` in this
+  specific branch once `classifyError`'s fallback is fixed to derive the
+  label from `retryable` rather than always defaulting to `permanent_`.
+- **A4 (residual claim-then-zero-attempts window):** a DB-round-trip-sized
+  race between the pre-claim deadline guard and `claimDispatch`'s own
+  latency can leave a claim written with `attempts === 0`, permanently
+  suppressing that order's email with no retry path (detectable only as a
+  stuck/absent claim, not silent — no money-path effect). Confirmed by
+  inspection this is real but genuinely narrow (the guard must pass by less
+  than the claim transaction's own latency) and would need an injected
+  artificial delay in `claimDispatch` (no such seam exists today) to write a
+  non-flaky regression test — not attempted in this QA pass; flagged for
+  whoever picks up A4's suggested fix (delete the just-created claim row
+  when `sendWithRetry` returns `attempts === 0`) to add the regression test
+  alongside the fix, using a real injected delay rather than trying to win
+  a live timing race.
+
+Both are recorded here as tracked follow-ups per this repo's standing
+non-blocking-advisory convention (same as the M4-1b/M4-2/M4-2b/M4-2c
+sections above) — not fixed in this QA pass, which is scoped to test
+suite/dogfood coverage, not product code.
+
+### M5-1b: Customer Order Dashboard & Status Timeline (HRH-53)
+**Status:** planned · **Owner:** storefront-admin-engineer
+(Next.js pages/components — `app/dashboard/orders/{page,[orderId]/page}.tsx`,
+`OrderStatusTimeline.tsx` — same UI-ownership convention as M2/M3's
+storefront-admin-engineer items)
+
+**Depends on M5-1a only insofar as both read the same `Order`/`OrderEvent`
+data; does not depend on M5-1a's email send succeeding or existing.**
+
+- [ ] **Only two of the four timeline states are reachable by any code path
+      today — confirm this explicitly, do not assume all four render for a
+      real order.** Grepped every `eventType:` write across `src/lib`
+      directly: the only order-lifecycle events any code ever writes are
+      `"CREATED"` (maps to the UI label "PLACED") and `"PAYMENT_CONFIRMED"`
+      (maps to "CONFIRMED"). **No code path anywhere in this repo writes a
+      `"SHIPPED"` or `"DELIVERED"` `OrderEvent`** — those two labels are
+      aspirational, named only in `prisma/schema.prisma:405`'s
+      free-form-string comment and the PRD's U9 approach note, never
+      implemented. Acceptance: the timeline component must render whichever
+      of the four steps have a real, matching `OrderEvent` as "reached"
+      (with its actual `createdAt` timestamp) and the remaining steps as
+      "not yet reached" — it must not fabricate a `SHIPPED`/`DELIVERED`
+      timestamp, must not error or render a broken state when only two of
+      four steps exist, and must not silently treat "no event" as
+      "in progress" if that's not actually true.
+- [ ] **Flagged dependency, not silently assumed already covered:** for
+      `SHIPPED`/`DELIVERED` to ever appear on a real order, some other
+      ledger item must first write those `OrderEvent`s — most likely an
+      admin "mark order shipped" action. **`M5-2` (this milestone's other
+      item) currently has no such bullet** — its three bullets (RBAC/2FA +
+      audit log, product/variant CRUD + bulk upload, low-stock flag) do not
+      include order management or a mark-shipped action, despite the PRD's
+      U10 Test 3 and this milestone's own Integration Checkpoint line both
+      naming "admin mark-shipped." This is a real, pre-existing ledger gap,
+      not introduced by this split — flagged to the orchestrator so a
+      future item (a new `M5-2b` or an amendment to `M5-2`) is scoped for
+      it, rather than this item's builder discovering mid-implementation
+      that `SHIPPED`/`DELIVERED` can never actually be tested end-to-end
+      against a real order.
+- [ ] **Ownership check, same pattern as M1-3/M3-2's established
+      convention.** `app/dashboard/orders/[orderId]/page.tsx` must verify
+      `session.user.id === order.userId` before rendering any order detail
+      (404 or redirect on mismatch, not a 403 that confirms the order
+      exists) — same "don't let a leaked/guessed id read another user's
+      data" rule already enforced for `Address`/cart ownership.
+- [ ] **List + detail content.** `app/dashboard/orders/page.tsx`: the
+      current user's orders, most recent first. `app/dashboard/orders/
+      [orderId]/page.tsx`: variant display names, attributes, images, and
+      the pricing breakdown (same underlying data M5-1a's email uses, per
+      U9 Test 2) — not just order id and total.
+- [ ] **Data source — query `OrderEvent` by `orderId`, ordered by
+      `createdAt` ascending; render exactly what exists.** No hardcoded
+      assumption that exactly one row per state or exactly four rows always
+      exist — the component must be correct for an order with only its
+      `CREATED` event (freshly placed, payment not yet confirmed) as well
+      as one with `CREATED` + `PAYMENT_CONFIRMED`.
+
+**Architect review: explicit NO** for the two-state (PLACED/CONFIRMED)
+version of this item — closer to M2-4/M3-3a's UI-wiring shape, reading an
+already-designed, already-written `OrderEvent` log with no new lock/
+concurrency/schema question. If a future item adds the SHIPPED/DELIVERED
+write path, that item (not this one) should get its own architect pass for
+the mark-shipped transaction/email-trigger design.
+
+**Not done, deliberately, per this task's scope:** no code written; only
+`FEATURES.md`'s M5-1a/M5-1b sections and `docs/agents/run-state.md` were
+edited (no `src/`/`tests/` touched).
 
 ### M5-2: Admin order/product management + audit log
 **Status:** planned · **Owner:** storefront-admin-engineer

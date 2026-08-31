@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runMpesaReconciliation } from "@/lib/mpesaReconcileService";
 
@@ -50,10 +50,22 @@ function isAuthorized(request: Request): boolean {
  * UI or any log aggregator.
  */
 export async function GET(request: Request) {
+  // M5-1a Decision 8: captured at handler entry, same as the other two
+  // webhook routes.
+  const requestStart = Date.now();
+
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const report = await runMpesaReconciliation();
+  const report = await runMpesaReconciliation({
+    emailDeps: {
+      schedule: after,
+      deadlineAt: requestStart + 55_000,
+      // Up to 25 rows x 3 attempts x 5s would blow this job's 60s
+      // maxDuration — capped to 1 attempt per row for the bulk path.
+      maxAttempts: 1,
+    },
+  });
   return NextResponse.json(report, { status: 200 });
 }

@@ -606,6 +606,140 @@ a direct DB query (`SELECT count(*) FROM "X" WHERE <this file's stale
 criteria>`) before trusting the next run's results — don't assume a clean
 slate.
 
+## An ADR's own worked code snippet for an injected scheduler can contradict its own prose — trust the type-checked code, verify empirically, and never assume the default seam is deterministic for a test
+
+**Symptom:** M5-1a's ADR (Decision 1.1) describes `inlineAfterResponse`
+("the default when no scheduler is injected") in prose as "run inline and
+AWAIT. Deterministic, never throws" — but its own literal code snippet is
+`(task) => { void task(); }`, which does NOT await the task; it fires the
+async task and immediately discards the returned promise. `void task()` is
+genuinely fire-and-forget: only the task's synchronous prefix (up to its
+first internal `await`) runs before the outer function returns. A test
+calling `dispatchOrderConfirmationEmail(orderId)` directly with no
+`schedule` override and then immediately asserting DB state (claim
+written, retries settled, event payload) is flaky by construction — the
+scheduled work has not necessarily finished, or even started past its
+first `await`, when the assertion runs.
+
+**Cause:** `AfterResponse`'s own type signature (`(task: () =>
+Promise<void>) => void`) is synchronous-returning by design (it has to be,
+to match real `after()`'s API and Decision 8's route wiring) — a
+synchronous function genuinely cannot "await" an async task and still
+return `void` before that task settles. The prose comment describing
+"deterministic" behavior is aspirational/inaccurate for the literal code,
+not a deliberate design a builder should try to preserve by inventing a
+different (non-type-matching) default.
+
+**Rule going forward:** empirically verify any ADR's "the default scheduler
+is deterministic for tests" claim (or similar "this seam behaves
+conveniently for the test suite" claims) with a one-off script BEFORE
+writing tests that rely on it — do not trust the prose over the type
+signature. When a genuinely-synchronous injectable scheduler needs
+deterministic completion in a test, build a small local test helper (this
+build's `runInlineAndAwait()`) that captures the task's returned promise
+via a `schedule` closure and exposes a `settle(): Promise<void>` the test
+awaits explicitly — this is the SAME pattern as the ADR's own "capturing
+scheduler, then drain" idiom (already used for the non-blocking/latency
+tests), just applied everywhere a direct call needs its result observed,
+not only where "assert the handler returned before the task ran" is the
+point. Every test in this build that calls
+`dispatchOrderConfirmationEmail` directly (not through a webhook/cron
+entry point) passes an explicit scheduler for this reason — never rely on
+the bare default when the next line asserts on its effects.
+
+**Second-order consequence — the SAME fire-and-forget default leaked into
+already-verified SIBLING test files, not just this item's own new one.**
+Wiring `dispatchOrderConfirmationEmail` unconditionally into
+`paymentWebhookService.ts`'s/`mpesaCallbackService.ts`'s/
+`mpesaReconcileService.ts`'s confirm paths (per ADR Decision 2/2.1) means
+EVERY existing caller of `handleStripeWebhookEvent`/`handleMpesaCallback`/
+`runMpesaReconciliation` that does NOT pass `opts.emailDeps` — i.e. every
+call site in `tests/test22-stripe-webhook.test.ts`,
+`tests/test24-mpesa-callback.test.ts`, and
+`tests/test25-mpesa-reconcile.test.ts` (all pre-existing, `verified`,
+written before this item and rightly unaware of it) — now triggers a REAL,
+unawaited (`inlineAfterResponse`'s `void task()`) background write: a real
+`ORDER_CONFIRMATION_EMAIL_DISPATCHED` `OrderEvent` insert plus a
+console-logged `ConsoleEmailService` send, against the SAME shared dev
+Postgres those files' own assertions query. `bash
+scripts/agents/local-check.sh`'s full-suite run caught this for real:
+`test24-mpesa-callback.test.ts`'s required test 9 ("...zero
+PaymentTransaction/OrderEvent writes") failed with `expected 16 to be 15`
+— a background email-dispatch write from an EARLIER test in the same file
+landed asynchronously inside a LATER test's own before/after row-count
+window. This was NOT the pre-documented flake (a different file/test
+entirely) — a genuine regression this item's own wiring introduced into
+someone else's (in this case, my own domain's, but still separately
+`verified`) prior work.
+
+**Rule going forward:** when a new item wires a cross-cutting side effect
+(here: unconditional email dispatch) into a SHARED entry point that
+existing, already-`verified` test files call without knowledge of the new
+optional parameter, do NOT assume "it's optional and additive, so old
+callers are unaffected" — an "additive optional param defaulting to real
+(if inert-looking) behavior" is only actually inert if that default
+behavior is synchronous/no-op. A default that schedules REAL async work
+(any DB write, any I/O) is NOT inert for a test suite sharing one
+Postgres instance across sequential files (`fileParallelism: false` does
+not help here — it prevents CONCURRENT files, not a stray unawaited
+promise from an EARLIER file's test still settling after that file's
+`afterAll` has already run its cleanup and the next file has started).
+The fix is NOT to make every old call site pass the new opt, and NOT to
+change the shared function's own default (that would silently weaken
+production behavior for the one real omission case that matters) — it is
+to `vi.mock` the new dependency (`orderNotificationService.ts`) to a
+no-op at the top of every sibling test file that doesn't test it, exactly
+the same way this repo already mocks unrelated SDK boundaries
+(`../src/lib/stripe`, `next/headers`) that a file's own scope doesn't
+care about. After making this class of change, always run the FULL
+`local-check.sh` suite (not just the new file, not just the files you
+edited) before reporting green — running only the new test file in
+isolation would have shown 29/29 passing and completely missed this,
+because the pollution only manifests when OTHER files' own strict
+row-count assertions are in the same process run.
+
+## `after()` genuinely throws outside a real Next.js request scope — confirmed empirically, not assumed from the ADR's prose
+
+**Symptom:** M5-1a's route wiring passes the REAL `after` (imported from
+`next/server`) as `deps.schedule` in all three webhook/cron routes. A
+naive assumption might be that route-level tests (which call `POST()`/
+`GET()` directly in-process, per this repo's established "no
+`next/headers`, no spawned server needed" pattern) could exercise the real
+`after()` scheduling path end-to-end. Verified empirically with a
+one-off `tsx` script (`import { after } from "next/server"; after(async
+()=>{})`) run from the repo root: `after()` synchronously throws `` `after`
+was called outside a request scope `` when invoked outside Next's own
+request-handling machinery — which an in-process `POST(new NextRequest(...))`
+call (no spawned `next dev` server, no Next-internal `AsyncLocalStorage`
+request context) does not provide.
+
+**Cause:** `after()`'s implementation depends on Next's own
+`workUnitAsyncStorage`, populated only while a real Next.js server (dev or
+built) is actively handling a request. Directly importing and calling a
+route's exported `POST`/`GET` handler — this repo's standard pattern for
+routes with no `next/headers`/`cookies()` dependency — does not establish
+that context, even though it otherwise faithfully exercises the handler's
+own logic (headers, body, status codes).
+
+**Rule going forward:** any code path that calls `after()` (or any
+`unstable_after`-family API) is NOT exercisable via this repo's
+"call the exported route handler directly, no spawned server" pattern for
+the specific `after()`-scheduled behavior — only for everything before it.
+Two consequences that both matter: (1) the CALLED function
+(`dispatchOrderConfirmationEmail` here) must independently wrap its own
+`schedule(task)` call in try/catch (which it does, per its "never throws"
+contract) so that a route-level test invoking it with the real `after`
+degrades to a caught, logged no-op rather than an unhandled rejection —
+this is not just defensive style, it is load-bearing for any route-level
+test that happens to reach a confirm path; (2) test the actual scheduled
+behavior (claim/retry/send content) exclusively at the SERVICE level
+(`handleStripeWebhookEvent`/`handleMpesaCallback`/`runMpesaReconciliation`
+called in-process) with an injected capturing/awaiting scheduler, never by
+trying to get a real `after()` to fire inside an in-process route-handler
+test — same "split by which side of the external call the assertion falls
+on" principle as this file's existing "`next/headers` route" entry, now
+generalized to any Next request-scope-only primit.
+
 ## Existing mocked-SDK fallback pattern (context, not yet a lesson)
 
 `tests/test4-stripe.test.ts` already establishes the pattern for this

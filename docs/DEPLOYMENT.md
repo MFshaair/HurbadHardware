@@ -156,6 +156,16 @@ secrets are still configured per-project as above.
 
 ## 5. SendGrid
 
+**`SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL` are now required by code, not
+merely planned** (M5-1a / HRH-52, `src/lib/emailService.ts`). Until step 3
+below is done, order confirmation email fails loud in production
+(`getEmailService()` refuses to send and records an
+`ORDER_CONFIRMATION_EMAIL_FAILED` `OrderEvent` with
+`reason: "not_configured"` — it never silently fakes success) and the
+checkout/payment flow itself is entirely unaffected either way
+(`dispatchOrderConfirmationEmail` never throws and never touches
+`Order.paymentStatus`/inventory).
+
 1. Create/access the SendGrid account
 2. Verify the sending domain (`hurbadhardware.com`) for DKIM/SPF
 3. Create an API key scoped to "Mail Send" and set `SENDGRID_API_KEY` in

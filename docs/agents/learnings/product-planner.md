@@ -406,6 +406,31 @@ a periodic job would; name that distinction explicitly in the new item's
 acceptance criteria rather than assuming threshold-order alone ("20 min is
 longer than 180s, so it's covered") settles the question.
 
+## A free-form status/event-type column can have PRD-named states that no code path ever writes
+**Symptom:** Drafting M5-1b's status-timeline criteria from the PRD's "PLACED
+→ CONFIRMED → SHIPPED → DELIVERED" language, or from `prisma/schema.prisma`'s
+`OrderEvent.eventType` inline comment (which lists `"SHIPPED" | "DELIVERED"`
+as example values), would have implied all four states are real, reachable
+outcomes for an order today.
+**Cause:** `eventType` is a free-form `String`, not an enum — the comment is
+documentation of *intended* values, not a record of what any function
+actually writes. Grepping every `eventType: "..."` write across `src/lib`
+directly showed only `"CREATED"` and `"PAYMENT_CONFIRMED"` are ever written
+by any code path; `SHIPPED`/`DELIVERED` require an admin mark-shipped action
+that had no ledger item at all (`M5-2`'s bullets didn't cover it either) —
+a two-layer gap only direct grep of the actual write sites caught, not the
+schema comment or the PRD prose.
+**Rule going forward:** For any acceptance criterion enumerating states of a
+free-form `String` status/event-type column, grep every literal write site
+of that column across `src/lib` (not the schema's inline comment, not the
+PRD's prose) before naming which states are real today. If some named states
+have no writer anywhere, say so explicitly and check whether a consuming
+ledger item exists that would ever write them — if not, that's a
+pre-existing ledger gap worth flagging to the orchestrator (not silently
+fixed by inventing a new bullet in someone else's item), and the UI/consumer
+criterion should be phrased to render only real states gracefully rather
+than assume the full named set always exists.
+
 ## A named security mechanism carried forward from one provider's item can be factually wrong for a sibling provider
 **Symptom:** M4-2b's PRD/Linear-inherited acceptance criteria named "HMAC-
 SHA256 signature verification" for the M-Pesa Daraja callback route,
