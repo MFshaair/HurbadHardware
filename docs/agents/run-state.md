@@ -24,13 +24,16 @@ expansion (Ethiopia/Somalia) and Phase 2 features are explicitly out of
 scope for autonomous execution — see OPEN RISKS.
 
 ### MILESTONE PLAN + current position
-Current milestone: **M4 — Payments (Stripe & M-Pesa)**, just started
-2026-08-29 via `/hurbad-team` on HRH-47 (M4-1, Stripe Embedded Checkout
-session creation). M0-M3 are all `verified`/checkpoint-tagged — see the
-table below and `checkpoint/m3` (this milestone's own predecessor). M2-3
-(non-blocking M2-1 security advisories) and M3-2's/M3-3's tracked
-non-blocking follow-ups (see security-signoff files) remain open but do
-not block M4.
+Current milestone: **M5 — Orders, Admin & Notifications**, started
+2026-08-31 via `/hurbad-team` on HRH-52 (M5-1, order confirmation email
+flow). M0-M4 are all `verified`/checkpoint-tagged — see the table below
+and `checkpoint/m4` (this milestone's own predecessor, tagged 2026-08-31
+after M4's integration checkpoint dogfood re-ran GREEN). M2-3 (non-blocking
+M2-1 security advisories), M3-2's/M3-3's tracked non-blocking follow-ups,
+and M4's own tracked non-blocking advisories (security-signoff files;
+plus the pre-existing `test22-stripe-webhook.test.ts` concurrency flake
+documented 2026-08-31, unrelated to any shipped item) remain open but do
+not block M5.
 
 | # | Milestone | Status |
 |---|---|---|
@@ -38,8 +41,8 @@ not block M4.
 | M1 | Auth & Identity (U3, better-auth) | M1-1/M1-2/M1-3 verified; M1-4/M1-5 deferred lower-priority findings, still `planned` |
 | M2 | Catalog, Variants & Search (U4) | M2-1/M2-2/M2-4 verified; M2-3 (non-blocking advisories backlog) still `planned` |
 | M3 | Cart, Checkout & Reservation (U5/U6/U12) | **verified, checkpoint tagged** (`checkpoint/m3`, commit `274c813`, 2026-08-29) — M3-1/M3-2/M3-3a/M3-3 all verified; integration checkpoint (concurrent-last-unit test + full cart→reservation dogfood) confirmed MET and re-run GREEN by the orchestrator before tagging |
-| M4 | Payments — Stripe & M-Pesa (U7/U8) | **in progress** — HRH-47/M4-1 started 2026-08-29 |
-| M5 | Orders, Admin & Notifications (U9/U10/U11/U13) | blocked on M4 |
+| M4 | Payments — Stripe & M-Pesa (U7/U8) | **verified, checkpoint tagged** (`checkpoint/m4`, commit `605ad26`, 2026-08-31) — M4-1/M4-1b/M4-2/M4-2b/M4-2c all verified; full-system dogfood (10 legs incl. real Stripe webhook + M-Pesa STK/callback/reconciliation-cron wiring) re-run GREEN by the orchestrator before tagging |
+| M5 | Orders, Admin & Notifications (U9/U10/U11/U13) | **in progress** — HRH-52/M5-1 started 2026-08-31 |
 | M6 | Hardening & Launch Readiness (U15/U16 + DoD) | blocked on M5 |
 
 Out of horizon for this run: U14 (Ethiopia/Somalia deploy), all Phase 2
@@ -72,18 +75,24 @@ Telebirr), not engineering-resolvable. Stay `planned` on the ledger.
   not the PRD, for this one fact.
 
 ### LAST KNOWN-GOOD CHECKPOINT
-`checkpoint/m3` tag, commit `274c813` (2026-08-29). M3's integration
-checkpoint (full-system dogfood: server boot → schema migrate → register/
-login → homepage/category-cards/search → browse/search/filter → cart
-add/view/update/remove/409/logout-rotation → real checkout address→
+`checkpoint/m4` tag, commit `605ad26` (2026-08-31). M4's integration
+checkpoint (full-system dogfood, 10 legs: server boot → schema migrate →
+register/login → homepage/category-cards/search → browse/search/filter →
+cart add/view/update/remove/409/logout-rotation → real checkout address→
 payment→review→**REAL Place order**→201→`Order`/`InventoryReservation`/
-`OrderEvent` rows confirmed→cart consumed→checkout draft cleared) was
-re-run independently by the orchestrator (not just trusted from
-`qa-dogfood-engineer`'s report) and exited 0 before this tag was created.
-`checkpoint/m0` (commit `3f26673`, 2026-08-20) is the next fallback if
-this one needs to be rolled back past. Roll back to `checkpoint/m3` if a
-later milestone's integration checkpoint goes red and can't be cheaply
-fixed forward.
+`OrderEvent` rows confirmed→cart consumed→checkout draft cleared → real
+signed Stripe webhook delivery→CONFIRMED→`onHand` decremented→idempotent
+redelivery → M-Pesa STK-push route wiring → real M-Pesa callback delivery
+(wrong-token 404/malformed-body 400, both zero-write, then a real
+`ResultCode:0` confirm→`onHand` decremented→idempotent redelivery) → real
+M-Pesa reconciliation cron wiring (auth guard 401 zero-write, then a real
+dead-letter DB-rejoin confirm)) was re-run independently by the
+orchestrator (not just trusted from any agent's report) and exited 0
+before this tag was created. `checkpoint/m3` (commit `274c813`,
+2026-08-29) is the next fallback if this one needs to be rolled back past;
+`checkpoint/m0` (commit `3f26673`, 2026-08-20) beyond that. Roll back to
+`checkpoint/m4` if a later milestone's integration checkpoint goes red and
+can't be cheaply fixed forward.
 
 ### OPEN RISKS / ESCALATIONS
 - **PRD (`eu-west-1`/Dublin) vs. repo (`eu-west-2`/London) region mismatch**
