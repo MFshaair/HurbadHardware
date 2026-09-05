@@ -422,13 +422,18 @@ model OrderEvent {
 // credential fields belong here — that was v1's AHD8 violation.
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  emailVerified Boolean  @default(false)
-  phone         String?  @unique
-  name          String
-  avatar        String?
-  role          UserRole @default(CUSTOMER)
+  id               String   @id @default(cuid())
+  email            String   @unique
+  emailVerified    Boolean  @default(false)
+  phone            String?  @unique
+  name             String
+  avatar           String?
+  role             UserRole @default(CUSTOMER)
+  // M5-2a (HRH-54): better-auth's two-factor plugin field, hand-applied
+  // per `docs/agents/arch-decisions/M5-2a-admin-rbac-2fa.md` Decision 6
+  // (`two-factor/schema.mjs`). Defaults to false so every existing
+  // customer row backfills unaffected.
+  twoFactorEnabled Boolean  @default(false)
 
   addresses      Address[]
   paymentMethods PaymentMethod[]
@@ -437,8 +442,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessions Session[]
-  accounts Account[]
+  sessions             Session[]
+  accounts             Account[]
+  twoFactors           TwoFactor[]
+  adminSessionActivity AdminSessionActivity[]
 
   @@index([email])
   @@map("User")
@@ -615,6 +622,11 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // M5-2a (HRH-54): back-relation for AdminSessionActivity's `session`
+  // FK (onDelete: Cascade) — logout/revocation cleans up the activity row
+  // automatically.
+  adminSessionActivity AdminSessionActivity?
+
   @@unique([token])
   @@index([userId])
   @@map("session")
@@ -652,4 +664,46 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// M5-2a (HRH-54): better-auth two-factor plugin's own table, hand-applied
+// per ADR M5-2a Decision 6 (`node_modules/better-auth/dist/plugins/
+// two-factor/schema.mjs`, read verbatim). `secret`/`backupCodes` are
+// encrypted at rest (symmetricEncrypt under BETTER_AUTH_SECRET) by the
+// plugin itself, never in plaintext here. Brand-new table — NOT NULL
+// columns here can never break an existing row.
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+  createdAt               DateTime  @default(now())
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
+}
+
+// M5-2a (HRH-54): app-owned table backing `requireAdmin()`'s 30-minute
+// IDLE timeout (ADR Decision 7) — deliberately NOT a change to
+// `betterAuth().session` (which would cut every customer's 7-day session
+// too) and NOT a cookie (state that authorizes access belongs
+// server-side). Stores `Session.id`, never `Session.token` (never
+// duplicate a bearer secret into a second table). `onDelete: Cascade` on
+// both FKs means logout / session revocation clean these rows up with no
+// cleanup cron needed.
+model AdminSessionActivity {
+  id             String   @id @default(cuid())
+  sessionId      String   @unique
+  session        Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastActivityAt DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
 }

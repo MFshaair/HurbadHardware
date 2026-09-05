@@ -461,3 +461,62 @@ wrong bullet in place for a builder to discover mid-implementation. Flag
 the actual mechanism choice for platform-architect review if it interacts
 with an already-locked decision (e.g. a callback URL path fixed by a prior
 ADR for unrelated reasons).
+
+## A single shared library instance can't give one role a stricter security
+## property than another without a real design decision
+**Symptom:** Sharpening M5-2a's "30-min admin session timeout" criterion
+by paraphrase alone ("shorter session for admins") would have implied a
+one-line `session.expiresIn` config change was sufficient.
+**Cause:** Reading `node_modules/better-auth/dist/context/
+create-context.mjs:147` and `src/lib/auth.ts` directly showed this repo
+has exactly one `betterAuth()` instance and one shared `Session` table,
+currently on better-auth's global 7-day default with no `session` block
+set at all — session expiry is a property of the *instance*, not the
+*user's role*, and better-auth's options expose no per-role expiry knob.
+A criterion phrased only as "admin sessions expire in 30 min" doesn't
+reveal that satisfying it naively (setting a global `expiresIn: 1800`)
+would silently also cut every *customer* session (checkout, dashboard) to
+30 minutes — a real regression a builder could introduce while
+technically satisfying the letter of the criterion. Same failure shape as
+this file's earlier "library defaults the opposite way" and "cached in
+memory" entries: a criterion that sounds like a config tweak can hide a
+platform/architecture question once you check whether the underlying
+mechanism is instance-wide or genuinely scoped to the actor the criterion
+names.
+**Rule going forward:** When a criterion asks for a stricter
+security/session/rate-limit property for one role/actor class than
+applies elsewhere in the app, check whether the underlying library
+mechanism (auth session config, rate limiter, cache) is configured at a
+scope that actually distinguishes that actor class (per-role, per-route)
+or only at a single shared/global scope. If only global, do not let the
+criterion imply a global config change satisfies it — name the real
+options (a second, separately-configured instance/cookie; an app-level
+check independent of the shared mechanism's own expiry) and flag it for
+platform-architect rather than leaving "make it 30 minutes" as a
+builder's one-line config edit.
+
+## A model/enum a Linear item asks you to "add" may already exist in the
+## schema from an earlier milestone
+**Symptom:** HRH-54's Linear description ("Admin/Operator/View-Only
+roles... TOTP 2FA... AdminAuditLog on every mutation") reads as if all
+three are new schema surface this item must design and migrate.
+**Cause:** Direct reads of `prisma/schema.prisma` showed `User.role
+UserRole @default(CUSTOMER)` (with the exact three non-customer values
+already named) and a fully-shaped `AdminAuditLog` model both already exist
+— committed in an earlier milestone's schema work, never surfaced in any
+ledger item's criteria because no admin-facing item had been scoped yet to
+consume them. Treating the Linear description's "RBAC... audit log" bullet
+as "design + migrate both" would have wasted a migration cycle and an
+architect review on schema that was already done, and would have hidden
+the one piece that genuinely IS new (the 2FA plugin's own additive
+`TwoFactor` table + `User.twoFactorEnabled` column).
+**Rule going forward:** Before treating any Linear/PRD bullet that names a
+role/enum/audit-log/permission model as "needs schema design," grep
+`prisma/schema.prisma` directly for that exact concept first — earlier
+milestones in this repo have repeatedly pre-built schema surface for
+features not yet scoped (v3's original schema pass front-loaded a lot).
+If it already exists, say so explicitly in the ledger entry (cite the
+line, confirm zero migration for that piece) and narrow the item's real
+scope to only the genuinely-new surface, rather than assuming the Linear
+description's phrasing ("needs roles," "needs an audit log") implies
+schema work is still outstanding.

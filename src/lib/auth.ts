@@ -13,6 +13,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
+import { twoFactor } from "better-auth/plugins/two-factor";
 import { createAuthMiddleware } from "better-auth/api";
 import { db } from "@/lib/db";
 import { rotateCartSessionId } from "@/lib/cartCookie";
@@ -106,7 +107,25 @@ export const auth = betterAuth({
       }
     }),
   },
-  // Must be the LAST plugin — its `after` hook writes Set-Cookie into
-  // Next's cookie store, and better-auth runs plugin hooks in order.
-  plugins: [nextCookies()],
+  // M5-2a (HRH-54): admin RBAC & 2FA. TOTP-only, per ADR Decision 5 —
+  // deliberately NOT set: `otpOptions` (no `sendOTP` configured, so
+  // `enableTwoFactor({method:"otp"})` throws `OTP_NOT_CONFIGURED` — this
+  // is the library-enforced scope fence keeping this repo TOTP-only, not
+  // discipline), `skipVerificationOnEnable` (left at its default `false`
+  // so `User.twoFactorEnabled`/`TwoFactor.verified` only flip after a real
+  // `verifyTOTP` call — that default IS the "one verifyTOTP call confirms
+  // setup" acceptance criterion). No `session` block is added anywhere in
+  // this file — the global 7-day default session lifetime
+  // (internal-adapter.mjs) is unchanged for every role; the 30-minute
+  // admin idle timeout is an app-level check in src/lib/adminAuth.ts, not
+  // a betterAuth() session config (would also cut every customer's
+  // session to 30 minutes). Never send `trustDevice: true` from any UI in
+  // this repo — see src/app/admin/2fa/setup/TwoFactorSetup.tsx and
+  // src/app/auth/2fa/TwoFactorChallenge.tsx, both of which omit it
+  // deliberately.
+  //
+  // Must come BEFORE nextCookies(), which must remain the LAST plugin —
+  // its `after` hook writes Set-Cookie into Next's cookie store, and
+  // better-auth runs plugin hooks in order.
+  plugins: [twoFactor({ issuer: "Hurbad Hardware" }), nextCookies()],
 });

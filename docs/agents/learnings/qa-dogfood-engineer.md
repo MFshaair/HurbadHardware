@@ -876,3 +876,73 @@ same break/restore cycle doubles as a check that (i) the test actually
 pins the correct (fixed) behavior and (ii) the test would have caught the
 bug before the fix existed — do this for any test edit that changes an
 expected value, not only for brand-new tests.
+
+## When a milestone's own test suite already spawns a real `next dev` server over real HTTP, a new dogfood.mjs leg for that milestone can be genuine theater, not a gap
+
+**Symptom/decision (M5-2a, HRH-54, admin RBAC/2FA/idle-timeout):** Every
+prior dogfood.mjs leg added for M4-2/M4-2b/M4-2c closed a real, provable
+gap because those milestones' own test files (test23/test24) called the
+exported route handler IN-PROCESS (`route.POST(request, ...)`), never over
+real HTTP against a spawned server — so dogfood.mjs was the ONLY place
+proving the route was actually registered/reachable/not-intercepted by
+middleware. M5-2a's own `tests/test28-admin-rbac-2fa.test.ts` Tier B does
+NOT have that gap: it already `spawn("npx", ["next", "dev", ...])`s a real
+server and issues real `fetch()` calls for every role-gate/2FA/idle-timeout
+scenario (confirmed by direct read, not assumed from its own header
+comment), and additionally drives the enrollment wizard and the
+Decision-9 login-loop fix through a REAL Playwright browser — the same
+fidelity dogfoodCheckout() itself uses for M3-3a. Concluded (and recorded
+in dogfood.mjs's own M5-2a STATUS comment) that adding a new leg here would
+be duplicate coverage of already-equivalent-fidelity assertions, not a new
+gate — and that `writeAdminAuditLog()`'s zero-callers state makes dogfooding
+it now the same "unwired code path is theater" class this file already
+refuses for M3-1/M4-1.
+
+**Rule going forward:** Before assuming a new milestone needs a new
+dogfood.mjs leg (the file's own charter default), check TWO things about
+that milestone's own test suite first: (1) does its Tier B/integration
+tier already spawn a real server and issue real HTTP/real-browser calls,
+or does it call route handlers in-process (grep for `spawn.*next.*dev` vs
+`route.POST(request` / similar in-process handler calls) — only the latter
+is the class of gap this file's legs are meant to close; (2) does the
+new milestone's own new helper/module have any real caller yet, or is it
+pure infrastructure for a later item — dogfooding a zero-caller helper is
+theater regardless of how load-bearing that helper will eventually be.
+If both checks come back "already covered" / "no real caller yet," the
+correct action is a documented STATUS comment explaining the decision NOT
+to add a leg (same style as the existing M4-1/M4-1b notes), not a leg added
+reflexively to satisfy "the file must grow every milestone." The charter's
+"must grow with the product" rule is about the file staying honest, not
+about mechanically adding one leg per milestone regardless of whether doing
+so would add real signal.
+
+## Idle-timeout fail-closed session revocation and the audit-log F1 runtime discriminator are both genuinely load-bearing — confirmed by independent break/fix/restore
+
+**Symptom (verification, not a bug, M5-2a):** Independently re-verified two
+of the ADR's own flagged highest-risk mechanisms rather than trusting the
+builder's/security-reviewer's account: (1) commented out the
+`db.session.deleteMany(...)` call inside `requireAdmin()`'s idle-timeout
+branch (`src/lib/adminAuth.ts`) — `tests/test28-admin-rbac-2fa.test.ts`'s
+"idle timeout fires" test failed immediately and specifically (`expected {
+...session row... } to be null`), proving a redirect-without-revoke really
+would leave a live session row for any other/future code path with a
+weaker check to accept. (2) short-circuited
+`writeAdminAuditLog()`'s runtime guard to `if (false && "$transaction" in
+tx)` (`src/lib/adminAuditLog.ts`) — the F1 regression test failed
+specifically (`promise resolved "undefined" instead of rejecting`), proving
+the type-level contract alone (a required `tx` parameter) really is
+insufficient and the runtime discriminator is the thing actually stopping
+an audit row from committing outside the mutation's own transaction.
+Restored both files exactly (`git diff --stat` empty) and reconfirmed all
+21 tests in test28 green afterward.
+
+**Rule going forward:** For any ADR-flagged "highest risk" mechanism
+(explicit fail-closed revocation, a runtime guard backstopping a type-level
+claim the ADR itself had to walk back), always do the break/fix/restore
+cycle yourself even when the security sign-off already reports having done
+it — it is cheap (one commented-out line, one `vitest run -t "<pattern>"`,
+one restore) and this repo has an established pattern of trusting a prior
+agent's account only after independently reproducing it. A test that fails
+with a specific, on-topic assertion diff (not a timeout, not an unrelated
+error) when the guarded behavior is disabled is the strongest available
+evidence the gate is real, not decorative.

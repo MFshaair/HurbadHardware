@@ -3477,11 +3477,454 @@ order-creation sequence, and why it deliberately does not re-prove
 ownership/cross-tenant scoping (test27's own 11-test suite already does,
 against a real spawned server).
 
-### M5-2: Admin order/product management + audit log
-**Status:** planned · **Owner:** storefront-admin-engineer
-- [ ] Admin RBAC (Admin/Operator/View-Only) + 2FA; every mutation writes `AdminAuditLog` (before/after state, observed via query)
-- [ ] Product/variant CRUD with soft delete; bulk CSV upload with duplicate-SKU rejection (no partial insert)
-- [ ] Low-stock flag (<10 availableForSale) shown in inventory view
+### M5-2: Admin order/product management + audit log — SPLIT 2026-09-05
+
+The original bundled three-bullet `M5-2` above has been split into five
+ledger items (`M5-2a`..`M5-2e`), one per Linear issue, mirroring the
+M4-2/M4-2b/M4-2c and M5-1a/M5-1b split precedent. This heading is retained
+only as a pointer; the actual items follow below.
+
+**Dependency chain, explicit:** `M5-2a` (HRH-54, RBAC + 2FA) is the
+authorization foundation every other M5-2 item needs — an "admin
+mutation" cannot write a real, role-checked `AdminAuditLog` entry with a
+genuine `actorId` if no admin-role concept or session boundary exists yet.
+`M5-2b`/`M5-2c`/`M5-2d`/`M5-2e` each state "depends on M5-2a existing" —
+same shape as M4-2b/M4-2c depending on M4-2's ADR being locked first —
+and none should be dispatched before `M5-2a` is `verified`.
+
+**Owner note, checked against file ownership, not assumed:** all five are
+led by storefront-admin-engineer (pages/routes/RBAC/audit-log plumbing),
+but `M5-2c` (product/variant CRUD) and `M5-2d` (bulk CSV import) create
+and update rows in `Product`/`ProductVariant`/`RegionalPrice`/
+`RegionalInventory` — the same tables `src/lib/productService.ts` (M2-1/
+M2-2, catalog-inventory-engineer's file, confirmed by its own header
+comment) currently only *reads*. Flagged as **coordination required with
+catalog-inventory-engineer** for both items (either that engineer builds
+the write-side service functions, or reviews/co-owns them) rather than
+silently letting storefront-admin-engineer invent parallel write logic
+against another agent's data layer — same pattern as the "binding fix in
+another agent's files" lesson already recorded in this agent's learnings.
+`M5-2b` (order management) and `M5-2e` (analytics) stay single-owner:
+`Order`/`OrderEvent` mutations are already this milestone's own surface
+(M5-1a/M5-1b), and `DailySalesMetric`/inventory-view reads are read-only.
+
+### M5-2a: Admin RBAC & 2FA (HRH-54)
+**Status:** verified (gate-check.sh M5-2a exit 0 — 2026-09-05) · **Owner:** storefront-admin-engineer
+
+**Verified (production-readiness-gate, 2026-09-05):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 475 passed / 2 skipped / 0 failed; statements 88.17% (1551/1759), branches 78.76% (957/1215), functions 96.01% (241/251), lines 89.08% (1453/1631) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all legs passed, including test:2-prisma-migrate confirming no migration drift (twice clean run), security-signoff verified STATUS: CLEAR
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M5-2a.md` STATUS: CLEAR (security-reviewer round 2 re-verification: F1 MEDIUM runtime fix + A1/A2 fixes verified; A3/A4/A5 documented non-blocking follow-ups)
+
+**Verification note:** security-reviewer conducted two-pass review. Round 1 found F1 (MEDIUM — audit-log helper's "structurally impossible to call outside transaction" was TypeScript-only, not runtime-enforced) plus five LOW advisories A1-A5. storefront-admin-engineer fixed F1 with runtime discriminator (`"$transaction" in tx` → throw) plus A1-A2; security-reviewer re-verified by tracing Prisma's own source (deny list, removeProperties layer, composite-proxy has trap) and updated sign-off STATUS: CLEAR with A3/A4/A5 retained as documented, non-blocking follow-ups. qa-dogfood-engineer deliberately did NOT add a new dogfood.mjs leg for M5-2a — reasoning documented: test28's own Tier B tests already spawn real next dev server with real Playwright-browser 2FA-enrollment-wizard coverage, and audit-log helper has zero production callers yet (M5-2b/c/d's job), so dogfooding it now exercises an unwired path. qa-dogfood-engineer independently re-proved two critical mechanisms via break/fix/restore: idle-timeout fail-closed revocation (commented-out db.session.deleteMany call made test fail) and F1 runtime discriminator (neutralizing "$transaction" in tx check made F1 regression test fail). All tests clean: 475 passed / 2 skipped. Migration verified: npm run test:2-prisma-migrate ran clean twice with no drift. One pre-existing unrelated flake noted during current verification run (test22-stripe-webhook.test.ts concurrent-redelivery, documented independently, not a regression of M5-2a).
+
+**Built 2026-09-05 (storefront-admin-engineer), against the ADR's 13
+decisions:**
+- Schema (Decision 6/7): `TwoFactor` model, `User.twoFactorEnabled`,
+  `AdminSessionActivity` — hand-applied additively, all indexes declared
+  as `@@index` in `prisma/schema.prisma` (never raw SQL). Migration
+  `20260905044232_m5_2a_two_factor_admin_activity` generated via
+  `prisma migrate dev`, never `db push`. `npm run test:2-prisma-migrate`
+  (double-run drift check) PASS, `npm run test:4-migration-reset` skips
+  per its own documented AI-agent-consent gate (known gap, not a failure).
+- `src/lib/auth.ts`: `twoFactor({ issuer: "Hurbad Hardware" })` added
+  before `nextCookies()`; no `otpOptions`, no `skipVerificationOnEnable`,
+  no `session` block — matches Decision 5's explicit "everything
+  deliberately not set" list.
+- `src/lib/adminAuth.ts`: `ADMIN_ROLES`, `ADMIN_IDLE_TIMEOUT_MS`,
+  `isAdminSessionStale()` (pure, unit-tested in-process, NOT excluded from
+  coverage), `requireAdminRole()` (steps 1-6), `requireAdmin()` (adds
+  2FA-enrolled check then idle-timeout check, in that exact order — role
+  before 2FA, per Decision 3.6).
+- `src/lib/adminAuditLog.ts`: `writeAdminAuditLog(tx, entry)`, `tx`
+  required first arg; normalizes omitted/null `before`/`after` to
+  `Prisma.DbNull` internally. No caller yet (per scope) — proven entirely
+  by its own tests, 100% covered. **Correction (security-reviewer M5-2a
+  F1, fixed 2026-09-05):** the original claim here and in the ADR that a
+  required `Prisma.TransactionClient` param makes it "structurally
+  impossible" / "physically cannot" to call this outside a transaction
+  was FALSE — `TransactionClient` is `Omit<PrismaClient, ITXClientDenyList>`,
+  and TypeScript's excess-property checking only applies to object
+  literals, so the full `db` singleton is structurally assignable to it
+  and `writeAdminAuditLog(db, entry)` compiled and ran cleanly, committing
+  an audit row independent of any mutation. Fixed by adding a runtime
+  guard (`if ("$transaction" in tx) throw ...` — the deny list strips
+  `$transaction` from a genuine `tx`, empirically verified) plus a new
+  Tier A test (`test28`, "runtime guard (security-reviewer M5-2a F1)")
+  that calls `writeAdminAuditLog(db, entry)` directly and asserts it
+  rejects with zero rows written. The guarantee is now real, not
+  conventional.
+- Route tree exactly per Decision 2: `src/app/admin/layout.tsx` (role
+  only), `src/app/admin/2fa/setup/{page,TwoFactorSetup}.tsx` (3-step
+  wizard: password → totpURI/secret rendered as selectable text → one
+  `verifyTOTP` call, no `trustDevice` → backup codes shown once, held only
+  in React state), `src/app/admin/(secure)/layout.tsx` (full gate),
+  `src/app/admin/(secure)/page.tsx` (placeholder landing,
+  `data-testid="admin-landing"`, admin's own email/role, zero extra
+  queries). All admin pages/layouts have `export const dynamic =
+  "force-dynamic"`.
+- `src/app/auth/login/page.tsx` (Decision 9, a required fix to an existing
+  file): added the `body?.twoFactorRedirect` branch (`router.push("/auth/2fa")`)
+  before the existing profile-redirect path — without it, no 2FA-enrolled
+  admin could ever complete sign-in. `src/app/auth/2fa/{page,TwoFactorChallenge}.tsx`
+  added; `/auth/2fa` deliberately NOT added to `src/middleware.ts`'s
+  matcher (reached via a two-factor cookie, not a session cookie).
+- `src/middleware.ts` matcher extended to include `/admin/:path*`; still
+  cookie-presence-only, no role check, no DB access.
+- `tests/test28-admin-rbac-2fa.test.ts`: 20 tests, all passing. Tier A
+  (in-process): `isAdminSessionStale` boundary cases;
+  `writeAdminAuditLog` happy path (nested before/after round-trip),
+  null-Json normalization, both atomicity directions (mutation→audit and
+  audit→mutation, each proven by a real rollback + a real absent-row
+  assertion), the signature-arity guard, and the pre-existing-row
+  `twoFactorEnabled` default-backfill check. Tier B (spawned `next dev` +
+  real Playwright browser for the enrollment wizard): CUSTOMER→404 (never
+  403, no `admin-landing` in body); all three enrolled admin roles reach
+  `/admin`; no-cookie→`/auth/login`; forged-cookie rejected on `/admin`
+  AND on a second admin route (proves the per-page `requireAdmin()` call,
+  not just the layout) — **non-triviality proven**: temporarily
+  neutralized `requireAdminRole()`'s `!session?.user?.id` check
+  (`if (false && ...)` plus an optional-chain around the `where`), reran
+  just that test, confirmed it failed (500 instead of the expected
+  redirect), reverted, confirmed the file's content matched the original
+  (new untracked file, so no `git diff` output — verified by direct read
+  instead); unenrolled ADMIN→`/admin/2fa/setup` (not 404, not silently
+  admitted); full enrollment end-to-end via a real browser (password →
+  rendered secret → real `verifyTOTP` with a code computed from the
+  secret → backup codes shown once → reload does not re-show them,
+  redirects to `/admin` instead); the 2FA sign-in path (Decision 9's own
+  proof: sign-in returns `twoFactorRedirect: true` with no working
+  session, `verifyTOTP` against the two-factor cookie then reaches
+  `/admin`); idle timeout fires (backdated activity row → redirect to
+  `/auth/login` AND the `Session` row is actually gone from the DB — the
+  fail-closed revocation, not just a redirect); idle timeout slides
+  (backdated 29 minutes → still succeeds, `lastActivityAt` refreshed);
+  customer-session regression (a CUSTOMER's `/profile`/`/dashboard/orders`
+  survive the same interval, `expiresAt` still ~7 days, no
+  `AdminSessionActivity` row ever created for a customer session).
+- `vitest.config.mts`: added explicit-path (never glob) coverage-exclude
+  entries for the seven framework-coupled admin/2fa page/layout files;
+  `src/lib/adminAuth.ts` and `src/lib/adminAuditLog.ts` deliberately NOT
+  excluded (confirmed 100% coverage on `adminAuditLog.ts`; `adminAuth.ts`
+  sits at 11% because only its pure `isAdminSessionStale` export runs
+  in-process — the rest is genuinely only reachable via the spawned
+  `next dev` subprocess, same measurement-gap class as every other
+  admin/dashboard page). One escaping bug caught and fixed during
+  verification: `(secure)` needs the same `\\(...\\)` escaping `[slug]`
+  already uses, or minimatch silently fails to match it and the file
+  shows a misleading 0%.
+- `bash scripts/agents/local-check.sh` (build + lint + full `npm test`):
+  PASS, exit 0 — verified by actually reading the exit code, not by
+  eyeballing piped output (a `| tail` on the outer command swallows the
+  real exit status). `npm run test:coverage`: 88.16% stmts / 78.73%
+  branches / 96.01% funcs / 89.07% lines — all above the 80/60/60/80
+  gate. `npm run build`: clean, `/admin`, `/admin/2fa/setup`, `/auth/2fa`
+  all correctly render `ƒ` (dynamic), not statically prerendered.
+- **Known pre-existing flakes hit during verification, confirmed NOT a
+  regression of this item:** `tests/test14-cart-ui.test.ts`'s Add-to-Cart
+  Playwright test and `tests/test21-checkout-stripe-session-route.test.ts`'s
+  guest-cookie-ownership test each timed out once during one full-suite
+  run, but passed cleanly in isolation and on a second full-suite rerun —
+  matches this repo's own documented "spawned-dev-server contention under
+  the full suite" flake class (`vitest.config.mts`'s own header comment),
+  unrelated to any file this item touches.
+- **Deviation from the ADR, flagged:** the ADR/Decision 11's
+  "structurally impossible" claim about `writeAdminAuditLog()` was wrong
+  (see the F1 correction above) — the contract is now enforced by a
+  runtime guard, not the type signature alone. The two open/deferred
+  questions the ADR itself named (`BETTER_AUTH_SECRET` rotation
+  invalidating TOTP secrets; no backup-code redemption UI) are unchanged,
+  still flagged for `platform-infra-engineer`/`product-planner`
+  respectively, not resolved by this build.
+- **Security review round 2 (2026-09-05): FINDINGS → fixed.** F1 (MEDIUM,
+  above) fixed with a runtime discriminator + test. Advisories: A1 (forged-
+  cookie test assertion was byte-identical to the no-cookie test's) fixed
+  — `requireAdminRole()`'s page-level `!session?.user?.id`/`!admin`
+  redirects now carry `?reason=admin_no_session` (middleware's redirect
+  never sets this), and both forged-cookie tests assert the marker while
+  the no-cookie test asserts its absence. A2 (customer-regression test's
+  backdated-`Session.updatedAt` leg was decorative, since that column is
+  `@updatedAt` and Prisma re-stamps it on every write) fixed — replaced
+  with a static assertion that `src/app/profile/page.tsx` and
+  `src/app/dashboard/orders/page.tsx` don't import `adminAuth` at all (the
+  genuine claim: no lever exists to apply admin-style elapsed-time
+  revocation to a customer session), keeping the sound `expiresAt`/
+  no-`AdminSessionActivity`-row assertions unchanged. A3 (`adminId`
+  contract is unenforced at this layer) — acknowledged, binding on
+  M5-2b/c/d's call sites, no code change at this layer. A4 (`/auth/2fa`
+  always pushes to `/admin`, a 404 dead end for a hypothetical
+  self-enrolled CUSTOMER) — deferred, product/UX call, not a security
+  hole since CUSTOMER cannot reach 2FA enrollment today. A5
+  (`BETTER_AUTH_SECRET` rotation / no backup-code redemption) — already
+  tracked above, no new action.
+
+**Architect review: DONE (platform-architect, 2026-09-01).** Binding design
+is `docs/agents/arch-decisions/M5-2a-admin-rbac-2fa.md` — 13 decisions.
+Consequential ones: the real gate is a shared `requireAdmin()`/
+`requireAdminRole()` helper (`src/lib/adminAuth.ts`) called from a layout
+AND every page/route — a layout alone can't protect a POST and doesn't
+re-run on client navigation; role is read fresh from the DB inside the
+helper, never trusted from the session payload; a CUSTOMER always gets a
+404, never a 403, and the role check runs strictly before the 2FA
+redirect so a customer never learns `/admin` exists; the 30-minute
+timeout is an **app-level idle check** backed by a new
+`AdminSessionActivity` table with fail-closed session revocation —
+**not** a change to better-auth's global session config, which would have
+also cut every customer session from 7 days to 30 minutes; the 2FA
+schema merge (`TwoFactor` table + `User.twoFactorEnabled`) is fully
+additive, defaulted/nullable, zero risk to existing rows; enabling the
+`twoFactor()` plugin requires a corresponding fix to the existing
+sign-in page, which the ADR catches as an easy-to-miss real bug — without
+it, no 2FA-enrolled admin could ever complete sign-in (a login loop);
+`writeAdminAuditLog()` takes a transaction client as a *required* first
+argument (no `db`-accepting overload) so an audit row and the mutation it
+logs can never diverge — the opposite atomicity choice from M5-1a's
+email dispatch, and deliberately so, since an audit log is a local,
+same-transaction compliance artifact, not an external best-effort call.
+This item builds gate infrastructure and a placeholder `/admin` landing
+page only — no real order/product/inventory/analytics content, which is
+M5-2b/c/d/e's job.
+
+This is the item being sharpened and dispatched now; `M5-2b`-`M5-2e` below
+are left at PRD/Linear granularity until their own turn, per this repo's
+standing convention (M4-2b/M5-1b were held the same way).
+
+**HRH-11 reconfirmed by the orchestrator, 2026-09-01, direct `get_issue`
+call.** Full description: Files `app/admin/{orders/page,orders/[orderId]/
+page,products/page,inventory/page,analytics/page}.tsx`, `lib/adminService.ts`.
+Approach: RBAC (Admin full / Operator view-products+fulfil-orders /
+View-Only read-analytics); 2FA (TOTP) required for all admin accounts,
+30-min session timeout; every admin mutation writes `AdminAuditLog`
+(before+after); analytics reads pre-computed `DailySalesMetric`, never
+live aggregation; inventory view flags `availableForSale < 10`. **Test
+scenarios named on the epic** (relevant ones for M5-2b onward, noted here
+so they aren't lost): (1) admin login with 2FA → dashboard loads — the
+HRH-54 acceptance bar; (3) "mark order shipped → **Shipment record**
+created; OrderEvent logged; email sent" — flag for M5-2b: this names a
+`Shipment` record distinct from `OrderEvent`, confirm against
+`prisma/schema.prisma` whether that model exists before assuming
+"mark shipped" is only an `OrderEvent` write. Everything below IS
+grounded in direct reads of `prisma/schema.prisma`,
+`src/lib/auth.ts`, `src/middleware.ts`, and `node_modules/better-auth`'s
+actual plugin surface — five concrete findings, each resolving or
+explicitly flagging one of the sharpening questions:
+
+1. **Roles already exist in the schema, zero migration needed for this
+   half.** `prisma/schema.prisma:431` — `User.role UserRole @default(CUSTOMER)`
+   — and the `UserRole` enum (`:600-605`) is already exactly
+   `CUSTOMER | ADMIN | OPERATOR | VIEW_ONLY`. This is pre-existing (not
+   added by this split); HRH-54's job is enforcing it at the route/page
+   level, not adding it to the schema.
+2. **2FA: this is "enable an existing better-auth plugin with native TOTP
+   support," NOT build-TOTP-from-scratch** — confirmed by reading
+   `node_modules/better-auth/dist/plugins/two-factor/index.d.mts` and
+   `schema.mjs` directly. The `twoFactor()` plugin ships
+   `auth.api.enableTwoFactor({ method: "totp" })` (returns `totpURI` +
+   `backupCodes`), `getTOTPURI`, and `verifyTOTP` endpoints out of the box.
+   Enabling it requires a real, additive schema merge (same process as
+   M0's Session/Account/Verification merge via `@better-auth/cli
+   generate`): a new `TwoFactor` table (`secret`, `backupCodes`, `userId`,
+   `verified`, `failedVerificationCount`, `lockedUntil`) plus
+   `User.twoFactorEnabled Boolean @default(false)` — both additive/
+   nullable-or-defaulted, safe, but a real migration, not a config-only
+   change. Scope this item to the `totp` method only (the plugin also
+   ships `otp`/email and `backupCode` sub-mechanisms — do not build those,
+   HRH-54's stated scope is TOTP only).
+3. **30-min session timeout is a real, unresolved design question — flag
+   for platform-architect, do not default it.** Confirmed by reading
+   `node_modules/better-auth/dist/context/create-context.mjs:147` and
+   `db/internal-adapter.mjs:24`: this repo's actual current session expiry
+   is better-auth's **global default, 7 days** (`3600*24*7` seconds) —
+   `src/lib/auth.ts` sets no `session` block at all today. Session
+   configuration lives on the single `betterAuth()` instance / single
+   `Session` table shared by every user regardless of role; there is no
+   per-role expiry knob in better-auth's session options. A naive global
+   `session.expiresIn: 1800` would also cut every *customer* session
+   (`/dashboard/*`, checkout) to 30 minutes, which is not what this item
+   asks for. This item's acceptance criteria state the mechanism must be
+   resolved by platform-architect (candidates: a separate,
+   shorter-lived admin-only session/cookie; or an app-level "admin
+   last-activity" check enforced independently at each admin page load,
+   similar in shape to the ownership-check pattern already used for
+   `/profile`/`/dashboard`) — not silently implemented as a global
+   `expiresIn` change.
+4. **`AdminAuditLog`'s table already exists (`prisma/schema.prisma:505`,
+   `adminId`/`action`/`entityType`/`entityId`/`before`/`after`/
+   `ipAddress`/`createdAt`) — zero migration for the table itself.**
+   HRH-54 itself has no product/order mutations to log (those are M5-2b/
+   c/d's job), so recommend HRH-54's own scope include building the
+   **shared write mechanism** — a single `src/lib/adminAuditLog.ts`
+   exposing one `writeAdminAuditLog({ adminId, action, entityType,
+   entityId, before, after, ipAddress })` helper — as infrastructure the
+   other four items call, rather than each reimplementing its own audit
+   write inline. Named explicitly as HRH-54's own added scope (beyond its
+   literal Linear description), to avoid four independent
+   reimplementations of the same insert.
+5. **`src/app/admin/` does not exist at all yet** (confirmed via glob —
+   this is the first item to create it, not an extension of a stub).
+   `src/middleware.ts`'s matcher currently covers only `/profile/:path*`
+   and `/dashboard/:path*` — needs `/admin/:path*` added, following the
+   *same already-twice-established pattern*: middleware checks cookie
+   presence only (UX redirect), the real check (session validity + role
+   ∈ {ADMIN, OPERATOR, VIEW_ONLY} + 2FA-enrolled) happens in a shared
+   admin layout/page-level `auth.api.getSession()` call, not in
+   middleware.
+
+**Acceptance criteria:**
+- [ ] `User.role` (existing enum, no migration) gates every `/admin/*`
+      route: CUSTOMER redirected/404'd at the page level (not just hidden
+      in UI); ADMIN/OPERATOR/VIEW_ONLY may enter, further mutation-level
+      distinctions (VIEW_ONLY blocked from writes) are a contract for
+      M5-2b/c/d to enforce and test once real mutations exist — this item
+      proves the read-side role gate only, since it has no mutations of
+      its own.
+- [ ] `twoFactor()` plugin enabled, TOTP method only (not OTP/email);
+      schema merged additively (`TwoFactor` table + `User.twoFactorEnabled`)
+      via `@better-auth/cli generate`, verified no-drift across repeated
+      `migrate dev` runs per this repo's standing migration-verification
+      convention. A user with role != CUSTOMER and `twoFactorEnabled:
+      false` is redirected to a forced-enrollment flow on any `/admin/*`
+      access attempt, not silently let through.
+- [ ] Enrollment flow: `enableTwoFactor({ method: "totp" })` →
+      `totpURI` rendered as a scannable QR/secret → one `verifyTOTP` call
+      confirms setup → `backupCodes` issued and shown exactly once.
+- [ ] Shared `writeAdminAuditLog()` helper built in `src/lib/
+      adminAuditLog.ts` (or equivalent single module), typed against the
+      existing `AdminAuditLog` model — no migration needed for the table.
+      This item's own tests prove the helper writes a correct row given
+      arbitrary before/after payloads; it has no caller yet (M5-2b/c/d
+      wire the first real calls).
+- [ ] `src/middleware.ts` matcher extended to `/admin/:path*`
+      (cookie-presence redirect only); a shared `src/app/admin/layout.tsx`
+      (or per-page pattern, architect's call) performs the real
+      `auth.api.getSession()` + role + 2FA-enrolled check — proven with a
+      forged-cookie break/fix/restore test, same standing proof pattern as
+      M1-3/M5-1b.
+- [ ] **Open question, explicitly not resolved here, for platform-architect:**
+      the 30-minute admin session timeout mechanism (separate
+      shorter-lived admin session/cookie vs. app-level last-activity
+      check) — see finding 3 above. No criterion may be marked met by a
+      global `session.expiresIn` change that also shortens customer
+      sessions.
+
+**Architect review: explicit YES, before dispatch.** Three genuinely new
+design questions named, not left to a builder: (1) the 2FA schema merge
+itself (new table, review same as M0's Session/Account/Verification
+precedent); (2) the 30-min-admin-vs-7-day-customer session mechanism,
+which has no existing precedent in this repo to copy; (3) whether the
+shared admin layout/role-gate should be one `src/app/admin/layout.tsx` or
+a per-page pattern (this repo has used per-page checks for `/profile` and
+`/dashboard/orders`, but admin's page count will likely be much larger,
+making a shared layout more attractive — a real architecture call, not
+obviously either way).
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M5-2
+section and `docs/agents/run-state.md` were edited (no `src/`/`tests/`/
+`prisma/schema.prisma` touched).
+
+### M5-2b: Admin Order Management UI (HRH-55)
+**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+
+**Depends on M5-2a existing** (role gate + audit-log helper) — this item's
+"mark shipped" action is also the first real code path in this repo that
+would write a `SHIPPED`/`DELIVERED` `OrderEvent` (flagged as a
+pre-existing gap by M5-1b's own ledger entry above — this item is that
+gap's resolution, once scoped).
+
+- [ ] `app/admin/orders/{page,[orderId]/page}.tsx` — filter by
+      region/status; mark shipped writes a `SHIPPED` `OrderEvent` (first
+      real writer of that event type in this repo — M5-1b's customer
+      timeline already renders it correctly once it exists, no change
+      needed there)
+- [ ] Every mutation (mark shipped, any other order-state change this page
+      exposes) calls `M5-2a`'s `writeAdminAuditLog()` helper with real
+      before/after state, `entityType: "Order"`
+- [ ] VIEW_ONLY role blocked from the mark-shipped action at the route/
+      mutation layer (403 or disabled control backed by a server-side
+      check, not just a hidden button) — first real test of M5-2a's
+      VIEW_ONLY contract
+
+Left at PRD/Linear granularity; full acceptance-criteria sharpening (exact
+`OrderEvent.payload` shape for `SHIPPED`, whether a carrier/
+tracking-number field is captured, email-trigger wiring back to M5-1a's
+`IEmailService`) deferred to whenever this item is actually picked up, per
+this agent's standing "sharpen at dispatch time, not ahead of it"
+convention.
+
+### M5-2c: Product & Variant CRUD Forms (HRH-57)
+**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+(coordination required with catalog-inventory-engineer — see the
+owner note above M5-2a; this item writes `Product`/`ProductVariant`/
+`RegionalPrice`/`RegionalInventory` rows, tables `productService.ts`
+currently only reads)
+
+**Depends on M5-2a existing** (role gate + audit-log helper).
+
+- [ ] `app/admin/products/{new,[id]/edit}/page.tsx` — creates `Product` +
+      ≥1 `ProductVariant` with SKU/attributes/regional pricing/inventory
+- [ ] Soft delete via `deletedAt` (matches the existing convention
+      `productService.ts` already filters on — `isActive`/`deletedAt`
+      read-side checks, confirmed present, need a write-side counterpart)
+- [ ] Every create/update/soft-delete calls `M5-2a`'s
+      `writeAdminAuditLog()` with `entityType: "Product"` or
+      `"ProductVariant"`
+- [ ] VIEW_ONLY role blocked from all writes on this page (server-side)
+
+Left at PRD/Linear granularity; full sharpening (which fields are
+mutable post-creation, whether `RegionalPrice`/`RegionalInventory` rows
+are created per-region atomically in one transaction, SKU uniqueness
+enforcement) deferred to dispatch time.
+
+### M5-2d: Bulk CSV Upload & Async Import (HRH-58)
+**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+(coordination required with catalog-inventory-engineer — same reason as
+M5-2c: this item performs the same `Product`/`ProductVariant`-table writes
+at bulk scale)
+
+**Depends on M5-2a existing** (role gate + audit-log helper) and likely on
+M5-2c's per-row create/validate logic existing first (a bulk import is
+naturally the same write path run in a loop — flagged as a probable, not
+yet confirmed, ordering dependency for whoever scopes this item next).
+
+- [ ] `bulk-upload/page.tsx`, `csvParser.ts`, `bulk-import/route.ts` — async
+      job; duplicate SKU rejected with **no partial insert** (whole-file
+      transaction or per-row transaction with a pre-validation pass —
+      mechanism TBD at dispatch time)
+- [ ] Admin notified by email on completion — likely reuses M5-1a's
+      `IEmailService` interface (HRH-13's remaining, not-yet-ledgered
+      template scope) rather than a new one-off email mechanism; flagged,
+      not confirmed
+- [ ] Every successful row-import calls `M5-2a`'s `writeAdminAuditLog()`
+      (or one summary entry per batch — mechanism TBD)
+
+**Genuinely open question, not resolved here:** same "no queue
+infrastructure" standing finding as M4-2/M4-2b/M4-2c/M5-1a (no Redis/
+Upstash/`@vercel/kv` in `package.json`) — "async job" needs the same
+architect scoping those items already got (fire-and-forget vs. polling vs.
+a `waitUntil`-style primitive). Flagged for whoever picks this item up
+next, not defaulted here.
+
+### M5-2e: Admin Analytics Dashboard (HRH-56)
+**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+
+**Depends on M5-2a existing** (role gate) — read-only, no writes, so no
+`AdminAuditLog` requirement.
+
+- [ ] `app/admin/analytics/page.tsx` reads pre-computed `DailySalesMetric`
+- [ ] Inventory view flags low stock (`<10 availableForSale`) — the
+      underlying `onHand - reserved - safetyBuffer` formula already
+      exists in `src/lib/cartService.ts` (M2-1/M3-1, catalog-inventory-
+      engineer's file); confirm at dispatch time whether this item reuses
+      that existing calculation or needs a new aggregate query, and flag
+      co-ownership with catalog-inventory-engineer if the latter
+
+Left at PRD/Linear granularity; full sharpening (which metrics
+`DailySalesMetric` actually populates today — verify against whoever
+built the nightly aggregation job, since this repo's standing pattern is
+that PRD-named fields aren't always populated by any code path yet, per
+the M5-1b `eventType` lesson) deferred to dispatch time.
 
 ---
 

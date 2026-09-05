@@ -504,3 +504,31 @@ accepting "same as the existing call sites" — extraction is the moment the
 class gets entrenched and also the cheapest moment to fix it. For money
 specifically, check min/maxFractionDigits explicitly and compare the output
 against every other surface rendering the same amount (email, receipt, admin).
+
+## A "required tx parameter" does not structurally forbid the top-level client
+**Symptom (M5-2a):** An audit-log helper typed its first parameter
+`Prisma.TransactionClient` and both the ADR and the ledger claimed a caller
+"physically cannot" write outside a transaction. `TransactionClient` is
+`Omit<PrismaClient, ITXClientDenyList>`, and a full PrismaClient is
+structurally assignable to it — `helper(db, entry)` compiles and runs.
+**Cause:** `Omit<>` narrows the callable surface, not the accepted argument;
+excess-property checking only applies to object literals. The accompanying
+test asserted `fn.length === 2`, which proves arity, not transactionality.
+**Rule going forward:** When a diff claims a type signature makes an unsafe
+call impossible, read the generated type definition and mentally attempt the
+unsafe call. For Prisma specifically, require a runtime discriminator
+(`"$transaction" in tx` → throw) plus a test that passes the top-level client
+and asserts rejection. Treat `fn.length` assertions as arity guards only.
+
+## A runtime type-discriminator fix must be checked in the failing direction too
+**Symptom (M5-2a, re-verify):** A `if ("$transaction" in tx) throw` guard fixes a
+real gap, but its correctness rests on a library internal — if Prisma's itx proxy
+had omitted the `has` trap, `in` would be true for a GENUINE tx and the guard
+would reject every legitimate caller.
+**Cause:** Reviewing only "does it catch the bad input" and not "can it reject the
+good input", because the finding was framed as a bypass.
+**Rule going forward:** For any `in`/`typeof`/`instanceof` discriminator over a
+proxied library object, read the library's proxy traps (`has`, not just `get`) and
+confirm BOTH directions. Then check which existing tests would catch a future
+regression of the false-positive direction — if none exercise the good input, that
+is itself a finding.

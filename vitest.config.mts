@@ -281,6 +281,30 @@ export default defineConfig({
         // can only be exercised as part of a real page response (same
         // measurement-gap justification as CartSummary.tsx above).
         "src/components/OrderStatusTimeline.tsx",
+        // M5-2a (HRH-54): the admin role/2FA/idle-timeout gate's
+        // framework-coupled page/layout files independently call
+        // requireAdminRole()/requireAdmin() (next/headers, next/
+        // navigation) and are only meaningfully exercised via
+        // tests/test28-admin-rbac-2fa.test.ts's spawned `next dev`
+        // subprocess (Tier B) — same measurement-gap justification as
+        // src/app/dashboard/orders/** above, not a testing gap.
+        // src/lib/adminAuth.ts and src/lib/adminAuditLog.ts are
+        // deliberately NOT excluded here — both are directly importable
+        // and unit-tested in-process (Tier A of the same test file):
+        // isAdminSessionStale() is pure, and adminAuditLog.ts imports
+        // only @prisma/client.
+        "src/app/admin/layout.tsx",
+        // `(secure)` is a literal directory name here (a Next.js route
+        // group), not a glob group — escaped so minimatch (used by the v8
+        // coverage provider's test-exclude) doesn't interpret the
+        // parentheses as an extglob group, same reason `[slug]` is
+        // escaped above.
+        "src/app/admin/\\(secure\\)/layout.tsx",
+        "src/app/admin/\\(secure\\)/page.tsx",
+        "src/app/admin/2fa/setup/page.tsx",
+        "src/app/admin/2fa/setup/TwoFactorSetup.tsx",
+        "src/app/auth/2fa/page.tsx",
+        "src/app/auth/2fa/TwoFactorChallenge.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

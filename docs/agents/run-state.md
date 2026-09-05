@@ -139,6 +139,79 @@ can't be cheaply fixed forward.
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
 
+### 2026-09-05 — M5-2 split into M5-2a..M5-2e (HRH-54/55/57/58/56), M5-2a's RBAC/2FA criteria sharpened
+`product-planner` was dispatched to split the bundled `M5-2` ("Admin
+order/product management + audit log," three undifferentiated bullets)
+along the same Linear-issue seam the M4-2/M4-2b/M4-2c and M5-1a/M5-1b
+splits already used. **No Linear MCP tool was available in this session**
+(only Read/Edit/Grep/Glob) — HRH-54/55/56/57/58's descriptions and HRH-11's
+full parent-epic scope were taken as relayed by the dispatching
+orchestrator, not independently re-fetched; flagged in `FEATURES.md`
+itself, not silently treated as verified. Everything else below is
+grounded in direct repo reads.
+
+Split into `M5-2a` (HRH-54, RBAC & 2FA — sharpened, about to be dispatched),
+`M5-2b` (HRH-55, order management UI), `M5-2c` (HRH-57, product/variant CRUD),
+`M5-2d` (HRH-58, bulk CSV import), `M5-2e` (HRH-56, analytics dashboard) —
+all under M5, all `planned`, all except M5-2a explicitly `NOT dispatched`.
+**Dependency chain recorded explicitly:** M5-2a is the authorization
+foundation; M5-2b/c/d/e each carry "depends on M5-2a existing."
+
+**Owner findings, not invented:** all five led by storefront-admin-engineer,
+but M5-2c (product/variant CRUD) and M5-2d (bulk CSV import) write to
+`Product`/`ProductVariant`/`RegionalPrice`/`RegionalInventory` — tables
+`src/lib/productService.ts` (catalog-inventory-engineer's file, confirmed
+by its own header comment) currently only *reads*. Flagged as
+"coordination required with catalog-inventory-engineer" for both, not a
+unilateral reassignment.
+
+**Five grounding findings for M5-2a specifically, all from direct reads:**
+1. `User.role UserRole @default(CUSTOMER)` and the `UserRole` enum
+   (`CUSTOMER|ADMIN|OPERATOR|VIEW_ONLY`) already exist in
+   `prisma/schema.prisma:431,600-605` — zero migration needed for roles
+   themselves.
+2. better-auth ships a full `twoFactor()` plugin with native TOTP support
+   (confirmed by reading `node_modules/better-auth/dist/plugins/
+   two-factor/index.d.mts`/`schema.mjs` directly — `enableTwoFactor({
+   method: "totp" })`, `getTOTPURI`, `verifyTOTP`). This is "enable an
+   existing plugin," not build-TOTP-from-scratch — but it requires a real,
+   additive schema merge (new `TwoFactor` table + `User.twoFactorEnabled`
+   boolean), same process as M0's Session/Account/Verification merge.
+3. **A real, unresolved design question, flagged for platform-architect,
+   not defaulted:** this repo's actual current session expiry is
+   better-auth's global default, 7 days (confirmed via
+   `node_modules/better-auth/dist/context/create-context.mjs:147` —
+   `src/lib/auth.ts` sets no `session` block today). Session config lives
+   on one `betterAuth()` instance / one `Session` table shared by every
+   role; there is no per-role expiry knob. A naive global
+   `session.expiresIn: 1800` would also cut customer sessions to 30
+   minutes — wrong. Left as an open architect question (separate
+   admin-only session mechanism vs. an app-level last-activity check),
+   not resolved here.
+4. `AdminAuditLog` (adminId/action/entityType/entityId/before/after/
+   ipAddress/createdAt) already exists in the schema — zero migration for
+   the table. Recommended (and added to M5-2a's own scope) that this item
+   build the shared write helper (`writeAdminAuditLog()`) as
+   infrastructure M5-2b/c/d call, rather than four independent
+   reimplementations.
+5. `src/app/admin/` does not exist at all (confirmed via glob — first
+   creation, not extending a stub). `src/middleware.ts`'s matcher currently
+   covers only `/profile/:path*` and `/dashboard/:path*` — needs
+   `/admin/:path*` added, same "UX-redirect only, real check is
+   page/layout-level" pattern already used twice.
+
+**Architect review: explicit YES for M5-2a**, before dispatch — three
+concrete unresolved design questions named (2FA schema merge review;
+30-min-admin-vs-7-day-customer session mechanism; shared admin layout vs.
+per-page role-gate pattern). **M5-2b/c/d/e left at PRD granularity**,
+architect review deferred to whenever each is actually picked up, per this
+repo's standing "sharpen at dispatch time" convention (same as M4-2b/
+M5-1b were held).
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M5-2
+section and this file were edited (no `src/`/`tests/`/`prisma/schema.prisma`
+touched).
+
 ### 2026-08-31 — M5-1 split into M5-1a (HRH-52, order-confirmation email) + M5-1b (HRH-53, customer order dashboard/timeline), acceptance criteria sharpened
 `product-planner` was dispatched to split the bundled `M5-1` ("Customer
 order tracking + async email," two undifferentiated bullets) along the same

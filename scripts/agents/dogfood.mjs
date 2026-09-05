@@ -281,6 +281,59 @@
 // full click-through browser journey (still blocked on the same "no
 // MpesaCheckout-equivalent component mounted anywhere" gap M4-2's own
 // status note above documents).
+//
+// M5-2a STATUS (checked 2026-09-05, qa-dogfood-engineer, M5-2a/HRH-54):
+// deliberately NOT adding a new leg here, unlike every other milestone
+// above. Rationale, checked directly against tests/test28-admin-rbac-2fa.
+// test.ts before deciding:
+//
+// 1. Unlike the M4-2/M4-2b/M4-2c gaps this file closed (where the existing
+//    test suite called an exported route handler IN-PROCESS -- e.g.
+//    `route.POST(request, ...)` -- never over real HTTP against a spawned
+//    server), test28's own Tier B is ALREADY real HTTP (`fetch(BASE_URL +
+//    ...)`) against a REAL spawned `next dev` server (`spawn("npx", ["next",
+//    "dev", ...])`, confirmed by direct read) -- the exact same fidelity
+//    this file's own legs use elsewhere. There is no "nothing proves this
+//    is reachable over real HTTP with real middleware" gap to close here:
+//    test28 already proves CUSTOMER->404, each of ADMIN/OPERATOR/VIEW_ONLY
+//    ->200, no-cookie->redirect, forged-cookie->/auth/login?reason=
+//    admin_no_session (non-triviality already proven by the builder's own
+//    neutralize/rerun/restore cycle, independently re-confirmed by this
+//    dispatch -- see the M5-2a status report), forced-2FA-enrollment
+//    redirect, the idle-timeout fail-closed session REVOCATION (re-verified
+//    by this dispatch's own break/fix/restore, not just accepted from the
+//    test's own assertion), idle-timeout sliding, and the customer-session
+//    regression -- all over real HTTP against a real server, same as this
+//    file's own legs would produce.
+// 2. The full 2FA enrollment wizard (password -> totpURI/secret rendered ->
+//    real verifyTOTP computed from the real secret -> backup codes shown
+//    once -> reload does not re-show them) and the full Decision-9
+//    login-loop fix (real sign-in -> twoFactorRedirect with no session ->
+//    real verifyTOTP -> reaches /admin) are ALREADY driven through a real
+//    Playwright browser in test28, not just fetch() -- the same real-
+//    browser fidelity dogfoodCheckout() below uses for M3-3a/M3-3. A new
+//    Playwright leg here would re-drive the identical click sequence for
+//    no new reason.
+// 3. `src/lib/adminAuditLog.ts`'s `writeAdminAuditLog()` helper has ZERO
+//    callers in this item (confirmed by `grep -rn "writeAdminAuditLog"
+//    src/app` -- no admin mutation exists yet to call it from; M5-2b/c/d
+//    wire it up later). Dogfooding an unwired helper now would be exactly
+//    the same class of theater this file already refuses for M3-1's
+//    unwired mergeGuestCartOnLogin and M4-1's unmounted StripeCheckout.tsx
+//    (see those STATUS notes above) -- there is no real user journey to
+//    click through yet. Add a dogfood leg for the audit-log helper once
+//    M5-2b (or whichever item first adds a real admin mutation) actually
+//    calls it from a route/action, so the leg exercises a genuine caller,
+//    not a synthetic one invented just to touch the file.
+//
+// Net: this is judged equivalent-fidelity coverage already in place, not a
+// gap this file needs to close, and adding a leg anyway would be
+// duplicate/theater coverage rather than a new gate. Revisit this note the
+// moment M5-2b/c/d add a real admin mutation -- at that point a genuine new
+// leg (real promoted admin, real mutation, real AdminAuditLog row asserted
+// via Prisma) becomes the honest thing to add, folded in the same way
+// M5-1b's dashboard leg was folded into dogfoodCheckout() rather than
+// necessarily requiring a brand-new top-level leg.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -2811,6 +2864,12 @@ console.log(
     "DB-rejoin reconciliation pass -> Order.paymentStatus CONFIRMED -> reviewedAt stamped, no Daraja " +
     "mocking needed for this path either; population (a)'s STK-Query path deliberately NOT dogfooded here " +
     "— see dogfoodMpesaReconcileCron()'s own header comment — and remains covered by test25's 45 " +
-    "in-process tests instead); " +
+    "in-process tests instead) + " +
+    "M5-1b real 'My orders' dashboard/detail render (folded into dogfoodCheckout(): the same " +
+    "authenticated browser session that just clicked a real Place order button also visits " +
+    "/dashboard/orders and /dashboard/orders/[orderId] and asserts the real persisted order renders); " +
+    "M5-2a admin RBAC/2FA/idle-timeout deliberately NOT given a new leg here — test28's own Tier B " +
+    "already provides equivalent real-HTTP/real-Playwright-browser fidelity (see this file's own " +
+    "M5-2a STATUS header comment for the full account); " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

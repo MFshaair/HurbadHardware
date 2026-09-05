@@ -45,6 +45,22 @@ export default function LoginPage() {
         return;
       }
 
+      // ADR M5-2a (HRH-54) Decision 9: once the two-factor plugin is
+      // enabled, sign-in for a 2FA-enrolled user returns HTTP 200 with
+      // { twoFactorRedirect: true, twoFactorMethods: [...] } and NO
+      // session — better-auth deletes the session the credential handler
+      // just created and sets a short-lived two-factor cookie instead.
+      // Without this branch, any 2FA-enrolled admin would be pushed to
+      // /profile with no session, which bounces straight back to
+      // /auth/login — a login loop, not an error message. This is
+      // unreachable for ordinary customers: twoFactorEnabled defaults to
+      // false and no customer flow ever calls enableTwoFactor.
+      const body = await res.json().catch(() => null);
+      if (body?.twoFactorRedirect) {
+        router.push("/auth/2fa");
+        return;
+      }
+
       // ADR M3-3a Decision 7: the set of selectable saved addresses
       // changes from "none" to this user's own rows on login, so any
       // carried-over checkout draft (guest ad-hoc address, savedAddressId

@@ -401,6 +401,98 @@ new disable directive, re-run `npm run lint` and confirm zero warnings
 for that exact rule/line — don't assume a directive worked just because
 it compiles.
 
+## better-auth's TOTP URI `secret` param is base32-ENCODED — pass it straight through and every code you compute will be silently wrong
+**Symptom (M5-2a):** a test that extracted `secret` from a real
+`enableTwoFactor` response's `totpURI` (`new URL(totpURI).searchParams.get("secret")`)
+and passed it directly into `auth.api.generateTOTP({ body: { secret } })`
+got a code that `verifyTOTP` rejected with `INVALID_CODE` every time, even
+though the secret was genuinely the one just issued for that user.
+**Cause:** `@better-auth/utils/otp`'s `generateQRCode` base32-encodes the
+raw secret bytes for the URI's `secret` query param (so an authenticator
+app can decode it back to bytes for HMAC-signing), but the SAME package's
+`createHMAC`/`generateHOTP` treat their own `secret` argument as the
+literal, pre-encoding text (`TextEncoder().encode(key)` directly) — never
+re-decoding anything. So the URI's `secret` param and the value
+`auth.api.generateTOTP`/`verifyTOTP` actually expect are two different
+representations of the same bytes; passing the base32 string straight
+through silently produces a different (wrong) HMAC key.
+**Rule going forward:** to compute a valid TOTP code in a test from a
+`totpURI`'s `secret` param, base32-DECODE it first (`@better-auth/utils/base32`'s
+`base32.decode(...)`, then `new TextDecoder().decode(...)` to get back the
+original secret string) before handing it to `auth.api.generateTOTP`/any
+manual OTP computation. `@better-auth/utils/base32` and `/hmac` are public
+subpath exports (check the package's own `exports` map before assuming a
+deep `node_modules` path import is needed) — reading the actual library
+source (`otp.mjs`'s `createOTP`/`generateQRCode`/`createHMAC`) settled this
+in minutes; guessing at the "obvious" pass-through would not have.
+
+## A test user created via better-auth sign-up-then-sign-in has TWO Session rows, not one — an unordered `findFirst({where:{userId}})` grabs an arbitrary one
+**Symptom (M5-2a):** a fixture helper did
+`db.session.findFirstOrThrow({ where: { userId } })` to locate "the"
+session belonging to a just-issued cookie, then backdated/asserted against
+that row — and the assertion sometimes silently checked/mutated a
+different session than the one the test's cookie actually carried.
+**Cause:** `emailAndPassword.autoSignIn` defaults to true, so
+`POST /api/auth/sign-up/email` itself creates a session (and sets a
+cookie the test then immediately discards by calling `/sign-in/email`
+again), and the explicit sign-in call creates a SECOND session row for
+the same user. Two live `Session` rows exist per test user from this
+point on; Prisma gives no ordering guarantee to an un-`orderBy`'d
+`findFirst`, so it can return either one.
+**Rule going forward:** never assume "one session per test user" after a
+sign-up-then-sign-in fixture flow in this repo. Either (a) derive the
+exact session id from something keyed to the real cookie (e.g. a
+just-created `AdminSessionActivity` row's `sessionId`, which is
+unambiguous because it's written by the one gate call that used that
+specific cookie), or (b) if you must query `Session` directly, add
+`orderBy: { createdAt: "desc" }` and take the first result (the explicit
+sign-in's session is always created after sign-up's), and say so in a
+comment — a bare unordered `findFirst` is a live bug waiting for the next
+reader to trust it.
+
+## `(parenthesized-route-group)` directory names need the same minimatch escaping as `[bracket]` dynamic segments in `vitest.config.mts`'s coverage exclude list
+**Symptom (M5-2a):** added
+`"src/app/admin/(secure)/layout.tsx"`/`"...(secure)/page.tsx"` to the
+coverage exclude list (Next.js route-group syntax), following the exact
+same "explicit path, never a glob" convention as every prior entry — but
+`npm run test:coverage` still showed both files at a misleading 0%
+instead of being excluded/invisible.
+**Cause:** minimatch (the pattern matcher v8's coverage-exclude uses)
+treats bare parentheses as extglob-group syntax, not literal characters —
+identical root cause to the already-documented `[slug]` case just above
+it in the same file, just a different special character.
+**Rule going forward:** any literal `(`/`)` in a real file path added to
+this exclude list must be escaped (`\\(secure\\)`), exactly like `[slug]`
+is escaped to `\\[slug\\]`. After adding ANY new exclude-list entry
+containing a special glob character, always re-run `npm run
+test:coverage` (not just `npm test`) and check that file has actually
+disappeared from the printed table — a "0%" row for a file you meant to
+exclude is the tell that the escaping didn't take, not that the file is
+somehow undertested.
+
+## A required-parameter type (`Prisma.TransactionClient`) does not stop a caller from passing the full `db` client — add a runtime discriminator too
+**Symptom (M5-2a, security-reviewer F1):** `writeAdminAuditLog(tx: Prisma.TransactionClient, ...)`'s doc comment and the ADR both claimed the helper "physically cannot" be called outside a transaction because `tx` is a required first param with no `db`-accepting overload. False: `Prisma.TransactionClient` is `Omit<PrismaClient, ITXClientDenyList>`, and TypeScript's excess-property checking only fires on object literals — an existing `db` variable (the full `PrismaClient`) is structurally assignable to that `Omit<...>` type, so `writeAdminAuditLog(db, entry)` compiles and runs cleanly, committing an audit row completely independent of any mutation. The existing "signature guard" test only asserted `fn.length === 2` (arity), which cannot detect a caller passing `db` instead of a real `tx` — arity and "is this actually a transaction handle" are different properties.
+**Cause:** a required-parameter-with-a-narrower-type contract *reads* like it enforces "must be called from inside a transaction," but TypeScript structural typing only distinguishes shapes, not provenance — nothing stops a wider-shaped value that happens to satisfy the narrower shape.
+**Rule going forward:** for any helper whose entire safety contract depends on "the caller passed X, not Y" where X and Y are structurally overlapping types (a `PrismaClient` vs. its own `TransactionClient`, or similarly an `Omit<>`/subset relationship anywhere else in this repo), don't trust the type signature alone — add a cheap runtime discriminator (here: `if ("$transaction" in tx) throw ...`, since Prisma's interactive-transaction deny list strips `$transaction`/`$connect`/`$disconnect`/`$on`/`$use`/`$extends` from a genuine `tx`) and a test that passes the *wrong* (wider) value directly and asserts it throws with zero rows written — not just a test that asserts the function's arity or that the happy path round-trips correctly. Verify the discriminator empirically (a scratch script confirming `"$transaction" in db` is `true` and `"$transaction" in tx` is `false` inside a real `db.$transaction(async (tx) => ...)` callback) before relying on it, same as any other unverified library-internals claim.
+
+## `bash scripts/agents/local-check.sh | tail -N` reports the tail's exit code, not the script's — always capture `$?` directly
+**Symptom (M5-2a):** ran `local-check.sh 2>&1 | tail -300` in the
+background; the task-completion notification said "exit code 0" even
+though the piped output clearly showed 2 failed test files inside.
+**Cause:** in a plain (non-`pipefail`) shell, `cmd | tail -N`'s exit
+status is `tail`'s own exit status, not `cmd`'s — a failing `local-check.sh`
+behind a `| tail` looks identical to a passing one from the exit code
+alone. This is exactly the kind of thing the harness's own background-task
+summary line can misreport if you rely on it instead of the real code.
+**Rule going forward:** when running `local-check.sh` (or any pass/fail
+gate script) through a pipe for convenience (e.g. to only see the tail of
+a long log), never trust the reported exit code of the piped command —
+redirect to a file instead (`local-check.sh > log 2>&1; echo "EXIT:$?" >>
+log`) and read the explicit `EXIT:` marker back out, or rerun the
+suspicious subset directly (`npx vitest run <failing files>`) to confirm
+whether a failure was a real regression or a known flake before accepting
+a "PASS" you can't actually verify.
+
 ## A raw-HTML substring count for repeated text can be silently doubled by Next.js App Router's inlined RSC hydration payload
 **Symptom (M5-1b):** `expect((html.match(/Not yet reached/g) ?? []).length).toBe(2)` failed with `4` received (and a `3`-expected case received `6`) against a real, correctly-rendering order-detail page with exactly 2 (then 3) "not yet reached" timeline steps.
 **Cause:** beyond the already-documented `<!-- -->` SSR comment-node
