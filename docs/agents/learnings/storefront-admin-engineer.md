@@ -347,3 +347,73 @@ added), not a rewrite. Update the ledger (`FEATURES.md`) to reflect
 `built, pending security review` with per-criterion evidence — leave
 `Status: planned` on a fully-built item is exactly the kind of ledger/
 reality drift that misleads the next agent into re-doing finished work.
+
+## A ledger item's illustrative file paths (`app/...`) may not match this repo's real convention (`src/app/...`) — verify before writing
+**Symptom (M5-1b):** the dispatch/ledger text named
+`app/dashboard/orders/{page,[orderId]/page}.tsx` and `OrderStatusTimeline.tsx`
+at repo root as if `app/` were the Next.js root. This repo's actual App
+Router root is `src/app/` (confirmed by every prior milestone:
+`src/app/profile`, `src/app/checkout`, `src/app/products`), and shared
+presentational components live under `src/components/` (`CartSummary.tsx`).
+**Rule going forward:** treat a ledger item's file paths as illustrative
+intent, not literal instruction — always confirm against an existing,
+already-shipped page in the same app (e.g. `src/app/profile/page.tsx`)
+before creating any new directory. Building at the ledger's literal path
+in a repo that doesn't have a top-level `app/` would silently produce a
+second, dead, never-routed copy of the app.
+
+## Extracting a shared pure formatter (`money.ts`, `orderTimeline.ts`) out from under a JSX-only component is the right move when a second consumer appears
+**Symptom (M5-1b):** `CartSummary.tsx` already had its own private
+`formatMoney(amount, currency)` closure; the order-dashboard pages needed
+the identical formatting logic. Duplicating the closure a second time
+(as `orderConfirmation.ts`'s HTML-string version already effectively does,
+for a different rendering target) would have left three near-identical,
+independently-driftable implementations.
+**Rule going forward:** when a second page/component needs the exact same
+Decimal-snapshot-string formatting an existing component already does
+inline, extract a small shared pure module (e.g. `src/lib/money.ts`) for
+the new consumers rather than copy-pasting the closure again — do not
+retrofit the *existing* component's already-shipped, already-tested
+inline version unless a real bug is found in it (out of scope for a UI
+item with no reported regression there). Same "one exported predicate,
+not copy-pasted per page" rule as the existing checkout-draft-guard entry
+above, generalized beyond just guard predicates.
+
+## `// eslint-disable-next-line RULE -- trailing description` on the same comment line silently fails to suppress the rule
+**Symptom (M5-1b):** copying `src/app/products/page.tsx`'s
+`// eslint-disable-next-line @next/next/no-img-element` pattern but adding
+a trailing `-- some explanation` on the *same* line (with the actual
+explanation continuing on following comment lines) produced BOTH an
+"Unused eslint-disable directive" warning AND the original
+`no-img-element` warning still firing on the next line — i.e. the
+directive was silently non-functional, not merely redundant.
+**Cause:** ESLint's disable-directive parser only recognizes the exact
+`// eslint-disable-next-line <rule-name>[, <rule-name>...]` form; trailing
+non-comma text after the rule name apparently breaks its parsing of the
+rule-name list in this repo's eslint version, so the rule stays active AND
+the directive is flagged as unused (a doubly-misleading result — it looks
+disabled at a glance but isn't).
+**Rule going forward:** keep any `eslint-disable-next-line` comment as a
+bare `// eslint-disable-next-line <rule>` with zero trailing text on that
+same line; put any explanation on a separate comment line *before* it
+(same order `src/app/products/page.tsx` already uses). After adding any
+new disable directive, re-run `npm run lint` and confirm zero warnings
+for that exact rule/line — don't assume a directive worked just because
+it compiles.
+
+## A raw-HTML substring count for repeated text can be silently doubled by Next.js App Router's inlined RSC hydration payload
+**Symptom (M5-1b):** `expect((html.match(/Not yet reached/g) ?? []).length).toBe(2)` failed with `4` received (and a `3`-expected case received `6`) against a real, correctly-rendering order-detail page with exactly 2 (then 3) "not yet reached" timeline steps.
+**Cause:** beyond the already-documented `<!-- -->` SSR comment-node
+gotcha (see the existing entry above for *split* text), a full App Router
+page response embeds a second, serialized RSC payload (for client
+hydration) inline in the same HTML document — this duplicates whole text
+strings verbatim, not just splits them, so any raw substring-count
+assertion over `res.text()` on a real App Router page is off by a
+(repo/version-specific, empirically-2x-here) multiplier, not a fixed
+constant to assume works everywhere.
+**Rule going forward:** for any test asserting *how many times* some text
+appears in a full-page HTML response (as opposed to just `toContain`), first
+run the assertion once to observe the actual raw count against known-correct
+component logic, then hardcode/comment that empirically-observed multiplier
+with a citation back to this note — don't assume raw HTML text-node count
+equals the number of times a component visually renders that text.

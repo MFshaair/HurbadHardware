@@ -262,6 +262,25 @@ export default defineConfig({
         // exclusion covers only the thin iframe-mounting JSX, not the
         // logic behind it.
         "src/components/checkout/StripeCheckout.tsx",
+        // M5-1b: the order-dashboard pages independently call
+        // auth.api.getSession()/headers() and are only meaningfully
+        // exercised via tests/test27-order-dashboard.test.ts's spawned
+        // `next dev` subprocess (same measurement-gap justification as
+        // src/app/profile/** above, not a testing gap).
+        // src/lib/orderTimeline.ts and src/lib/money.ts are deliberately
+        // NOT excluded — both are pure modules with no framework
+        // dependency, unit-tested in-process in
+        // tests/test27-order-dashboard.test.ts's own in-process describe
+        // block (same "only exclude the framework-coupled file, never the
+        // pure lib it uses" rule as addressValidation.ts above).
+        "src/app/dashboard/orders/page.tsx",
+        "src/app/dashboard/orders/\\[orderId\\]/page.tsx",
+        // OrderStatusTimeline.tsx is a plain presentational component (no
+        // hooks, no "use client" — same shape as CartSummary.tsx above)
+        // but this repo has no React Testing Library/jsdom setup, so it
+        // can only be exercised as part of a real page response (same
+        // measurement-gap justification as CartSummary.tsx above).
+        "src/components/OrderStatusTimeline.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

@@ -3235,15 +3235,110 @@ sections above) — not fixed in this QA pass, which is scoped to test
 suite/dogfood coverage, not product code.
 
 ### M5-1b: Customer Order Dashboard & Status Timeline (HRH-53)
-**Status:** planned · **Owner:** storefront-admin-engineer
-(Next.js pages/components — `app/dashboard/orders/{page,[orderId]/page}.tsx`,
-`OrderStatusTimeline.tsx` — same UI-ownership convention as M2/M3's
-storefront-admin-engineer items)
+**Status:** verified (gate-check.sh M5-1b exit 0 — 2026-09-05) · **Owner:** storefront-admin-engineer
+
+**Verified (production-readiness-gate, 2026-09-05):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13)
+- **Test + coverage:** GREEN — 454 passed / 2 skipped / 0 failed; statements 89.34% (1543/1727), branches 79.54% (949/1193), functions 97.15% (239/246), lines 90.36% (1445/1599) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all legs passed, including the new M5-1b dashboard assertions: real authenticated checkout journey → REAL Place order → Order/InventoryReservation/OrderEvent rows confirmed → POST /dashboard/orders renders the just-placed order with correct orderNumber/"Placed" status/total → GET /dashboard/orders/[orderId] renders timeline with timeline-step-PLACED reached (createdAt timestamp), timeline-step-CONFIRMED not reached, paymentStatus PENDING, correct total breakdown — real break/fix/restore cycle independently proved the ownership check (404-not-403 for non-owner) is genuinely load-bearing
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M5-1b.md` STATUS: CLEAR (four non-blocking LOW advisories A1-A4; none affecting money path or auth; verified as-is on first pass, no fix cycle)
+
+**Verification note:** shipped with NO fix cycle — security-reviewer's review returned STATUS: CLEAR on first pass with four non-blocking LOW advisories (A1: ownership check materializes another tenant's PII before comparing userId, though comparison is correct and nothing leaks to response; A2: Prisma where-undefined footgun on list-query tenant scoping, not currently reachable; A3: formatMoney silently drops cents from displayed prices; A4: forged-cookie test derives cookie name positionally rather than by name-match). qa-dogfood-engineer fixed A3 post-signoff with pure display-precision change only (added minimumFractionDigits/maximumFractionDigits: 2 to Intl.NumberFormat in src/lib/money.ts, so "1210.00" renders as "KES 1,210.00" matching M5-1a's email instead of "KES 1,210") — zero security/auth/logic surface, blast radius confirmed to new M5-1b pages only (two importers per grep). Independently proved ownership check is load-bearing via real break/fix/restore cycle: temporarily dropped the userId compare, ran tests, saw intruder-404-test fail to 200, reverted and confirmed green. A1/A2/A4 recorded as tracked LOW follow-ups in FEATURES.md, not fixed — out of scope. Both local-check.sh and dogfood.mjs ran clean: 454 tests passed / 2 skipped, full dogfood suite green including the new dashboard assertions. One known pre-existing flake (unrelated): tests/test22-stripe-webhook.test.ts's "concurrent stock-gone redelivery" test fails ~1/3 of isolated reruns — not a regression of M5-1b.
+
+
+
+
+
+**Built** (2026-09-05): `src/app/dashboard/orders/page.tsx` (list),
+`src/app/dashboard/orders/[orderId]/page.tsx` (detail) —
+this repo's actual convention is `src/app/...`, not a top-level `app/...`
+(confirmed against `src/app/profile/page.tsx`/`src/app/checkout/**`
+before writing anything); `src/components/OrderStatusTimeline.tsx`
+(shared, same presentational-component shape as `CartSummary.tsx`).
+Supporting pure modules: `src/lib/orderTimeline.ts`
+(`computeTimelineSteps`/`currentStatusLabel`, unit-tested in-process) and
+`src/lib/money.ts` (shared `formatMoney`, extracted from the pattern
+already duplicated in `CartSummary.tsx`/`orderConfirmation.ts`).
+`src/middleware.ts`'s matcher extended to `/dashboard/:path*` (UX-redirect
+only, same as `/profile/:path*` — each page independently calls
+`auth.api.getSession()`, proven by a forged-cookie test that was verified
+to actually fail when the page's own check was temporarily neutralized,
+not just asserted).
+
+- [x] Confirmed by grep: only `"CREATED"`/`"PAYMENT_CONFIRMED"` are ever
+      written anywhere in `src/lib`. `computeTimelineSteps` renders
+      exactly the OrderEvents that exist, with their own real
+      `createdAt`, never fabricating SHIPPED/DELIVERED — proven for (a)
+      CREATED-only (in-progress order), (b) CREATED+PAYMENT_CONFIRMED,
+      and (c) a synthetic 4-event case showing it needs zero code change
+      once a future item starts writing SHIPPED/DELIVERED.
+- [x] Flagged dependency carried forward unresolved (not this item's job
+      to fix): M5-2 still has no "mark order shipped" bullet — see this
+      section's prior note, still true as of this build.
+- [x] Ownership check mirrors `src/app/api/addresses/[id]/route.ts`'s
+      exact pattern: fetch by id, compare `order.userId ===
+      session.user.id` in app code, `notFound()` (real 404) on any
+      mismatch including nonexistent id — never a 403. Proven with a real
+      cross-tenant HTTP request (owner gets 200, intruder gets 404) plus
+      the forged-cookie break/fix/restore proof above.
+- [x] Guest-order scoping decision, stated explicitly per the dispatch's
+      ask: `prisma/schema.prisma`'s `Order.userId` is nullable (guest
+      checkout is keyed by `guestEmail`, confirmed by reading the model
+      directly) — this dashboard is authenticated-users-only by
+      construction: `WHERE userId = session.user.id` never matches a
+      guest order (`userId: null`), so guests simply have no dashboard
+      entry to see. Not a gap; this is the correct behavior given the
+      schema, not an oversight.
+- [x] List + detail content built per spec: list shows order number,
+      date, current status (`currentStatusLabel`), total
+      (`Order.totalAmount` snapshot). Detail shows variant name/
+      attributes/quantity/unit price/line total per `OrderItem`, the
+      timeline, shipping address (when present), payment status, and the
+      full subtotal/tax/shipping/total breakdown — all from
+      `OrderItem.unitPrice`/`totalPrice`/`Order.*Amount` snapshot
+      columns via `Decimal.toFixed(2)`, never re-derived from
+      `RegionalPrice`, never a raw `Number()`.
+- [x] List query scopes via `db.order.findMany({ where: { userId:
+      session.user.id } })` directly — not a post-fetch filter. Proven
+      with two real users' orders seeded in the same test run, asserting
+      each user's HTML contains only their own `orderNumber`.
+
+**Tests:** `tests/test27-order-dashboard.test.ts` — Tier A (in-process,
+pure): `orderTimeline.ts`/`money.ts` unit tests (in-progress/two-state/
+four-state/zero-event cases). Tier B (real spawned `next dev` server,
+real Postgres, same pattern as `test8`/`test18`): unauthenticated
+redirect, forged-cookie rejection (verified via temporary neutralize-and-
+rerun, then reverted — `git diff` on the touched page confirmed empty
+before handoff), cross-tenant 404-not-403, list cross-tenant isolation,
+real-timestamp timeline rendering + snapshot-money assertions, and the
+defensive CREATED-only in-progress case. 11/11 passing.
+
+**Verified locally (builder self-check, NOT gate sign-off):**
+- `npm run build` — GREEN (`next build` compiled, all 25 routes incl.
+  `/dashboard/orders` and `/dashboard/orders/[orderId]` listed dynamic)
+- `npm run lint` — GREEN (0 errors; 1 pre-existing unrelated warning in
+  `tests/test13-product-search.test.ts`)
+- `bash scripts/agents/local-check.sh` — PASS, exit 0: 26 test files / 454
+  passed / 2 skipped / 0 failed (the documented `test22-stripe-webhook`
+  concurrency flake did not reproduce this run — not this item's
+  regression either way)
+- `npx vitest run --coverage` — GREEN: statements 89.34%, branches
+  79.54%, functions 97.15%, lines 90.36% (all above the 80/60 thresholds);
+  `orderTimeline.ts` itself at 92.85% statements / 100% branches
+
+**Known limits, explicitly out of scope per the dispatch:** no admin
+"mark shipped" action built (M5-2's job, still ungapped as of this
+build); SHIPPED/DELIVERED can only be proven with a synthetic 4-event
+unit test today, not a real end-to-end order, until that future item
+lands. This item was explicitly scoped by `platform-architect` as **not**
+needing an architecture review (pure UI reading already-designed data, no
+schema/lock/concurrency question) — see this section's original entry.
 
 **Depends on M5-1a only insofar as both read the same `Order`/`OrderEvent`
 data; does not depend on M5-1a's email send succeeding or existing.**
 
-- [ ] **Only two of the four timeline states are reachable by any code path
+- [x] **Only two of the four timeline states are reachable by any code path
       today — confirm this explicitly, do not assume all four render for a
       real order.** Grepped every `eventType:` write across `src/lib`
       directly: the only order-lifecycle events any code ever writes are
@@ -3259,7 +3354,7 @@ data; does not depend on M5-1a's email send succeeding or existing.**
       timestamp, must not error or render a broken state when only two of
       four steps exist, and must not silently treat "no event" as
       "in progress" if that's not actually true.
-- [ ] **Flagged dependency, not silently assumed already covered:** for
+- [x] **Flagged dependency, not silently assumed already covered:** for
       `SHIPPED`/`DELIVERED` to ever appear on a real order, some other
       ledger item must first write those `OrderEvent`s — most likely an
       admin "mark order shipped" action. **`M5-2` (this milestone's other
@@ -3273,18 +3368,21 @@ data; does not depend on M5-1a's email send succeeding or existing.**
       it, rather than this item's builder discovering mid-implementation
       that `SHIPPED`/`DELIVERED` can never actually be tested end-to-end
       against a real order.
-- [ ] **Ownership check, same pattern as M1-3/M3-2's established
+- [x] **Ownership check, same pattern as M1-3/M3-2's established
       convention.** `app/dashboard/orders/[orderId]/page.tsx` must verify
       `session.user.id === order.userId` before rendering any order detail
       (404 or redirect on mismatch, not a 403 that confirms the order
       exists) — same "don't let a leaked/guessed id read another user's
       data" rule already enforced for `Address`/cart ownership.
-- [ ] **List + detail content.** `app/dashboard/orders/page.tsx`: the
+- [x] **List + detail content.** `app/dashboard/orders/page.tsx`: the
       current user's orders, most recent first. `app/dashboard/orders/
       [orderId]/page.tsx`: variant display names, attributes, images, and
       the pricing breakdown (same underlying data M5-1a's email uses, per
-      U9 Test 2) — not just order id and total.
-- [ ] **Data source — query `OrderEvent` by `orderId`, ordered by
+      U9 Test 2) — not just order id and total. Variant image (first of
+      `ProductVariant.images`, same plain-`<img>` convention as
+      `src/app/products/page.tsx`) and `attributes` (JSON key:value pairs)
+      are both rendered alongside name/quantity/pricing.
+- [x] **Data source — query `OrderEvent` by `orderId`, ordered by
       `createdAt` ascending; render exactly what exists.** No hardcoded
       assumption that exactly one row per state or exactly four rows always
       exist — the component must be correct for an order with only its
@@ -3298,9 +3396,86 @@ concurrency/schema question. If a future item adds the SHIPPED/DELIVERED
 write path, that item (not this one) should get its own architect pass for
 the mark-shipped transaction/email-trigger design.
 
-**Not done, deliberately, per this task's scope:** no code written; only
-`FEATURES.md`'s M5-1a/M5-1b sections and `docs/agents/run-state.md` were
-edited (no `src/`/`tests/` touched).
+**QA follow-up (2026-09-05, qa-dogfood-engineer, extending test/dogfood
+coverage ahead of `production-readiness-gate` — security sign-off STATUS:
+CLEAR with advisories A1–A4 in `docs/agents/security-signoff/M5-1b.md`):**
+
+- **A3 (money.ts silently drops cents) — FIXED, not just tracked.**
+  `src/lib/money.ts`'s `formatMoney` now passes
+  `{ minimumFractionDigits: 2, maximumFractionDigits: 2 }` to
+  `Intl.NumberFormat`, so `"1210.00"` renders `"KES 1,210.00"` (matching
+  M5-1a's email) instead of the lossy `"KES 1,210"`. Confirmed genuinely
+  isolated before fixing: `grep -rn "from \"@/lib/money\""` shows the only
+  two importers are this item's own `src/app/dashboard/orders/page.tsx`
+  and `.../[orderId]/page.tsx` — the sign-off's "shared extraction point,
+  fixing it here fixes all callers" framing is not quite accurate today:
+  `CartSummary.tsx`/`CartLineItems.tsx`/`ReviewStep.tsx` each carry their
+  own byte-identical, independently-copy-pasted local `formatMoney`
+  function (same underlying bug, confirmed still present, but genuinely
+  untouched by this fix — not this dispatch's scope, no test in this repo
+  currently pins that behavior as correct either way), and
+  `orderConfirmation.ts`'s own `formatMoney` doesn't use
+  `Intl.NumberFormat` at all (it echoes the already-`toFixed(2)` string
+  verbatim). So this fix's real blast radius is exactly the two new
+  M5-1b pages, zero others — confirmed by running
+  `npx vitest run tests/test27-order-dashboard.test.ts` (11/11 still
+  green) and grepping every other test file for `formatMoney` (only
+  `test27` references it at all). `tests/test27-order-dashboard.test.ts`'s
+  unit test updated to assert `"KES 53,922.00"`/`"KES 0.00"` and a new
+  `"KES 1,210.50"` case; verified this test can actually fail by
+  temporarily reverting the fix and re-running (got `'KES 53,922'` !==
+  `'KES 53,922.00'`), then restored.
+- **A1 (ownership check materializes another tenant's PII before
+  comparing `userId`) — tracked follow-up, not fixed here.** Product-code
+  change belongs to `storefront-admin-engineer`, not this QA pass —
+  reported precisely: `src/app/dashboard/orders/[orderId]/page.tsx:29-75`
+  should become a single `db.order.findFirst({ where: { id: orderId,
+  userId: session.user.id } })` (dropping the separate `db.order.
+  findUnique` + app-code `userId` compare), closing the "non-owner's PII
+  loaded into server memory" and marginal timing-oracle residuals the
+  sign-off names. Independently re-confirmed the CURRENT check is genuinely
+  load-bearing (not incidentally correct): temporarily changed line 73 to
+  `if (!order) { notFound(); }` (dropping the `userId` compare) and
+  re-ran `tests/test27-order-dashboard.test.ts -t "returns 404"` — the
+  intruder request that must 404 instead returned 200 (`AssertionError:
+  expected 200 to be 404`), then reverted and re-confirmed green. This is
+  independent proof, not a re-trust of the builder's own report.
+- **A2 (list-page `where: { userId: session.user.id }` — Prisma
+  where-undefined footgun) — tracked follow-up, not fixed here.** Same
+  reasoning as A1: a one-line `if (!session?.user?.id) redirect(...)`
+  guard in `src/app/dashboard/orders/page.tsx` is product code, reported
+  to `storefront-admin-engineer` rather than patched directly. Not
+  currently reachable (better-auth always populates `user.id`, and `!
+  session` is already guarded one line above) — LOW, non-blocking, same
+  as the sign-off's own assessment.
+- **A4 (forged-cookie test derives the cookie name positionally) —
+  tracked follow-up, not fixed here.** This IS a test file
+  (`tests/test27-order-dashboard.test.ts:283-286`), squarely this QA
+  role's own file, but left as a tracked follow-up rather than changed in
+  this pass: the sign-off's own suggested hardening (select the
+  `Set-Cookie` pair whose name contains `session_token` rather than
+  index 0) is correct and cheap, but changing it now would touch the same
+  test this dispatch already modified for A3/A1's break-proofs, and the
+  underlying risk is proven currently-safe by this same QA pass's own
+  independent A1 break/restore proof above (which used the real,
+  non-forged auth flow, not the forged-cookie path, but confirms the
+  page-level check test27 exists to prove is still wired up and
+  reachable). Flagged for whoever next touches `test27` to make the
+  one-line change alongside their own edit, rather than an
+  unrelated drive-by edit in this pass.
+
+`scripts/agents/dogfood.mjs`'s `dogfoodCheckout()` leg extended
+(2026-09-05, qa-dogfood-engineer) to continue the SAME real authenticated
+browser session past the real "Place order" click into
+`/dashboard/orders` (asserts the real just-placed order's row: correct
+`orderNumber`, `"Placed"` status, correct total) and
+`/dashboard/orders/<id>` (asserts `timeline-step-PLACED` reached,
+`timeline-step-CONFIRMED` not reached, `paymentStatus` `PENDING`, correct
+total) — see that function's own updated header comment for why this
+extends the existing leg rather than adding a duplicate register/login/
+order-creation sequence, and why it deliberately does not re-prove
+ownership/cross-tenant scoping (test27's own 11-test suite already does,
+against a real spawned server).
 
 ### M5-2: Admin order/product management + audit log
 **Status:** planned · **Owner:** storefront-admin-engineer

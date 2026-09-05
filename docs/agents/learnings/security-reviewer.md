@@ -450,3 +450,57 @@ guard was keyed on that same reason string.
 human-readable `reason`, check the reason is derived FROM the boolean, not
 from a sibling field. Then check what else keys on the reason string (dedup
 guards, ops queries) — a mislabel there silently changes grouping too.
+
+## A read page's ownership check can be correct and still load the other tenant's PII
+**Symptom (M5-1b):** An order-detail Server Component did findUnique by id
+selecting the full shipping address and line items, then compared userId and
+called notFound(). Correct — nothing reaches the response — but every
+non-owner request materializes another customer's name/phone/street in
+server memory, and the two 404 paths (missing id vs. not-yours) pay
+different join costs.
+**Rule going forward:** Apply the existing "single-statement enforcement"
+rule to READS, not just mutations: prefer findFirst({ where: { id, userId } })
+over findUnique-then-compare. Record the split form as advisory and check
+specifically whether anything between the fetch and the check could log or
+serialize the row.
+
+## Prisma's where-undefined footgun turns a scoped list query into a full-table read
+**Symptom (M5-1b):** `findMany({ where: { userId: session.user.id } })` is the
+correct cross-tenant scoping, but Prisma treats an `undefined` value in a
+where clause as "filter absent" — so a session whose user.id was ever
+undefined would render every row in the table. TypeScript's non-nullable
+typing means the compiler cannot catch a regression here either.
+**Rule going forward:** For any tenant-scoping where clause, check the scoping
+value cannot be undefined at that line, and prefer an explicit
+`if (!session?.user?.id) redirect(...)` guard over relying on the auth
+library's typing. "Does not leak" resting on an external library invariant is
+weaker than "cannot leak".
+
+## A runtime-derived cookie name can still degrade positionally
+**Symptom (M5-1b):** A forged-cookie test correctly avoided hardcoding the
+cookie name — but derived it as `split("=")[0]` over a join of ALL Set-Cookie
+pairs, i.e. whichever cookie the auth library emits first. If a non-session
+cookie ever comes first, middleware's presence check rejects the forged
+header and the test silently becomes the no-cookie case, still passing —
+because its assertion is byte-identical to the no-cookie test's.
+**Rule going forward:** "Derived at runtime, not hardcoded" is necessary but
+not sufficient. Also check the derivation SELECTS the session cookie by name
+match (contains `session_token`), not by position — and treat a
+forged-cookie test whose assertion is identical to the no-cookie test's as
+requiring that stronger derivation, since it has no other way to distinguish
+the two paths.
+
+## A lossy display formatter extracted into a shared module entrenches the loss
+**Symptom (M5-1b):** A new shared `formatMoney` used
+`Intl.NumberFormat("en-US")` with no options (minimumFractionDigits defaults
+to 0), silently dropping cents from correct Decimal(12,2) snapshot strings,
+with a unit test codifying the lossy output. Copied verbatim from four
+pre-existing call sites, so it read as following convention — but this was
+the first surface showing what the customer was actually CHARGED, and the
+sibling email template formats the same order without the loss.
+**Rule going forward:** When a diff extracts a duplicated formatter into a
+shared module, review the extracted logic on its own merits rather than
+accepting "same as the existing call sites" — extraction is the moment the
+class gets entrenched and also the cheapest moment to fix it. For money
+specifically, check min/maxFractionDigits explicitly and compare the output
+against every other surface rendering the same amount (email, receipt, admin).

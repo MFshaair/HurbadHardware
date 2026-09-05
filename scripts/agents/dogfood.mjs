@@ -87,6 +87,26 @@
 // gap, and test26's table-driven tests already cover per-path trigger
 // correctness in-process.
 //
+// PLUS M5-1b's "My orders" dashboard leg (added 2026-09-05 for
+// M5-1b/HRH-53, qa-dogfood-engineer), folded INTO dogfoodCheckout() rather
+// than as a new leg or a new register/login/order-creation sequence: the
+// SAME authenticated browser session that just clicked a real "Place order"
+// button now also visits /dashboard/orders and /dashboard/orders/[orderId]
+// and asserts the real, actually-persisted order (real snapshot columns,
+// real CREATED-only OrderEvent, real orderNumber) renders correctly — not
+// a duplicate of tests/test27-order-dashboard.test.ts, which (confirmed by
+// reading it) builds its own fixture order via a direct `db.order.create()`
+// call, never through the real checkout transaction. Nothing before this
+// addition had proven the dashboard actually renders what
+// `createReservationAndOrder` (M3-2/M3-3) genuinely persists end to end.
+// Deliberately does NOT re-prove ownership/cross-tenant scoping or the
+// forged-cookie path — test27's own spawned-server suite already covers
+// those exhaustively (11 tests) and duplicating them here would just be
+// redundant, slower coverage of the same page-level check. Also
+// deliberately stops at the CREATED-only ("Placed") timeline state, since
+// this leg never runs a real Stripe/M-Pesa confirmation — the CONFIRMED
+// timeline state is covered by test27's own event-fixture tests instead.
+//
 // Extending this script to cover the real flow for each milestone is
 // qa-dogfood-engineer's explicit responsibility — see FEATURES.md and
 // docs/agents/run-state.md for which milestone is current. Do NOT let this
@@ -1501,11 +1521,80 @@ async function dogfoodCheckout() {
       );
     }
 
+    // 7. (M5-1b) The SAME authenticated browser session that just placed
+    // this real order now visits its own "My orders" dashboard — the real
+    // customer-facing continuation of this exact journey, not a separate
+    // fixture. Deliberately extends this existing leg rather than adding a
+    // parallel register/login/order-creation sequence (this file's own
+    // dogfoodCheckout() already has one): tests/test27-order-dashboard.test.ts
+    // proves the dashboard pages' security/rendering logic against a
+    // hand-crafted `db.order.create()` fixture (confirmed by reading
+    // test27 directly — its Tier B `beforeAll` builds the order via Prisma,
+    // never through the real checkout transaction), so nothing before this
+    // addition had proven the dashboard actually renders what
+    // `createReservationAndOrder` (M3-2/M3-3) really persists — the real
+    // snapshot columns, the real CREATED OrderEvent, the real address/items
+    // shape. This closes that specific gap without duplicating test27's own
+    // ownership/timeline-state coverage.
+    await page.goto(`${BASE_URL}/dashboard/orders`, { waitUntil: "networkidle" });
+    const orderRowTotal = await page
+      .locator(`[data-testid="order-row-${orderNumber.trim()}-total"]`)
+      .textContent();
+    // Mirrors src/lib/money.ts's own formatMoney exactly (fixed 2 fraction
+    // digits — QA fix for security sign-off M5-1b advisory A3, see
+    // src/lib/money.ts's own comment), not re-derived independently.
+    const expectedTotal = `${order.currency} ${new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(order.totalAmount.toFixed(2)))}`;
+    if (!orderRowTotal || orderRowTotal.trim() !== expectedTotal) {
+      throw new Error(
+        `/dashboard/orders did not render the real just-placed order's row with the expected total. ` +
+          `Expected "${expectedTotal}", got: ${JSON.stringify(orderRowTotal)}`,
+      );
+    }
+    const orderRowStatus = await page
+      .locator(`[data-testid="order-row-${orderNumber.trim()}-status"]`)
+      .textContent();
+    if (orderRowStatus?.trim() !== "Placed") {
+      throw new Error(
+        `/dashboard/orders showed status "${orderRowStatus}" for a freshly-placed order with no ` +
+          `PAYMENT_CONFIRMED event yet — expected "Placed" (must never fabricate "Confirmed").`,
+      );
+    }
+
+    await page.locator(`[data-testid="order-row-${orderNumber.trim()}"]`).click();
+    await page.waitForURL(new RegExp(`/dashboard/orders/${order.id}$`), { timeout: 10_000 });
+
+    const placedStep = page.locator('[data-testid="timeline-step-PLACED"]');
+    const confirmedStep = page.locator('[data-testid="timeline-step-CONFIRMED"]');
+    if ((await placedStep.getAttribute("data-reached")) !== "true") {
+      throw new Error("Order detail timeline did not mark PLACED as reached for the real just-placed order");
+    }
+    if ((await confirmedStep.getAttribute("data-reached")) !== "false") {
+      throw new Error(
+        "Order detail timeline wrongly marked CONFIRMED as reached — this order has no real " +
+          "PAYMENT_CONFIRMED OrderEvent yet (M4's job, out of scope for this leg)",
+      );
+    }
+    const detailPaymentStatus = await page.locator('[data-testid="order-payment-status"]').textContent();
+    if (detailPaymentStatus?.trim() !== "PENDING") {
+      throw new Error(`Expected the real order's paymentStatus to render as "PENDING", got: ${detailPaymentStatus}`);
+    }
+    const detailTotal = await page.locator('[data-testid="order-total"]').textContent();
+    if (detailTotal?.trim() !== expectedTotal) {
+      throw new Error(
+        `/dashboard/orders/${order.id} total did not match the real snapshot column. ` +
+          `Expected "${expectedTotal}", got: ${JSON.stringify(detailTotal)}`,
+      );
+    }
+
     await page.close();
     console.log(
       "[dogfood] PASS: add to cart -> checkout address -> payment -> review -> REAL Place order " +
         "-> 201 -> Order/InventoryReservation/OrderEvent rows confirmed -> cart consumed -> " +
-        "sessionStorage draft cleared",
+        "sessionStorage draft cleared -> My orders dashboard shows the real order (correct status/" +
+        "total) -> order detail shows correct timeline/payment-status/total",
     );
   } finally {
     await cleanup();

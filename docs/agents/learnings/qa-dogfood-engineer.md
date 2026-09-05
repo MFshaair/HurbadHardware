@@ -825,3 +825,54 @@ consecutive runs in this dev DB (Postgres's physical row order was stable
 enough here to reproduce reliably, though in principle this class of bug
 is inherently non-deterministic and might not reproduce identically on a
 different DB/run) — then restoring the fix gave 5+ consecutive clean runs.
+
+## Before trusting a security sign-off's "shared extraction point" framing, grep the actual import graph
+
+**Symptom:** Security sign-off M5-1b (advisory A3) described `src/lib/
+money.ts`'s `formatMoney` as "now the shared extraction point" such that
+fixing its fraction-digit bug there "would fix all callers at once" —
+which read as if the fix had a 4-file blast radius (`CartSummary.tsx`,
+`CartLineItems.tsx`, `ReviewStep.tsx`, `orderConfirmation.ts`, all named
+as having "identical expressions").
+
+**Cause:** Those four files each carry their own independently
+copy-pasted local `formatMoney` function — none of them actually
+`import { formatMoney } from "@/lib/money"`. The new `src/lib/money.ts`
+module is shared only in *pattern* (same-shaped code), not in *import
+graph* — `grep -rn "from \"@/lib/money\""` shows exactly two importers,
+both new M5-1b dashboard pages. A sign-off's prose description of
+"shared"/"duplicated" code is a claim about similarity, not necessarily
+about a real shared dependency edge — the two are easy to conflate when
+skimming.
+
+**Rule going forward:** Before deciding a fix to a "shared" helper is
+in-scope or out-of-scope based on its blast radius, grep the actual
+import statements (not just similarly-named/similarly-shaped functions)
+to find the real caller set, and grep every test file for references to
+the helper too (`grep -rln "<helperName>" tests/`) to confirm which
+tests would actually be affected. Only then decide whether a fix is
+"cheap, isolated" (as it turned out here — zero other importers, zero
+other tests reference it) or genuinely has wide blast radius. Applies
+generally: any advisory/finding that describes code as "the same pattern
+as" or "duplicated at" other locations should be treated as a
+similarity claim to verify, not an import-graph fact to accept.
+
+## Break/fix/restore proofs for both a test AND a QA-owned test-correctness fix are cheap and worth doing even when the builder/reviewer already reported them
+
+**Symptom:** Dispatched to independently verify (a) a builder-reported
+ownership-check test (`test27`'s "404 not 403" case) was genuinely
+load-bearing, and (b) whether to fix a security-sign-off advisory
+(`money.ts`'s missing fraction-digits) now vs. track it as a follow-up.
+
+**Rule going forward:** For (a), always re-run the break/restore cycle
+yourself rather than accepting a builder's/reviewer's documented account
+at face value — it costs one Python-scripted string-replace + one
+`vitest run -t "<pattern>"` + a restore, a few seconds of wall time, and
+directly satisfies this role's own "prove it can fail" discipline rather
+than transitively trusting someone else's proof. For (b), when a fix
+touches both product code (`src/lib/money.ts`) and its own pinning unit
+test (`test27`'s money-formatting assertions) in the same commit, the
+same break/restore cycle doubles as a check that (i) the test actually
+pins the correct (fixed) behavior and (ii) the test would have caught the
+bug before the fix existed — do this for any test edit that changes an
+expected value, not only for brand-new tests.
