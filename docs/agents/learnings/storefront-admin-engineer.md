@@ -493,6 +493,105 @@ suspicious subset directly (`npx vitest run <failing files>`) to confirm
 whether a failure was a real regression or a known flake before accepting
 a "PASS" you can't actually verify.
 
+## Node's global `fetch` (undici) sends `Sec-Fetch-Mode: cors` by default, which trips better-auth's form-CSRF origin check for a plain `node script.mjs` HTTP client — but NOT inside a vitest test process
+**Symptom (M5-2b):** a scratch verification script (plain `node foo.mjs`,
+spawning `next dev` and hitting `/api/auth/sign-up/email` with a bare
+`fetch`) got a `403 { code: "MISSING_OR_NULL_ORIGIN" }` even with correct
+credentials and no cookie sent — but the IDENTICAL request, run from inside
+a vitest test file against the same spawned server, succeeded with `200`,
+matching every existing spawned-server test file's (test6/test27/test28)
+own established pattern of using bare `fetch` with no `Origin` header.
+**Cause:** `node_modules/better-auth/dist/api/middlewares/origin-check.mjs`'s
+`formCsrfMiddleware` forces an origin check whenever the request carries a
+non-empty `Sec-Fetch-Mode`/`Sec-Fetch-Site`/`Sec-Fetch-Dest` header (or a
+cookie), and Node 20's built-in `fetch` (undici) sets `Sec-Fetch-Mode: cors`
+on every outgoing request by default when invoked from a plain Node
+process — but not (empirically confirmed) when the same `fetch` call runs
+inside a vitest-managed test process, whose runtime doesn't add that
+header. This is a genuine behavioral difference between "runs under
+vitest" and "runs under plain `node`," not a flake.
+**Rule going forward:** for any one-off empirical verification of Next.js
+route behavior (e.g. confirming what HTTP status `redirect()`/`notFound()`
+produces from a Route Handler) that needs to hit better-auth-protected
+endpoints, write the throwaway probe as a real (temporary) vitest test file
+and run it via `npx vitest run`, not a bare `node script.mjs` — a plain-Node
+script can produce a spurious 403 that has nothing to do with the thing
+being verified, costing time chasing a non-bug. Delete the scratch test
+file immediately after reading its output; it exists only to settle one
+empirical question, not to ship.
+
+## `requireAdmin()`'s `redirect()`/`notFound()` behave exactly as expected inside a Route Handler (not just a Server Component page) — verified, not assumed
+**Symptom/context (M5-2b):** the ADR flagged this as the single highest
+ambiguity to verify before writing the mark-shipped POST route: "Builder
+must verify empirically... if `notFound()` surfaces as a 500 rather than a
+404 in a Route Handler under 15.5.23, the fix belongs in this route... never in `adminAuth.ts`."
+**Resolution:** built a throwaway vitest test hitting the real route with
+`redirect: "manual"` for the unauthenticated case and a real signed-up
+CUSTOMER session for the notFound() case. Confirmed: an unauthenticated
+POST gets a clean `307` with `Location: /auth/login?reason=admin_no_session`
+(same marker/redirect Next.js's Server Component `redirect()` produces
+elsewhere in this repo), and a CUSTOMER-session POST gets a clean `404`
+with an empty body — no local status-mapping shim was needed in the route.
+**Rule going forward:** when an ADR explicitly flags "verify this
+empirically, don't assume," budget the time to actually do it via a
+throwaway spawned-server test (see the entry above for why it must run
+under vitest, not plain node) before writing the "just in case" mapping
+code the ADR warns might be needed — don't add defensive status-remapping
+for a framework behavior you haven't actually observed to be wrong.
+
+## An ADR's illustrative precondition-check ORDER can be self-contradicting with its own required test outcomes when two conditions are causally linked by the same mutation
+**Symptom (M5-2b):** ADR Decision 3.4's pseudocode checked
+`TERMINAL_FULFILLMENT.includes(fulfillmentStatus)` before
+`existingShipments > 0`, but Decision 7 required a literal second
+mark-shipped call against an already-shipped order to surface
+`409 ALREADY_SHIPPED` specifically. Coding the checks in the ADR's literal
+order made that outcome IMPOSSIBLE: this same mutation's own step (e)
+always sets `fulfillmentStatus: "SHIPPED"` in the same transaction that
+creates the `Shipment` row, and `"SHIPPED"` is itself a
+`TERMINAL_FULFILLMENT` member — so the terminal-status check always fired
+first on a repeat call, permanently shadowing the more specific
+already-shipped error. Writing the tests first (as directed) surfaced this
+immediately: tests 17/18 failed with `FULFILLMENT_TERMINAL` instead of the
+required `ALREADY_SHIPPED`.
+**Rule going forward:** when two precondition checks can become true
+*together, as a direct causal consequence of the same mutation's own prior
+writes* (not just independently-possible states), the ADR's illustrative
+check order is not necessarily load-bearing — the actual behavioral
+contract is whatever the ADR's own required tests assert. Reorder to
+satisfy the tests (here: check the more specific condition —
+`existingShipments`, which only this mutation's own success can produce —
+before the generic catch-all that a *terminal-but-never-shipped* state
+like `CANCELLED` also satisfies), and flag the deviation explicitly and
+loudly (inline code comment + ledger note), rather than silently picking
+whichever order happens to compile. Don't treat "matches the ADR's
+pseudocode line-for-line" and "passes the ADR's own required tests" as
+automatically the same thing — when they conflict, the tests are the
+actual spec, and the deviation needs to be visible to whoever reviews the
+diff next, not just correct.
+
+## A real Postgres `BEFORE INSERT ... WHEN (...)` trigger, created and dropped inside the test itself, is a clean way to force a SPECIFIC downstream statement in a multi-step transaction to fail for an atomicity/rollback proof
+**Symptom/need (M5-2b):** proving "if step (f) [OrderEvent create] fails,
+step (d) [Shipment create] rolls back too" needed a REAL failure at
+exactly that statement, not a mock (which would skip the real transaction
+entirely, proving nothing about actual rollback behavior) — but every
+column on the `OrderEvent`/`Shipment` rows involved is either optional or
+has no meaningful constraint to violate (no unique index, no FK checks on
+`actorId`, `payload` is always valid JSON from a fixed shape the test
+can't perturb).
+**Rule going forward:** for this class of "force exactly this one
+statement, and only this one, to fail" atomicity proof where no ordinary
+constraint violation is available, create a throwaway Postgres trigger
+function scoped with a `WHEN (...)` clause matching only the row shape
+under test (e.g. `WHEN (NEW."eventType" = 'SHIPPED')` on `OrderEvent`) that
+`RAISE EXCEPTION`s, run the mutation under test inside a `try`, then
+`DROP TRIGGER`/`DROP FUNCTION` in a `finally` — regardless of test
+pass/fail. This is a real DB-level failure injection (satisfies "not a
+mock that skips the transaction"), fails only the exact statement
+targeted, and leaves zero schema footprint once the `finally` runs. Prefer
+the already-established "omit a required NOT NULL field" technique
+(test28's own pattern) first when the failing statement has one available
+(cheaper, no raw SQL) — reach for a scoped trigger only when it doesn't.
+
 ## A raw-HTML substring count for repeated text can be silently doubled by Next.js App Router's inlined RSC hydration payload
 **Symptom (M5-1b):** `expect((html.match(/Not yet reached/g) ?? []).length).toBe(2)` failed with `4` received (and a `3`-expected case received `6`) against a real, correctly-rendering order-detail page with exactly 2 (then 3) "not yet reached" timeline steps.
 **Cause:** beyond the already-documented `<!-- -->` SSR comment-node
@@ -509,3 +608,18 @@ run the assertion once to observe the actual raw count against known-correct
 component logic, then hardcode/comment that empirically-observed multiplier
 with a citation back to this note — don't assume raw HTML text-node count
 equals the number of times a component visually renders that text.
+
+**Related, not just repeated text (M5-2b):** the same inlined RSC
+hydration payload also verbatim-echoes a Server Component page's OWN props
+— in particular `searchParams` — into the raw response body, even when the
+page's rendered application content never displays that value anywhere. A
+test asserting "an unrecognized/malicious query param is never echoed into
+the page" (proving no reflected-value bug) must NOT do a blanket
+`expect(html).not.toContain(rawValue)` over the full raw HTML — it will
+false-fail against a genuinely-safe page, because Next.js's own hydration
+payload contains the URL/searchParams regardless. Scope the assertion to
+the actual rendered markup instead (e.g. `not.toContain('<option
+value="XX"')` rather than `not.toContain("XX")`), and assert the default/
+safe state IS rendered (e.g. the exact `<option value="" selected="">All
+...</option>` string) — that's the real, non-framework-internal claim the
+test needs to prove.

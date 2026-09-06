@@ -532,3 +532,29 @@ proxied library object, read the library's proxy traps (`has`, not just `get`) a
 confirm BOTH directions. Then check which existing tests would catch a future
 regression of the false-positive direction — if none exercise the good input, that
 is itself a finding.
+
+## An unreachable error branch signals the ADR's check order is wrong, not that the error is unnecessary
+**Symptom (M5-2b):** An ADR enumerated preconditions in an order where one
+specific error was structurally dead — the mutation's own success set a state
+that matched an earlier, more generic guard, so the later, more specific guard
+could never fire. The builder reordered the checks to make it reachable.
+**Rule going forward:** When a builder reorders guards away from the ADR's
+literal order, verify the guards are a pure conjunction with no side effects
+between them — only then does reordering change which diagnosis fires without
+changing which inputs reach the write block. Then check the regression test
+asserts the specific error CODE, not just the HTTP status, or the reorder
+isn't actually pinned by anything.
+
+## A "second route" regression test that fetches the first route's URL
+**Symptom (M5-2b, re-examining M5-2a's own test):** A test's title claimed to
+prove a per-page auth gate was live on a second route inside a shared route
+group, but the fetch target inside the test body was the same URL the
+previous test already used — so the claimed property was unproven for every
+other page in the group, even though the underlying gate was in fact correct
+by construction (every page independently calls the shared check).
+**Rule going forward:** For any test whose title states a security property
+("holds on a second route", "also gates X"), read the actual URL/fixture the
+test body uses, not just its name — and grep for sibling tests reusing the
+same target string. A passing test with a misleading title still leaves the
+named property unverified for a future page that doesn't happen to call the
+shared check.

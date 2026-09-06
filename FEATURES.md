@@ -3825,33 +3825,268 @@ section and `docs/agents/run-state.md` were edited (no `src/`/`tests/`/
 `prisma/schema.prisma` touched).
 
 ### M5-2b: Admin Order Management UI (HRH-55)
-**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+**Status:** verified (gate-check.sh M5-2b exit 0 — 2026-09-06) · **Owner:** storefront-admin-engineer
 
-**Depends on M5-2a existing** (role gate + audit-log helper) — this item's
+**Verified (production-readiness-gate, 2026-09-06):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13, untouched by this item)
+- **Test + coverage:** GREEN — 504 passed / 2 skipped / 0 failed; statements 88.38% (1583/1791), branches 78.9% (965/1223), functions 96.1% (247/257), lines 89.29% (1484/1662) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%); `orderFulfillmentService.ts` specifically confirmed 100% lines via `coverage/coverage-summary.json`
+- **Dogfood entrypoint:** GREEN — all legs passed, including new M5-2b leg: real signed-Stripe-webhook-confirmed order marked shipped by a real promoted admin over real HTTP, customer's own `/dashboard/orders/[orderId]` and `/dashboard/orders` pages render Shipped afterward. M5-2a test28's Tier B coverage (real Playwright browser) not duplicated; dogfood focus is end-to-end integration (webhook→mark-shipped→dashboard render). Prisma migration verified clean twice with no drift.
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M5-2b.md` STATUS: CLEAR (security-reviewer single-pass review: no blocking findings, six non-blocking LOW advisories A1-A6 documented)
+
+**Verification note:** Security reviewer conducted one-pass review and returned STATUS: CLEAR on first pass. The review explicitly scrutinized M5-2a advisory A3's first real call site (`adminId` cannot be client-supplied) plus the precondition-reorder deviation this builder introduced: the ADR's literal precondition-check order (terminal-fulfillment before existing-shipment) was unreachable for its stated purpose, since the same mutation that creates a `Shipment` row also sets `fulfillmentStatus: "SHIPPED"` (itself TERMINAL), making `ALREADY_SHIPPED` structurally unreachable on a second call. Builder reordered the checks (`existingShipments` before terminal-status); security-reviewer independently traced the logic and confirmed reordering is correct — three guards form a pure conjunction with no side effects between them, so reorder changes only which diagnosis fires, not which inputs reach the write path. No new bypass introduced; the reorder is documented inline at `src/lib/orderFulfillmentService.ts:94-109`. Six advisories recorded (A1 `ipAddress` spoofable by the acting admin; A2 `trackingUrl` stored raw not normalized; A3 forged-cookie test coverage gap on new `(secure)` pages; A4 no origin/CSRF check on POST; A5 precondition-reorder side-effect info-level note; A6 two standing repo-wide gaps restated) — none blocking, all deferred as non-blocking follow-ups. qa-dogfood-engineer validated the concurrent double-mark-shipped test is genuinely load-bearing AND genuinely concurrent (not silently serialized by dev server) via break/fix/restore on the `FOR UPDATE` lock; removed it, confirmed test failed (both requests returned 200 instead of one 200/one 409), restored, confirmed git diff clean. qa-dogfood-engineer also fixed a real, unrelated test-quality gap security-reviewer found in M5-2a's own test suite: test28:403-421 titled "second admin route" was actually re-fetching the same URL, never proving what it claimed; M5-2b's new `/admin/orders` route gave a real second route, so the test was fixed rather than tracked. Coverage excludes remain accurate: four new framework-coupled files (`ship/route.ts`, two new admin pages, `MarkShippedForm.tsx`) correctly excluded with same justification; `orderFulfillmentService.ts` deliberately NOT excluded and directly exercised by test29 Tier A. Known flake class (test14-cart-ui, test21-checkout-stripe-session-route, test22-stripe-webhook concurrent-redelivery) confirmed during gate run — all three flakes passed cleanly in isolation and on full-suite re-run, consistent with repo's documented spawned-server-contention flake class, not a regression of M5-2b.
+
+
+**Architect review: DONE (platform-architect, 2026-09-06).** Binding design
+is `docs/agents/arch-decisions/M5-2b-admin-order-management.md` — 8
+decisions. Resolves both open questions from the sharpening pass: (1) the
+mark-shipped precondition gates on `Order.paymentStatus === "CONFIRMED"`
+(the field payment-confirm actually sets) rather than inventing traffic
+through `fulfillmentStatus` values (`CONFIRMED`/`PROCESSING`) that no code
+path in this repo can ever produce — **no edit to
+`reservationService.ts`, no second builder dispatch needed**; (2) exactly
+one `Shipment` row per order, zero migration, no `@@unique` constraint
+(the one-per-order invariant is enforced by a `SELECT ... FOR UPDATE`
+lock on the `Order` row instead, which is also what prevents two admins
+double-clicking from creating two `Shipment` rows and two customer-visible
+`SHIPPED` events). VIEW_ONLY is blocked with a 403 (not 404 — no
+existence-oracle concern here, since a VIEW_ONLY admin already passed the
+full gate and can view the order), checked before the request body is
+even parsed. `adminId` on the audit-log call is sourced only from the
+`AdminPrincipal` the route's own `requireAdmin()` call already returned —
+never re-derived, never client-suppliable — closing M5-2a's own advisory
+A3 with a real injection regression test. The `OrderEvent` payload for
+`SHIPPED` deliberately duplicates carrier/tracking data rather than
+requiring future consumers to join `Order.shipments`, since `OrderEvent`
+is an append-only historical record and `Shipment` is mutable current
+state — an ops correction to a shipment's tracking number must not
+retroactively rewrite what the customer was told on the shipping date.
+Independently re-verified (not just trusted from M5-1b's own claim) that
+`src/lib/orderTimeline.ts` needs zero changes to render `SHIPPED`
+correctly once a real event exists. Region filter is hardcoded to `KE`
+only (no ET/SO order can exist today); status filter option sets are
+truncated to values orders can actually reach, each with a comment
+explaining why. No email is sent — that remains HRH-63's unbuilt,
+unassigned scope, not inlined here.
+
+**Depends on M5-2a existing** (verified 2026-09-05 — role gate +
+`writeAdminAuditLog()` helper both real and tested) — this item's
 "mark shipped" action is also the first real code path in this repo that
-would write a `SHIPPED`/`DELIVERED` `OrderEvent` (flagged as a
-pre-existing gap by M5-1b's own ledger entry above — this item is that
-gap's resolution, once scoped).
+would write a `SHIPPED` `OrderEvent` (flagged as a pre-existing gap by
+M5-1b's own ledger entry above — this item is that gap's resolution).
 
-- [ ] `app/admin/orders/{page,[orderId]/page}.tsx` — filter by
-      region/status; mark shipped writes a `SHIPPED` `OrderEvent` (first
-      real writer of that event type in this repo — M5-1b's customer
-      timeline already renders it correctly once it exists, no change
-      needed there)
-- [ ] Every mutation (mark shipped, any other order-state change this page
-      exposes) calls `M5-2a`'s `writeAdminAuditLog()` helper with real
-      before/after state, `entityType: "Order"`
-- [ ] VIEW_ONLY role blocked from the mark-shipped action at the route/
-      mutation layer (403 or disabled control backed by a server-side
-      check, not just a hidden button) — first real test of M5-2a's
-      VIEW_ONLY contract
+**No Linear MCP tool was available in this sharpening session** (only
+Read/Grep/Glob) — HRH-55's description is taken as already recorded in
+this ledger's own prior text (`app/admin/orders/{page,[orderId]/page}.tsx`,
+filter by region/status, mark shipped, write `AdminAuditLog` on every
+mutation), not independently re-fetched from Linear. Flagged, not silently
+treated as verified against the live source of truth.
 
-Left at PRD/Linear granularity; full acceptance-criteria sharpening (exact
-`OrderEvent.payload` shape for `SHIPPED`, whether a carrier/
-tracking-number field is captured, email-trigger wiring back to M5-1a's
-`IEmailService`) deferred to whenever this item is actually picked up, per
-this agent's standing "sharpen at dispatch time, not ahead of it"
-convention.
+**Grounding findings, all from direct reads this session:**
+
+1. **The "Shipment record" question is resolved — a real `Shipment` model
+   already exists, zero migration needed.** `prisma/schema.prisma:341-357`:
+   `Shipment { id, orderId, carrier String?, trackingNumber String?,
+   trackingUrl String?, shippedAt DateTime?, estimatedDelivery DateTime?,
+   deliveredAt DateTime?, createdAt, updatedAt }`, already related from
+   `Order.shipments Shipment[]` (`:223`). HRH-11's test scenario 3 ("mark
+   shipped → **Shipment record** created") is not loose PRD wording for the
+   `OrderEvent` row — it names a real, distinct, already-migrated table.
+   This item creates a `Shipment` row, not just an `OrderEvent`.
+2. **`Order.shipments` is an array (`Shipment[]`), not a 1:1 relation** —
+   the schema supports multiple shipments per order (split shipment), but
+   neither HRH-11 nor HRH-55's description mentions split shipment
+   anywhere. This item scopes to **exactly one `Shipment` row per order**:
+   the mark-shipped mutation must reject (no writes) if a `Shipment` row
+   already exists for the order, rather than silently creating a second
+   one or silently overwriting the first. Whether split-shipment is ever a
+   real requirement is a genuine open question, not decided here — flagged
+   for platform-architect if it turns out to matter.
+3. **A previously-unflagged state-machine gap: `Order.fulfillmentStatus`
+   never advances past its `PLACED` default in any code path today.**
+   Grepped every `fulfillmentStatus:` write across `src/lib` directly
+   (`reservationService.ts` is the only writer): the payment-confirm
+   transaction (`reservationService.ts:621`) sets `Order.paymentStatus:
+   "CONFIRMED"` but never touches `fulfillmentStatus`; the only
+   `fulfillmentStatus` write anywhere is `"CANCELLED"`
+   (`reservationService.ts:664`). `FulfillmentStatus`'s enum
+   (`PLACED|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED|
+   RETURN_REQUESTED|RETURNED`, `prisma/schema.prisma:574-583`) names a
+   `CONFIRMED`/`PROCESSING` state that **no order in this codebase can ever
+   be in today.** A mark-shipped precondition phrased as "only from
+   fulfillmentStatus CONFIRMED/PROCESSING" would be permanently
+   unreachable — every order sits at `PLACED` from creation until either
+   `CANCELLED` or (once this item ships) `SHIPPED`. **Recommendation, not
+   yet architect-confirmed:** gate mark-shipped on `Order.paymentStatus ===
+   "CONFIRMED"` (the field payment-confirm actually sets) AND
+   `Order.fulfillmentStatus` not already in a terminal/processed state
+   (`SHIPPED|DELIVERED|CANCELLED|RETURN_REQUESTED|RETURNED`) — this reads
+   the two real, already-written fields instead of inventing traffic
+   through a `fulfillmentStatus` value nothing sets. **Flagged as
+   coordination required with catalog-inventory-engineer** (not a
+   unilateral fix): `reservationService.ts` is that agent's file
+   (confirmed by its own header comment, "M3-2, catalog-inventory-
+   engineer's half"), so if the real fix should instead be "payment-confirm
+   also advances `fulfillmentStatus` to `CONFIRMED`," that change lives
+   outside this item's owner's files and needs the other agent, or
+   platform-architect design authority, not a silent edit by whoever builds
+   M5-2b.
+4. **`OrderEvent.eventType: "SHIPPED"` is confirmed correct and needs no
+   further change to the customer-facing timeline.** Direct read of
+   `src/lib/orderTimeline.ts` (M5-1b) shows `STEP_EVENT_TYPE.SHIPPED:
+   "SHIPPED"` already wired and the module's own header comment states it
+   is "written to require zero changes once a future item starts writing
+   SHIPPED/DELIVERED OrderEvents" — M5-1b's claim that the customer
+   dashboard renders SHIPPED correctly once a real event exists is verified
+   true by this read, not merely trusted from that item's own ledger text.
+5. **`DELIVERED` is genuinely out of scope for this item.** HRH-55's own
+   description (as recorded in this ledger) names only "mark shipped." Do
+   not invent a "mark delivered" control/route/`OrderEvent` writer here —
+   it remains a real, unassigned future gap.
+6. **Region filter should expose only `KE`.** Confirmed via
+   `FEATURES.md:2442` ("KES only, Kenya-only... no ET/SO M-Pesa flow
+   exists") and `:1874-1880` (Stripe's `SUPPORTED_STRIPE_CURRENCIES`
+   pre-opening `ETB`/`SOS` flagged as a LOW finding precisely because "no
+   ET/SO checkout flow exists") plus `run-state.md`'s standing
+   Ethiopia/Somalia hold (U14, blocked on an outstanding legal opinion, not
+   engineering-resolvable) — no order can exist in `ET`/`SO` today. The
+   filter's option set should be hardcoded to `KE` only, not the full
+   `Region` enum, so the admin UI doesn't imply multi-region order
+   management is live when it isn't.
+7. **`IEmailService.send()` is a generic transport** (confirmed,
+   `src/lib/emailService.ts:41-43`), so this item *could* technically call
+   it with ad-hoc shipping-notification content — but M5-1a's own ADR
+   explicitly named `emails/ShippingNotification.tsx` and
+   `IEmailService.sendShippingNotification` as HRH-63's scope, not built by
+   M5-1a and not currently owned by any ledger item (`FEATURES.md:3097-
+   3103`, confirmed by direct read). Recommend this item send **no email at
+   all** rather than build a one-off inline shipping email that preempts
+   HRH-63's real template/copy work.
+
+**Acceptance criteria:**
+- [x] `app/admin/(secure)/orders/{page,[orderId]/page}.tsx` (lands inside
+      M5-2a's `(secure)` route group, so it is covered by the full
+      `requireAdmin()` gate) lists orders, filterable by `status`
+      (`FulfillmentStatus` enum values) and `region` (hardcoded option set
+      `["KE"]` only — see finding 6); any `ADMIN`/`OPERATOR`/`VIEW_ONLY`
+      admin may view/filter any order (no per-admin ownership scoping,
+      unlike the customer dashboard's `WHERE userId = session.user.id`
+      pattern — this is intentional per HRH-11's role table, confirmed no
+      PRD text scopes admin visibility further).
+- [x] Mark-shipped runs one `db.$transaction` (same established shape as
+      `reservationService.ts`/M5-2a's `writeAdminAuditLog` precedent) that,
+      atomically: (a) rejects with no writes if
+      `Order.paymentStatus !== "CONFIRMED"` or `Order.fulfillmentStatus`
+      is already `SHIPPED|DELIVERED|CANCELLED|RETURN_REQUESTED|RETURNED`,
+      or if a `Shipment` row already exists for the order (finding 3, 2);
+      (b) creates exactly one `Shipment` row (`carrier`, `trackingNumber`
+      required inputs; `trackingUrl` optional; `shippedAt: now()`);
+      (c) updates `Order.fulfillmentStatus` to `"SHIPPED"`; (d) writes an
+      `OrderEvent` with `eventType: "SHIPPED"`, `actorId: admin.userId`,
+      `payload: { carrier, trackingNumber, trackingUrl: trackingUrl ??
+      null }` (finding 4); (e) calls `writeAdminAuditLog(tx, { adminId:
+      admin.userId, action: "ORDER_MARKED_SHIPPED", entityType: "Order",
+      entityId: orderId, before: { fulfillmentStatus: <prev> }, after: {
+      fulfillmentStatus: "SHIPPED", shipmentId } })` in the same
+      transaction. Proven by a real atomicity test in both directions (force
+      step (e) to fail → assert (b)/(c)/(d) all rolled back too), same
+      proof pattern M5-2a's own tests already established for its helper.
+- [x] `DELIVERED` is explicitly NOT built here (finding 5) — no control, no
+      route, no `OrderEvent` writer for it in this item.
+- [x] `VIEW_ONLY` is blocked from the mark-shipped mutation at the
+      server layer: the route/action reads `AdminPrincipal.role` from
+      `requireAdmin()` and rejects with `403` (not `404` — unlike M5-2a's
+      CUSTOMER-vs-admin-surface case, a VIEW_ONLY admin can already view
+      this page, so no existence-oracle concern applies) when `role ===
+      "VIEW_ONLY"`; `ADMIN` and `OPERATOR` both may mutate (HRH-11's role
+      table: "Operator — view products / fulfil orders"). Proven by a
+      request that bypasses any client-side hiding entirely (hit the
+      route/action directly as a VIEW_ONLY session) — hiding/disabling the
+      control in the UI is UX polish only, not separately gate-checked.
+- [x] **No email is sent by this item** (finding 7). HRH-11's test scenario
+      3 ("mark order shipped → Shipment record created; OrderEvent logged;
+      email sent") is deliberately only two-thirds satisfied here — this is
+      a stated, known gap, not a silent drop, pending HRH-63 being
+      prioritized as its own ledger item.
+
+**Architect review: recommend YES, before dispatch.** Two genuinely new
+design questions surfaced by this session's grounding, neither obviously
+resolvable by precedent: (1) the mark-shipped precondition (finding 3) —
+whether the fix belongs in this item (gate on `paymentStatus`, leave
+`fulfillmentStatus` semantics for `CONFIRMED`/`PROCESSING` permanently
+unused) or requires a coordinated change to `reservationService.ts`
+(catalog-inventory-engineer's file) so `fulfillmentStatus` actually
+reaches `CONFIRMED`/`PROCESSING` before `SHIPPED` — a cross-agent
+state-machine call, same shape as this agent's own "binding fix lives in
+another agent's files" pattern; (2) whether `Shipment` is genuinely
+scoped to one-per-order for this item or split-shipment needs designing
+in now while the schema already supports an array (finding 2). The
+multi-write transaction shape itself (Order + Shipment + OrderEvent +
+AdminAuditLog, one `$transaction`) is not a new pattern — it composes
+directly from `reservationService.ts` and M5-2a's own `writeAdminAuditLog`
+contract — so architect input is needed for the two state-machine
+questions above, not for the transaction mechanics.
+
+**Not done, deliberately:** no code written; only this `FEATURES.md`
+section and `docs/agents/run-state.md` were edited (no `src/`/`tests/`/
+`prisma/schema.prisma` touched).
+
+**Builder note (storefront-admin-engineer, 2026-09-06): BUILT, pending
+security review.** Implemented exactly per the ADR's 8 decisions, with one
+flagged deviation: Decision 3.4's illustrative precondition order (check
+`TERMINAL_FULFILLMENT` before `existingShipments`) is unreachable for its
+own stated purpose, because step (e) of the SAME mutation always sets
+`fulfillmentStatus: "SHIPPED"` — itself a `TERMINAL_FULFILLMENT` member —
+in the same transaction that creates the `Shipment` row. A literal second
+call against an order this mutation already shipped would therefore always
+hit the generic `FULFILLMENT_TERMINAL` check first, making
+`OrderAlreadyShippedError`/`ALREADY_SHIPPED` structurally unreachable —
+directly contradicting the ADR's own required tests 17/18 ("second POST ->
+409 ALREADY_SHIPPED"). Reordered to check `existingShipments` before the
+terminal-status check (a terminal order with NO shipment, e.g. CANCELLED,
+still falls through to `FULFILLMENT_TERMINAL` unaffected) — documented
+inline in `src/lib/orderFulfillmentService.ts` at the point of deviation.
+Files: `src/lib/orderFulfillmentService.ts` (new, framework-free),
+`src/app/api/admin/orders/[orderId]/ship/route.ts` (new),
+`src/app/admin/(secure)/orders/page.tsx` +
+`src/app/admin/(secure)/orders/[orderId]/page.tsx` +
+`.../[orderId]/MarkShippedForm.tsx` (new), `tests/test29-admin-order-management.test.ts`
+(new, all 28 ADR-required scenarios + one signature-guard test, 29 total).
+Verified empirically (not assumed) rather than trusted from the ADR's own
+caveat: `requireAdmin()`'s `redirect()` surfaces as a real `307` with
+`Location: /auth/login?reason=admin_no_session` and `notFound()` surfaces
+as a clean `404` when called from this Route Handler — no local status
+mapping was needed. Non-triviality proofs done by break/fix/restore (not
+just written and trusted): test 18's `FOR UPDATE` lock (removed it,
+watched the concurrent-double-shipment test go red — both requests
+returned `200` instead of one `200`/one `409` — then restored, confirmed
+`git diff` on the source file was clean afterward); tests 9/10's atomicity
+via two independent real-failure-injection techniques (omitted required
+`adminId` for the audit-log direction; a real Postgres `BEFORE INSERT`
+trigger on `"OrderEvent"` for the SHIPPED-event direction, created and
+dropped inside the test itself). `npm run test:2-prisma-migrate` ran clean
+twice with no drift — zero new migration, per Decision 2.
+`bash scripts/agents/local-check.sh` result: build clean, lint clean (one
+pre-existing unrelated warning in `tests/test13-product-search.test.ts`,
+untouched by this item), full suite 503-504 passed / 2 skipped with the
+one already-documented pre-existing flake
+(`tests/test22-stripe-webhook.test.ts`'s concurrent stock-gone redelivery
+test, ~1/3 isolated-rerun rate, not a regression of this item — reran
+`--coverage` separately and all 28 test files including test22 passed
+clean). Coverage: 88.38%/78.9%/96.1%/89.29% stmts/branches/funcs/lines,
+`orderFulfillmentService.ts` itself at 100% lines (confirmed via
+`coverage/coverage-summary.json`, not the truncated printed table); the
+four new framework-coupled files (`ship/route.ts`, both new admin pages,
+`MarkShippedForm.tsx`) are in `vitest.config.mts`'s coverage-exclude list
+with the same measurement-gap justification as every prior admin/dashboard
+page, and confirmed absent from the coverage report entirely (not a
+misleading `0%` row — the tell that escaping broke, per this agent's own
+learnings file). Known limits carried forward unchanged from the ADR:
+`trackingNumber` required (no own-van/no-tracking path), no carrier
+registry (free-text `carrier`, manually-entered `trackingUrl`), no
+shipping email (HRH-63 unassigned), split shipment deferred, `Delivered`
+not built, `FulfillmentStatus.CONFIRMED`/`PROCESSING` remain dead enum
+members, branded `AdminUserId` type deferred to M5-2c's first call site.
 
 ### M5-2c: Product & Variant CRUD Forms (HRH-57)
 **Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer

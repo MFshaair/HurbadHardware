@@ -401,12 +401,20 @@ describe("Admin role gate + 2FA + idle-timeout — real next dev server", () => 
   );
 
   it("the forged-cookie rejection also holds on a second admin route under the same (secure) layout, proving the per-page requireAdmin() call is live, not just the layout", async () => {
+    // NOTE (QA fix, M5-2b/HRH-55 dispatch): this test previously re-fetched
+    // the SAME /admin URL as the test above (only the forged cookie's junk
+    // value differed) — flagged by security-reviewer as a real test-quality
+    // gap (M5-2a advisory), since it never actually proved the claimed
+    // "second route" property for THIS item's own pages. M5-2b's
+    // /admin/orders (src/app/admin/(secure)/orders/page.tsx) is a genuine
+    // second route under the same (secure) layout, added after this test
+    // was written — using it here closes that gap for real.
     const { cookieHeader } = await signUpAndSignIn();
     const realPair = findCookiePairByNameSubstring(cookieHeader, "session_token");
     const cookieName = realPair.split("=")[0];
     const forgedCookieHeader = `${cookieName}=another-forged-value.bad`;
 
-    const res = await fetch(`${BASE_URL}/admin`, {
+    const res = await fetch(`${BASE_URL}/admin/orders`, {
       headers: { cookie: forgedCookieHeader },
       redirect: "follow",
     });
@@ -417,7 +425,7 @@ describe("Admin role gate + 2FA + idle-timeout — real next dev server", () => 
     // Re-run the role-gate proof (test 2 above) against a real enrolled
     // session too, so we know the pass path isn't layout-only either.
     const { cookieHeader: realCookie } = await createEnrolledAdmin(UserRole.ADMIN);
-    const realRes = await fetch(`${BASE_URL}/admin`, { headers: { cookie: realCookie } });
+    const realRes = await fetch(`${BASE_URL}/admin/orders`, { headers: { cookie: realCookie } });
     expect(realRes.status).toBe(200);
   }, 30_000);
 

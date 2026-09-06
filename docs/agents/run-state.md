@@ -212,6 +212,46 @@ M5-1b were held).
 section and this file were edited (no `src/`/`tests/`/`prisma/schema.prisma`
 touched).
 
+### 2026-09-06 — M5-2b (HRH-55, admin order management) sharpened
+`product-planner` sharpened M5-2b's three bare bullets into testable
+acceptance criteria, now that M5-2a (role gate + `writeAdminAuditLog()`) is
+`verified`. No Linear MCP tool was available this session either — HRH-55's
+description taken as already recorded in the ledger, not re-fetched.
+
+**Two findings worth keeping in durable memory (full grounding is in
+`FEATURES.md`'s M5-2b entry):**
+1. **`Shipment` is a real, already-migrated model**
+   (`prisma/schema.prisma:341-357` — carrier/trackingNumber/trackingUrl/
+   shippedAt/estimatedDelivery/deliveredAt), zero migration needed. HRH-11's
+   "Shipment record created" test scenario names this real table, not loose
+   phrasing for the `OrderEvent` row. It is an array relation
+   (`Order.shipments Shipment[]`) — this item scopes to exactly one
+   `Shipment` per order (reject a second mark-shipped attempt), split
+   shipment is an open question, not decided.
+2. **`Order.fulfillmentStatus` never advances past its `PLACED` default in
+   any code path today** — payment-confirm
+   (`reservationService.ts:621`) sets `Order.paymentStatus: "CONFIRMED"`
+   but never touches `fulfillmentStatus`; the only `fulfillmentStatus`
+   write anywhere in the repo is `"CANCELLED"`. The `FulfillmentStatus`
+   enum's own `CONFIRMED`/`PROCESSING` members are therefore currently
+   unreachable states. M5-2b's mark-shipped precondition must be gated on
+   `Order.paymentStatus === "CONFIRMED"` (the field that's actually set),
+   not on a `fulfillmentStatus` value nothing ever writes — recommended in
+   the ledger entry but not yet architect-confirmed, and flagged as
+   **coordination required with catalog-inventory-engineer** since the
+   alternative fix (payment-confirm also advancing `fulfillmentStatus`)
+   lives in `reservationService.ts`, that agent's file, not
+   storefront-admin-engineer's (M5-2b's owner).
+
+**Architect review: recommended YES** for M5-2b before dispatch — the two
+findings above are genuine, previously-unflagged state-machine questions;
+the multi-write transaction shape itself (Order + Shipment + OrderEvent +
+AdminAuditLog in one `$transaction`) is not new, it composes directly from
+`reservationService.ts` and M5-2a's own audit-log contract.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M5-2b
+section and this file were edited.
+
 ### 2026-08-31 — M5-1 split into M5-1a (HRH-52, order-confirmation email) + M5-1b (HRH-53, customer order dashboard/timeline), acceptance criteria sharpened
 `product-planner` was dispatched to split the bundled `M5-1` ("Customer
 order tracking + async email," two undifferentiated bullets) along the same

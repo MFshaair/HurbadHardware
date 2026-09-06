@@ -916,7 +916,145 @@ reflexively to satisfy "the file must grow every milestone." The charter's
 about mechanically adding one leg per milestone regardless of whether doing
 so would add real signal.
 
-## Idle-timeout fail-closed session revocation and the audit-log F1 runtime discriminator are both genuinely load-bearing — confirmed by independent break/fix/restore
+## A concurrent-requests test over real HTTP can pass even if the two requests were accidentally serialized — prove genuine overlap directly, don't just trust `Promise.all`
+
+**Symptom/verification (M5-2b/HRH-55, test29 test 18 — double mark-shipped,
+CONCURRENT):** Security-reviewer flagged (advisory, non-blocking) that firing
+two `fetch()`s via `Promise.all` against a spawned `next dev` server doesn't
+by itself prove the two requests raced at the DB level — if the dev server
+(or Node's own connection handling) happened to serialize them, the test
+would degrade into a duplicate of the sequential test and still pass even if
+the `SELECT ... FOR UPDATE` lock were removed, because the second request
+would simply never observe the first one's in-flight, uncommitted state.
+Confirmed this concern was NOT actually true here, but did so by direct
+instrumentation, not assumption: temporarily added `console.error` timestamp
+probes (`enter markOrderShipped`, `before-lock`, `after-lock`) plus an
+artificial 1500ms delay after lock acquisition inside
+`orderFulfillmentService.ts`, and piped the spawned server's
+stdout/stderr to the parent process (normally silently discarded —
+`stdio: ["ignore", "pipe", "pipe"]` with no `.on("data", ...)` listener).
+Result: both requests' `enter`/`before-lock` timestamps landed within 1-3ms
+of each other (genuinely concurrent at the HTTP/handler level), while
+request B's `after-lock` timestamp landed ~1530ms after request A's (exactly
+matching A's artificial hold time) — direct proof that B's
+`SELECT ... FOR UPDATE` genuinely blocked at the Postgres level waiting for
+A's transaction, not that B was queued behind A by the server before ever
+reaching the handler. Also separately confirmed the standard way (remove the
+`FOR UPDATE` clause, rerun 3x, get `[200, 200]` every time instead of
+`[200, 409]`; restore, reconfirm green) — the timestamp-overlap proof and
+the remove-the-lock proof are two different, complementary checks (one
+proves the requests genuinely overlap in time; the other proves the specific
+guard is what the test depends on) and both are cheap enough to do together.
+
+**Rule going forward:** For any `Promise.all([fetch(...), fetch(...)])`-style
+concurrency test against a real spawned server, don't stop at "removing the
+guard makes it fail" (that alone can't rule out accidental serialization
+upstream of the guard) — additionally prove the two requests were actually
+in-flight simultaneously. The cheapest way: temporarily pipe the spawned
+server's stdout/stderr to the parent test process (one-line change even when
+the test's own `spawn(...)` call normally discards it) and add timestamped
+probes at entry and at the specific serialization point (e.g. right after
+the lock query) plus a large artificial delay held only by the FIRST
+request's code path — if the second request's probe timestamp lags by
+approximately the artificial delay's duration, that's direct evidence of
+real blocking/overlap, not coincidental sequencing. Revert both the probes
+and the delay afterward and reconfirm the original file is byte-identical
+(`git diff --stat`) before trusting the restored state.
+
+## A test's own title claim ("a second route") can be quietly false even after the test passes green for months — grep the actual URL, not the surrounding prose
+
+**Symptom (M5-2a's test28, fixed during the M5-2b/HRH-55 dispatch):** A test
+titled "the forged-cookie rejection also holds on a second admin route under
+the same (secure) layout, proving the per-page requireAdmin() call is live,
+not just the layout" in fact re-fetched the exact same `/admin` URL as the
+test immediately above it (only the forged cookie's junk suffix differed) —
+flagged by security-reviewer as a real (non-blocking) test-quality gap for
+M5-2a, since at the time M5-2a shipped only one real admin page (`/admin`)
+existed, so there was no genuine second route to test against yet. Fixed
+cheaply once M5-2b added `/admin/orders` as a real second page under the
+same `(secure)` layout: changed both `fetch` calls in that test from
+`/admin` to `/admin/orders`.
+
+**Non-trivial break/fix/restore proof, and a genuine surprise along the
+way:** Bypassing ONLY `src/app/admin/(secure)/orders/page.tsx`'s own
+`requireAdmin()` call did NOT make the test fail — it still correctly
+redirected. Investigating why revealed `/admin/orders` is actually gated by
+**three independent, stacked `requireAdmin()`/`requireAdminRole()` calls**,
+not two: (1) the outer `src/app/admin/layout.tsx`'s `requireAdminRole()`
+(role-only, deliberately weaker so `/admin/2fa/setup` stays reachable by an
+unenrolled admin — ADR M5-2a), (2) the inner `src/app/admin/(secure)/
+layout.tsx`'s full `requireAdmin()`, and (3) the page's own full
+`requireAdmin()` call. Only after bypassing **all three** (plus, separately,
+confirming the middleware only checks cookie *presence*, never validity) did
+a forged-cookie request against `/admin/orders` return a real `200` instead
+of redirecting — that 3-layer defense-in-depth is more redundant gating than
+the ADR's own prose explicitly enumerates, and is a good thing, but it means
+a shallow single-layer bypass is NOT a valid non-triviality check for any
+`/admin/*` page in this repo.
+
+**Rule going forward:** (1) When a test's own title makes a claim like "a
+second X" or "proves Y is live, not just Z", grep the test body's actual
+URL/fixture values against the title's claim — a passing test can silently
+stop proving what its title says the moment the code/data it exercises
+changes shape (here: no second route existed when the test was written), and
+this can persist for an entire milestone's worth of "verified" sign-off
+without anyone noticing, because the test still passes for an unrelated,
+still-true reason. (2) For any admin page in this repo, don't assume "the
+page's own `requireAdmin()` call" is the only gate standing between a forged
+cookie and a 200 — check `grep -rn "requireAdmin\(Role\)\?(" src/app/admin`
+for EVERY layout/page in the route's own directory chain first, and bypass
+all of them together for a genuine break-proof; a single-layer bypass that
+still redirects is not evidence the test can't fail, it's evidence of
+redundant defense-in-depth that must be fully disabled to observe the
+guarded-open state.
+
+## A fixture-shortcut precondition (`createOrder({ paymentStatus: "CONFIRMED" })`) is a real, distinct gap from "route not proven over real HTTP" — dogfood.mjs's unique value is chaining real state-machine output into a later, unrelated real mutation
+
+**Symptom/decision (M5-2b/HRH-55, admin mark-shipped):** Applying the
+established "does the milestone's own test suite already spawn a real `next
+dev` server over real HTTP" check (see the M5-2a dogfood-decision entry
+above) to `tests/test29-admin-order-management.test.ts` returned "yes" —
+its Tier B is real HTTP against a real spawned server throughout, including
+a genuine cross-item integration test (test 12: real admin mark-shipped call
+-> real customer dashboard render). That alone would have suggested "no new
+dogfood.mjs leg needed," by direct analogy to the M5-2a precedent. But a
+second, different question — not about HTTP fidelity, but about STATE
+PROVENANCE — surfaced a real, distinct gap: every one of test29's 29 tests
+reaches its "shippable" precondition via `createOrder({ paymentStatus:
+"CONFIRMED", ... })`, a raw Prisma field set that never runs
+`reservationService.ts`'s real `confirmReservationsForOrder` transaction at
+all. No test anywhere in the repo (test29 or otherwise) had ever chained a
+REAL webhook-confirmed order (produced by the actual money/inventory
+state machine, over real HTTP, real HMAC-signed payload) into the NEW
+admin mutation the way a real ops sequence would produce one.
+
+**Rule going forward:** The "already equivalent real-HTTP fidelity, so no
+new leg needed" check from the M5-2a precedent is necessary but not
+sufficient — it answers "is the ROUTE reachable/wired correctly," not "does
+this milestone's own test suite exercise the mutation against STATE THAT WAS
+ITSELF PRODUCED BY A REAL, UNRELATED STATE MACHINE, or only ever against a
+hand-set fixture shortcut for that state." When a new admin/ops mutation's
+precondition is "some other subsystem already put the row in state X," check
+whether every existing test for the new mutation manufactures state X via a
+raw Prisma write (a shortcut) or via actually driving the real subsystem that
+produces X. If it's always the shortcut, a new dogfood.mjs leg that chains
+the new mutation onto the TAIL of an EXISTING real dogfood leg for that
+other subsystem (here: `dogfoodStripeWebhook()`'s real signed-webhook-confirm
+flow) is genuine, non-duplicate signal — it proves the two subsystems
+genuinely compose on the same row, which no fixture-shortcut test, however
+otherwise rigorous, can claim. Added `dogfoodAdminMarkShipped()`
+accordingly (chains a real signed Stripe webhook confirm -> real promoted-
+admin mark-shipped call -> real owning customer's dashboard render, all in
+one continuous run with its own dedicated fixtures/port/cleanup). Caught a
+real assertion-shape mistake on the first run this way, too (see the
+adjacent "check the ACTUAL response shape" learnings entry): assumed the
+customer dashboard would render the raw tracking number after shipping —
+per the ADR (Decision 3.7/3.8) it deliberately does not, only the timeline
+step + event timestamp — the leg failed with a specific, correct error on
+its first real run, was fixed to assert the event's own `createdAt` instead
+(same value test29's own test 12 asserts), and then passed. Verified zero
+fixture leftovers after a real run (`user`/`product`/`order` counts by
+fixture-prefix, all zero) before treating the leg as done.
 
 **Symptom (verification, not a bug, M5-2a):** Independently re-verified two
 of the ADR's own flagged highest-risk mechanisms rather than trusting the

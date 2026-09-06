@@ -305,6 +305,24 @@ export default defineConfig({
         "src/app/admin/2fa/setup/TwoFactorSetup.tsx",
         "src/app/auth/2fa/page.tsx",
         "src/app/auth/2fa/TwoFactorChallenge.tsx",
+        // M5-2b (HRH-55): the ship route and admin order pages
+        // independently call requireAdmin()/next-headers/next-navigation
+        // and are only meaningfully exercised via
+        // tests/test29-admin-order-management.test.ts's spawned `next dev`
+        // subprocess — same measurement-gap justification as
+        // src/app/admin/** above, not a testing gap.
+        // src/lib/orderFulfillmentService.ts is deliberately NOT excluded
+        // here — it's framework-free (no next/* imports) and directly
+        // unit-tested in-process (same "only exclude the framework-coupled
+        // file, never the pure lib it uses" rule as addressValidation.ts
+        // above), including its own atomicity/rollback/lock tests.
+        "src/app/api/admin/orders/\\[orderId\\]/ship/route.ts",
+        "src/app/admin/\\(secure\\)/orders/page.tsx",
+        "src/app/admin/\\(secure\\)/orders/\\[orderId\\]/page.tsx",
+        // MarkShippedForm.tsx is a "use client" component with hooks/real
+        // browser fetch — same "no RTL/jsdom in this repo" justification as
+        // CartSummary.tsx/StripeCheckout.tsx above.
+        "src/app/admin/\\(secure\\)/orders/\\[orderId\\]/MarkShippedForm.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

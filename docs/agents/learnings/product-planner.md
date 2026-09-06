@@ -520,3 +520,34 @@ line, confirm zero migration for that piece) and narrow the item's real
 scope to only the genuinely-new surface, rather than assuming the Linear
 description's phrasing ("needs roles," "needs an audit log") implies
 schema work is still outstanding.
+
+## A status/enum field's own member list can include values no code path
+## can ever reach yet — grep every writer before writing a precondition
+**Symptom:** Drafting M5-2b's "mark shipped" precondition as "only valid
+from `Order.fulfillmentStatus` CONFIRMED/PROCESSING" (pattern-matched from
+the `FulfillmentStatus` enum's own member list, which lists
+`PLACED|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|...`) would have handed a
+builder a criterion that is permanently unsatisfiable.
+**Cause:** Grepping every literal `fulfillmentStatus:` write site across
+`src/lib` directly (not the enum's member list) showed the payment-confirm
+transaction only ever sets `Order.paymentStatus: "CONFIRMED"` — it never
+touches `fulfillmentStatus` at all. The only `fulfillmentStatus` write
+anywhere in the repo is `"CANCELLED"`. Every order therefore sits at its
+`PLACED` default from creation until either cancelled or (once some future
+item ships) marked shipped — `CONFIRMED`/`PROCESSING` are enum members
+with zero writers, the same "documented intent, not reality" gap as this
+file's existing "free-form status column" entry, but this time the field
+is a real Prisma enum, not a free-form string, which makes it look even
+more authoritative and even easier to trust without checking.
+**Rule going forward:** An enum's declared member list is not proof any
+code path ever sets that member. Before writing a state-transition
+precondition ("valid only from state X"), grep every literal write site of
+that exact column (not just its type declaration) and identify which
+*other* column the relevant business event (e.g. payment confirmation)
+actually writes to instead — the real precondition may need to reference
+that sibling column (here, `paymentStatus`) rather than the field named in
+the PRD/enum. If satisfying the "correct" precondition would require a fix
+in a file owned by a different agent (e.g. the payment-confirm transaction
+advancing `fulfillmentStatus` too), flag that as coordination required
+rather than silently writing the criterion against a value nothing sets,
+or silently expanding scope into the other agent's file.

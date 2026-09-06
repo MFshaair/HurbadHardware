@@ -334,6 +334,17 @@
 // via Prisma) becomes the honest thing to add, folded in the same way
 // M5-1b's dashboard leg was folded into dogfoodCheckout() rather than
 // necessarily requiring a brand-new top-level leg.
+//
+// RESOLVED for M5-2b (2026-09-06, qa-dogfood-engineer, HRH-55): the first
+// real admin mutation landed (mark-shipped) and it changes customer-visible
+// state, so per the note above a genuine new leg was added --
+// dogfoodAdminMarkShipped() below (see its own "M5-2b STATUS" header
+// comment for why it's non-duplicate of tests/test29-admin-order-
+// management.test.ts's own 29 tests despite that suite already using a real
+// spawned server too: it chains the mark-shipped call onto an order whose
+// CONFIRMED state came from a real signed Stripe webhook delivery, not a
+// Prisma fixture shortcut, and finishes at the real owning customer's own
+// dashboard render).
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -2016,6 +2027,415 @@ async function dogfoodStripeWebhook() {
 }
 
 // ---------------------------------------------------------------------------
+// M5-2b STATUS (added 2026-09-06, qa-dogfood-engineer, M5-2b/HRH-55): this
+// closes the gap M5-2a's own STATUS note above explicitly deferred --
+// "revisit this note the moment M5-2b/c/d add a real admin mutation... a
+// genuine new leg becomes the honest thing to add."
+//
+// tests/test29-admin-order-management.test.ts's own Tier B already spawns a
+// real `next dev` server and issues real HTTP (confirmed by direct read, no
+// in-process route.POST(...) calls anywhere in that file) -- so, exactly
+// like M5-2a, there is no "does this route even work over real HTTP/
+// middleware" gap left for this file to close on its own. BUT one real,
+// non-duplicate gap remains: EVERY order test29 marks shipped is seeded via
+// `createOrder({ paymentStatus: "CONFIRMED", ... })` -- a raw Prisma field
+// set that never runs `reservationService.ts`'s real
+// `confirmReservationsForOrder` transaction at all. This leg instead marks
+// shipped an order whose CONFIRMED state was produced by the exact same
+// real signed-webhook path `dogfoodStripeWebhook()` above already proves
+// (real HTTP POST /api/webhooks/stripe, real HMAC signature, real
+// `confirmReservationsForOrder` transaction, real onHand decrement) --
+// proving the two money/inventory and fulfillment mutations genuinely
+// compose end-to-end on the SAME real order, which no fixture-shortcut test
+// can claim. It also drives the full chain through a REAL signed-up
+// customer account (not test29's admin-role-flip-only fixtures) so the
+// final assertion is the real customer's OWN /dashboard/orders/[orderId]
+// page, over real HTTP, rendering "Shipped" -- the full system loop this
+// file's charter exists to prove, not just the isolated route.
+//
+// Deliberately NOT re-proven here (already covered elsewhere, would be
+// theater): the FOR UPDATE concurrent-double-ship race (test29 test 18,
+// independently break/fix/restore-verified by this same dispatch -- see
+// the qa-dogfood-engineer learnings file); VIEW_ONLY/role-allowlist/
+// precondition/validation edge cases (test29 tests 3-4,14-23); the
+// adminId-injection regression (test29 test 13); admin 2FA
+// enrollment/idle-timeout (test28, M5-2a). This leg is the one thing those
+// suites structurally cannot claim: a REAL webhook-confirmed order,
+// chained into a real admin mark-shipped call, chained into a real
+// customer page render, all in one continuous run.
+// ---------------------------------------------------------------------------
+async function dogfoodAdminMarkShipped() {
+  const PORT = process.env.DOGFOOD_ADMIN_SHIP_PORT ?? "3112";
+  const BASE_URL = `http://localhost:${PORT}`;
+  const AUTH_ORIGIN = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? BASE_URL;
+  const BOOT_TIMEOUT_MS = 60_000;
+
+  console.log(
+    "[dogfood] real webhook-confirmed order -> real admin mark-shipped -> real customer dashboard " +
+      "shows Shipped, via real HTTP against a real running server...",
+  );
+
+  const db = new PrismaClient();
+  const server = spawn("npx", ["next", "dev", "-p", PORT], {
+    env: { ...process.env, NODE_ENV: "development" },
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: true,
+  });
+
+  let stderrBuf = "";
+  server.stderr.on("data", (d) => {
+    stderrBuf += d.toString();
+  });
+
+  const uniq = Date.now();
+  let productId;
+  let addressId;
+  const customerEmail = `dogfood-m5-2b-customer-${uniq}@example.test`;
+  const adminEmail = `dogfood-m5-2b-admin-${uniq}@example.test`;
+  const password = "Dogfood-Password-1!";
+
+  async function cleanup() {
+    try {
+      // FK order: Order's own children cascade (schema.prisma), but Order ->
+      // Address and Order -> User do NOT cascade — delete Order first, then
+      // Address, then the two fixture Users, then the Product (same
+      // discipline as dogfoodStripeWebhook()'s cleanup above).
+      if (addressId) {
+        await db.order.deleteMany({ where: { shippingAddressId: addressId } });
+        await db.address.delete({ where: { id: addressId } });
+      }
+      await db.user.deleteMany({ where: { email: { in: [customerEmail, adminEmail] } } });
+      if (productId) {
+        await db.product.delete({ where: { id: productId } });
+      }
+    } catch (err) {
+      console.error(`[dogfood] WARN: fixture cleanup failed: ${err.message}`);
+      throw err;
+    }
+    await db.$disconnect();
+    if (server.pid) {
+      try {
+        process.kill(-server.pid, "SIGTERM");
+      } catch {
+        // group may already be gone
+      }
+      await delay(500);
+      try {
+        process.kill(-server.pid, "SIGKILL");
+      } catch {
+        // already dead — expected in the common case
+      }
+    }
+  }
+
+  try {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error(
+        "STRIPE_WEBHOOK_SECRET is unset — cannot sign a webhook payload at all (pure local HMAC, no " +
+          "real Stripe account needed — a REPLACE_ME placeholder is fine, same as dogfoodStripeWebhook()).",
+      );
+    }
+
+    const product = await db.product.create({
+      data: {
+        slug: `dogfood-m5-2b-ship-${uniq}`,
+        name: `Dogfood M5-2b Admin Ship Fixture ${uniq}`,
+        category: "test",
+        brand: "DogfoodBrand",
+        images: [],
+        specs: {},
+      },
+    });
+    productId = product.id;
+    const variant = await db.productVariant.create({
+      data: {
+        productId,
+        sku: `DOGFOOD-M5-2B-SKU-${uniq}`,
+        name: "Dogfood M5-2b Admin Ship Fixture Variant",
+        attributes: { Color: "Black" },
+        images: [],
+      },
+    });
+    const quantity = 1;
+    const inventory = await db.regionalInventory.create({
+      data: { variantId: variant.id, region: "KE", onHand: 10, reserved: quantity, safetyBuffer: 0 },
+    });
+
+    const deadline = Date.now() + BOOT_TIMEOUT_MS;
+    let up = false;
+    while (Date.now() < deadline) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/cart`);
+        if (res.status < 500) {
+          up = true;
+          break;
+        }
+      } catch {
+        // not up yet
+      }
+      await delay(1000);
+    }
+    if (!up) {
+      throw new Error(
+        `Timed out waiting for Next.js dev server to respond.\nstderr:\n${stderrBuf}`,
+      );
+    }
+
+    // Real customer sign-up + sign-in (real HTTP against better-auth
+    // routes) so this order has a real owning userId, not a guestEmail
+    // shortcut — the whole point is that /dashboard/orders/[orderId] at the
+    // end is a real ownership-scoped render, not a fixture bypass.
+    const customerSignUpRes = await fetch(`${BASE_URL}/api/auth/sign-up/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email: customerEmail, password, name: "Dogfood M5-2b Customer" }),
+    });
+    if (customerSignUpRes.status !== 200) {
+      throw new Error(`Customer sign-up returned ${customerSignUpRes.status}, expected 200`);
+    }
+    const customerSignInRes = await fetch(`${BASE_URL}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email: customerEmail, password }),
+    });
+    if (customerSignInRes.status !== 200) {
+      throw new Error(`Customer sign-in returned ${customerSignInRes.status}, expected 200`);
+    }
+    const customerCookieHeader = customerSignInRes.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0].trim())
+      .join("; ");
+    const customer = await db.user.findUniqueOrThrow({ where: { email: customerEmail } });
+
+    const address = await db.address.create({
+      data: {
+        userId: customer.id,
+        fullName: "Dogfood M5-2b Admin Ship Buyer",
+        phone: "+254700000099",
+        region: "KE",
+        city: "Nairobi",
+        postalCode: "00100",
+        street: "1 Dogfood Admin Ship Street",
+      },
+    });
+    addressId = address.id;
+    const unitPrice = "1000.00";
+    const order = await db.order.create({
+      data: {
+        orderNumber: `HH-TEST-DOGFOOD-M5-2B-${uniq}`,
+        userId: customer.id,
+        region: "KE",
+        currency: "KES",
+        subtotalAmount: "1000.00",
+        taxAmount: "0",
+        shippingAmount: "0",
+        totalAmount: "1000.00",
+        shippingAddressId: address.id,
+        paymentStatus: "PENDING",
+      },
+    });
+    await db.orderItem.create({
+      data: { orderId: order.id, variantId: variant.id, quantity, unitPrice, totalPrice: "1000.00" },
+    });
+    await db.inventoryReservation.create({
+      data: {
+        orderId: order.id,
+        inventoryId: inventory.id,
+        variantId: variant.id,
+        quantity,
+        status: "ACTIVE",
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+    const sessionId = `cs_test_dogfood_m5_2b_${uniq}`;
+    const paymentTransaction = await db.paymentTransaction.create({
+      data: {
+        orderId: order.id,
+        provider: "stripe",
+        idempotencyKey: `dogfood-idem-m5-2b-${uniq}`,
+        providerTxId: sessionId,
+        amount: "1000.00",
+        currency: "KES",
+        status: "PENDING",
+      },
+    });
+
+    // Real signed checkout.session.completed event — same helper shape as
+    // dogfoodStripeWebhook() above, pure local HMAC, no real Stripe account.
+    const session = {
+      id: sessionId,
+      object: "checkout.session",
+      payment_status: "paid",
+      client_reference_id: order.id,
+      metadata: { orderId: order.id, paymentTransactionId: paymentTransaction.id },
+      payment_intent: `pi_test_dogfood_m5_2b_${uniq}`,
+    };
+    const event = {
+      id: `evt_dogfood_m5_2b_${uniq}`,
+      object: "event",
+      api_version: "2026-07-29.dahlia",
+      created: Math.floor(Date.now() / 1000),
+      livemode: false,
+      pending_webhooks: 0,
+      request: { id: null, idempotency_key: null },
+      type: "checkout.session.completed",
+      data: { object: session },
+    };
+    const payload = JSON.stringify(event);
+    const signingClient = new Stripe("sk_test_not_used_for_signing", {
+      apiVersion: "2026-07-29.dahlia",
+    });
+    const signature = signingClient.webhooks.generateTestHeaderString({
+      payload,
+      secret: process.env.STRIPE_WEBHOOK_SECRET,
+    });
+
+    const webhookRes = await fetch(`${BASE_URL}/api/webhooks/stripe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "stripe-signature": signature },
+      body: payload,
+    });
+    if (webhookRes.status !== 200) {
+      const body = await webhookRes.text().catch(() => "<unreadable>");
+      throw new Error(`Real webhook delivery returned ${webhookRes.status}, expected 200. Body: ${body.slice(0, 300)}`);
+    }
+    const webhookBody = await webhookRes.json();
+    if (webhookBody.outcome !== "confirmed") {
+      throw new Error(`Expected outcome "confirmed" on real webhook delivery, got: ${JSON.stringify(webhookBody)}`);
+    }
+
+    const orderAfterWebhook = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    if (orderAfterWebhook.paymentStatus !== "CONFIRMED") {
+      throw new Error(
+        `Expected Order.paymentStatus === "CONFIRMED" after the real webhook (confirmReservationsForOrder), ` +
+          `got: ${orderAfterWebhook.paymentStatus}`,
+      );
+    }
+    if (orderAfterWebhook.fulfillmentStatus !== "PLACED") {
+      throw new Error(
+        `Expected Order.fulfillmentStatus to remain "PLACED" after payment-confirm (ADR M5-2b Decision 1: ` +
+          `confirmReservationsForOrder never writes fulfillmentStatus), got: ${orderAfterWebhook.fulfillmentStatus}`,
+      );
+    }
+
+    // Before: the real customer's own real order-detail page does not yet
+    // show Shipped.
+    const beforeRes = await fetch(`${BASE_URL}/dashboard/orders/${order.id}`, {
+      headers: { cookie: customerCookieHeader },
+    });
+    if (beforeRes.status !== 200) {
+      throw new Error(`GET /dashboard/orders/${order.id} (before ship) returned ${beforeRes.status}, expected 200`);
+    }
+    const beforeHtml = await beforeRes.text();
+    if (!beforeHtml.includes("Not yet reached")) {
+      throw new Error(`Expected the pre-ship order detail page to show an unreached step, got no "Not yet reached" text`);
+    }
+
+    // Real admin: sign up, sign in (while twoFactorEnabled is still false so
+    // sign-in succeeds normally), then flip role/twoFactorEnabled directly —
+    // same pattern as tests/test28-admin-rbac-2fa.test.ts's
+    // createEnrolledAdmin() (no live TOTP hardware exists for a script to
+    // drive; requireAdmin() reads role/twoFactorEnabled fresh from the DB on
+    // every request, so the already-issued cookie passes the gate next
+    // request regardless of when the flip happened).
+    const adminSignUpRes = await fetch(`${BASE_URL}/api/auth/sign-up/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email: adminEmail, password, name: "Dogfood M5-2b Admin" }),
+    });
+    if (adminSignUpRes.status !== 200) {
+      throw new Error(`Admin sign-up returned ${adminSignUpRes.status}, expected 200`);
+    }
+    const adminSignInRes = await fetch(`${BASE_URL}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: AUTH_ORIGIN },
+      body: JSON.stringify({ email: adminEmail, password }),
+    });
+    if (adminSignInRes.status !== 200) {
+      throw new Error(`Admin sign-in returned ${adminSignInRes.status}, expected 200`);
+    }
+    const adminCookieHeader = adminSignInRes.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0].trim())
+      .join("; ");
+    await db.user.update({
+      where: { email: adminEmail },
+      data: { role: "ADMIN", twoFactorEnabled: true },
+    });
+
+    // Real admin mark-shipped call against the REAL webhook-confirmed order.
+    const shipRes = await fetch(`${BASE_URL}/api/admin/orders/${order.id}/ship`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: adminCookieHeader },
+      body: JSON.stringify({ carrier: "DHL", trackingNumber: "DOGFOOD-M5-2B-TRACK" }),
+    });
+    if (shipRes.status !== 200) {
+      const body = await shipRes.text().catch(() => "<unreadable>");
+      throw new Error(`POST /api/admin/orders/${order.id}/ship returned ${shipRes.status}, expected 200. Body: ${body.slice(0, 300)}`);
+    }
+
+    const orderAfterShip = await db.order.findUniqueOrThrow({ where: { id: order.id } });
+    if (orderAfterShip.fulfillmentStatus !== "SHIPPED") {
+      throw new Error(`Expected Order.fulfillmentStatus === "SHIPPED" after mark-shipped, got: ${orderAfterShip.fulfillmentStatus}`);
+    }
+    const shipmentCount = await db.shipment.count({ where: { orderId: order.id } });
+    if (shipmentCount !== 1) {
+      throw new Error(`Expected exactly 1 Shipment row after mark-shipped, got ${shipmentCount}`);
+    }
+    const auditLogCount = await db.adminAuditLog.count({
+      where: { entityType: "Order", entityId: order.id, action: "ORDER_MARKED_SHIPPED" },
+    });
+    if (auditLogCount !== 1) {
+      throw new Error(`Expected exactly 1 ORDER_MARKED_SHIPPED AdminAuditLog row, got ${auditLogCount}`);
+    }
+    const shippedEvent = await db.orderEvent.findFirstOrThrow({
+      where: { orderId: order.id, eventType: "SHIPPED" },
+    });
+
+    // After: the real customer's own real order-detail page now shows the
+    // SHIPPED step reached (with the real event's own createdAt — per ADR
+    // M5-2b Decision 3.7/3.8, the customer dashboard deliberately does NOT
+    // render carrier/tracking-number text, only the timeline step itself,
+    // so asserting on the tracking number here would assert a UI surface
+    // this item never builds), and the list page's status label reflects it
+    // too — zero changes to orderTimeline.ts or either dashboard page needed
+    // (same claim test29's own test 12 makes; here it's proven starting
+    // from a real webhook-confirmed order rather than a Prisma fixture
+    // shortcut).
+    const afterRes = await fetch(`${BASE_URL}/dashboard/orders/${order.id}`, {
+      headers: { cookie: customerCookieHeader },
+    });
+    if (afterRes.status !== 200) {
+      throw new Error(`GET /dashboard/orders/${order.id} (after ship) returned ${afterRes.status}, expected 200`);
+    }
+    const afterHtml = await afterRes.text();
+    if (!afterHtml.includes(shippedEvent.createdAt.toISOString())) {
+      throw new Error(
+        `Expected the post-ship order detail page to render the real SHIPPED event's own createdAt ` +
+          `(${shippedEvent.createdAt.toISOString()}), got no match`,
+      );
+    }
+    const listRes = await fetch(`${BASE_URL}/dashboard/orders`, { headers: { cookie: customerCookieHeader } });
+    if (listRes.status !== 200) {
+      throw new Error(`GET /dashboard/orders (after ship) returned ${listRes.status}, expected 200`);
+    }
+    const listHtml = await listRes.text();
+    if (!listHtml.includes("Shipped")) {
+      throw new Error(`Expected the customer's order list page to show "Shipped" after a real admin mark-shipped call`);
+    }
+
+    console.log(
+      "[dogfood] PASS: real signed Stripe webhook confirms a real order -> real admin (promoted, 2FA-" +
+        "enrolled) marks it shipped over real HTTP -> Order.fulfillmentStatus SHIPPED, one Shipment, one " +
+        "AdminAuditLog row -> the real owning customer's own /dashboard/orders/[orderId] and /dashboard/orders " +
+        "pages genuinely render Shipped",
+    );
+  } finally {
+    await cleanup();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // M4-2 — route-wiring-only leg: POST /api/checkout/create-mpesa-session over
 // real HTTP against a real spawned `next dev` server (see the "M4-2 STATUS"
 // header comment above for why this is deliberately narrower than a full
@@ -2841,6 +3261,7 @@ await dogfoodCatalogSearch();
 await dogfoodCart();
 await dogfoodCheckout();
 await dogfoodStripeWebhook();
+await dogfoodAdminMarkShipped();
 await dogfoodMpesaRouteWiring();
 await dogfoodMpesaCallback();
 await dogfoodMpesaReconcileCron();
@@ -2871,5 +3292,10 @@ console.log(
     "M5-2a admin RBAC/2FA/idle-timeout deliberately NOT given a new leg here — test28's own Tier B " +
     "already provides equivalent real-HTTP/real-Playwright-browser fidelity (see this file's own " +
     "M5-2a STATUS header comment for the full account); " +
+    "M5-2b real admin mark-shipped leg (resolves M5-2a's own deferred note): a real signed-Stripe-" +
+    "webhook-confirmed order (not a Prisma fixture shortcut) is marked shipped by a real promoted admin " +
+    "over real HTTP, and the real owning customer's own /dashboard/orders/[orderId] and /dashboard/orders " +
+    "pages are asserted to genuinely render Shipped afterward — see dogfoodAdminMarkShipped()'s own " +
+    "'M5-2b STATUS' header comment for why this is not duplicate of test29's own 29 tests; " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );
