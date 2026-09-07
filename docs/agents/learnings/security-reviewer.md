@@ -76,6 +76,14 @@ diff, check its imports yourself. If it has no framework/runtime
 dependency, the "can't be instrumented" justification is false and the
 exclusion is dodging coverage on business logic — treat it as a finding
 even when the module is integration-tested.
+**Corollary (M5-2e):** the exclusion can be *correctly* justified and the
+item's validation logic still end up unmeasured, because the validator was
+written module-private INSIDE the framework-coupled page rather than in a
+pure lib. When the excluded file is the one holding the diff's input
+validation, say so explicitly as an advisory and name the extraction
+(the repo's own addressValidation.ts / searchParams.ts / orderTimeline.ts
+precedent) — "the exclude is justified" is not the same claim as "the
+validation is covered."
 
 ## Ownership checks split from the mutation statement
 **Symptom:** A resource route does findUnique → compare userId → mutate by
@@ -233,6 +241,13 @@ can reach it yet — reachability changes silently, allowlists don't get
 re-reviewed. The good counter-example is M4-2's M-Pesa route, which
 hard-gates on `region === "KE" && currency === "KES"` *before* any network
 call — prefer that shape when asking a builder to fix an over-broad list.
+**Calibration (M5-2e):** grade the entry by the capability it opens, not by
+the enum member's presence. A read-only admin *view* offering ET/SO over
+non-personal rows that already exist in the same primary DB grants no
+capability and moves no data across regions — that is an advisory, not the
+M4-1 finding. Still flag it, and still flag deriving the option set from
+`Object.values(SomeEnum)` rather than a literal `as const` tuple, because
+the dynamic form silently exposes the *next* enum member with no review.
 
 ## A misconfiguration error wrapped into a security-typed error becomes the wrong HTTP status
 **Symptom (M4-1b):** An ADR bound "missing secret -> 500, never 400". The
@@ -475,6 +490,10 @@ value cannot be undefined at that line, and prefer an explicit
 `if (!session?.user?.id) redirect(...)` guard over relying on the auth
 library's typing. "Does not leak" resting on an external library invariant is
 weaker than "cannot leak".
+**Good shape to recognise (M5-2e):** an optional filter written as
+`...(region ? { region } : {})` is immune to this — the key is absent rather
+than present-and-undefined, and the value was allowlisted first. Prefer that
+spread form over `{ region: maybeUndefined }`.
 
 ## A runtime-derived cookie name can still degrade positionally
 **Symptom (M5-1b):** A forged-cookie test correctly avoided hardcoding the
@@ -489,6 +508,14 @@ match (contains `session_token`), not by position — and treat a
 forged-cookie test whose assertion is identical to the no-cookie test's as
 requiring that stronger derivation, since it has no other way to distinguish
 the two paths.
+**Best shape seen so far (M5-2e test 1):** name selected by
+`.find(p => p.split("=")[0].includes("session_token"))`, AND the two cases
+assert *different* observable outcomes (`/auth/login` vs
+`/auth/login?reason=admin_no_session`). That marker is emitted only from the
+page-level gate, so non-triviality is structural and needs no
+temporarily-disable-the-check ritual to demonstrate. Accept this shape
+without asking for an empirical toggle; keep asking for the toggle whenever
+the two assertions are identical.
 
 ## A lossy display formatter extracted into a shared module entrenches the loss
 **Symptom (M5-1b):** A new shared `formatMoney` used
@@ -558,3 +585,72 @@ test body uses, not just its name — and grep for sibling tests reusing the
 same target string. A passing test with a misleading title still leaves the
 named property unverified for a future page that doesn't happen to call the
 shared check.
+
+## Reviewing raw SQL: read the substitution mechanism, then re-read every reuse of the fragment
+**Symptom (M5-2e):** An ADR promised "bound parameters, never
+string-interpolated" for a `$queryRaw` with an admin-supplied region filter and
+a threshold inside a `WHERE` computing column arithmetic. The prose is not the
+evidence — the same sentence would be written for a `Prisma.raw()` or a
+backtick-concatenated string.
+**Rule going forward:** For any raw-SQL diff, check four things by reading the
+construction site: (1) the value is a `${}` substitution in a *tagged template*
+(`Prisma.sql` / `db.$queryRaw` backticks), not an argument to `Prisma.raw()` and
+not `+`-concatenated; (2) any type cast is applied to the placeholder
+(`${region}::"Region"`), not to interpolated text; (3) `LIMIT`/`OFFSET` are
+substitutions too, since those are the ones builders most often inline as
+"just a number"; (4) when one `Prisma.sql` fragment is shared by two statements
+(the rows query and the count query), confirm the fragment is *referenced*, not
+retyped — a hand-typed second copy is the drift risk the sharing was meant to
+remove — and that parameter numbering is per-statement. Then still require the
+value be allowlisted before it reaches the driver: parameterisation and an
+allowlist are two controls, and the review should be able to name both.
+
+## decimal.js accepts "Infinity" and "NaN" as strings, so a String()-coerce-in-try/catch validator is not total
+**Symptom (M5-2e):** A defensive parser over an untrusted Json column did
+`new Prisma.Decimal(String(entry.revenue))` inside `try/catch` and correctly
+dropped every object/array/null/boolean/missing case (they stringify to values
+Decimal rejects). But the string literals `"Infinity"`, `"-Infinity"` and
+`"NaN"` are *accepted* by decimal.js, so they survive into a money column's
+render path, propagate through `.plus()`, and make a `comparedTo` sort
+comparator return NaN.
+**Cause:** The try/catch is reviewed as "anything invalid throws", which is
+true for almost every hostile shape — the two non-finite literals are the gap,
+and no realistic test fixture contains them.
+**Rule going forward:** Any `new Decimal(String(x))`-in-try/catch validator
+needs an explicit `isFinite()` check after construction, not just the catch.
+More generally, when a validator's rejection mechanism is "the constructor
+throws", enumerate the inputs the constructor *accepts* rather than the ones it
+rejects. Also check where the parsed value flows: a non-finite value in a sort
+comparator degrades ordering silently, which is harder to notice than a visible
+`∞` in the markup.
+
+## A retry helper keyed on a status that is also a legitimate authorization outcome
+**Symptom (M5-2e):** A test suite added `fetchResilient()` that retries once on
+**404** to work around an empirically-proven framework dev-mode artifact. 404 is
+also exactly what this repo's admin gate returns for a wrong-role principal
+(`notFound()`, chosen deliberately as a no-existence-oracle) — so the helper is
+one careless call site away from silently retrying past a real authorization
+regression.
+**Cause:** The retry predicate is chosen from the *flake's* symptom without
+asking what else legitimately produces that status in this codebase.
+**Rule going forward:** For any retry/resilience helper in a test suite, ask
+which security outcomes share the retried status, then check every test that
+asserts one of those outcomes actually uses the *plain* fetch. Accept the helper
+when (a) the flake is evidenced rather than asserted, (b) the gate-outcome tests
+demonstrably bypass it, and (c) the diagnostic code used to prove the flake is
+genuinely gone from the module it exonerated — verify (c) by reading/grepping
+that module yourself, since a builder's "reverted it" is a claim. Recommend
+narrowing the helper to an explicit expected-status argument so the bypass is
+structural rather than a convention.
+
+## Conditional assertions turn an empty-state test into a self-agreeing test
+**Symptom (M5-2e):** An empty-state test wrapped its real assertion in
+`if (html.includes("<table testid>")) { expect(200) } else { expect(empty) }`
+to tolerate shared-dev-DB seed data — and the item's own ADR states the seed
+data reliably produces rows matching that query in every region, so the escape
+branch is the one that runs and the named property is never asserted.
+**Rule going forward:** Treat any `if/else` inside a test where both branches
+`expect()` as a test that cannot fail for its stated reason. Check the fixture
+generator (the seed script, the ADR's own description of it) to work out which
+branch actually executes. The fix is fixture isolation — a dedicated marker,
+a fixture-scoped filter, or an unused key space — not a tolerant branch.

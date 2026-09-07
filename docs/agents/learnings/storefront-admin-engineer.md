@@ -623,3 +623,89 @@ value="XX"')` rather than `not.toContain("XX")`), and assert the default/
 safe state IS rendered (e.g. the exact `<option value="" selected="">All
 ...</option>` string) — that's the real, non-framework-internal claim the
 test needs to prove.
+
+**Related, one level deeper (M5-2e):** the correct-and-clamped value can
+ALSO be defeated by this same echo, in the opposite direction — asserting
+`not.toContain(theRequestedButShouldBeClampedValue)` over full raw HTML
+false-fails even when the server-side clamp is fully correct, because the
+client's ORIGINAL (unclamped) query-param value is what gets echoed into
+the RSC payload, not the clamped value the page actually used. Don't
+reach for `not.toContain(rawParamValue)` for "was this value excluded"
+assertions at all; instead capture the real DB id of the row that should/
+shouldn't appear (from the fixture-creation call itself) and assert on
+its own unique rendered testid (`data-testid="analytics-row-${id}"`) —
+this also sidesteps a SEPARATE, unrelated gotcha (the exact same date
+string can independently appear in an `<input type="date">` filter field
+above a table, breaking a naive `indexOf(dateString)` "is this the first
+occurrence" ordering check). Never infer row order or presence from a
+bare substring/position check when a per-row unique id is available to
+scope the assertion instead.
+
+## React SSR's per-option `selected=""` attribute breaks an exact-string `<option value="X">Label</option>` assertion
+**Symptom (M5-2e):** `expect(html).toContain('<option value="">All
+regions</option>')` failed against a genuinely-correct `<select>` — the
+actual rendered tag was `<option value="" selected="">All
+regions</option>`, because React's SSR emits a `selected=""` attribute on
+whichever `<option>` matches the `<select>`'s current value (own
+learnings file already documents this exact string as the correct one to
+expect, but a first draft of a NEW test in the same session still wrote
+the un-suffixed exact-match version and had to be caught before handoff).
+**Rule going forward:** never assert an exact `<option value="X">Label</option>`
+string; match the opening tag loosely instead
+(`/<option value="X"[^>]*>Label<\/option>/`) so the assertion is
+independent of whether that particular option happens to be the
+currently-selected one.
+
+## `DailySalesMetric.@@unique([date, region])` makes hardcoded small relative-day-offset fixtures across many tests in one file collide
+**Symptom (M5-2e):** several `it()` blocks in the same spawned-server test
+file each seeded `DailySalesMetric` rows at small `isoDateNDaysAgo(0/1/2)`
+offsets (today, yesterday, etc.) for readability — since MULTIPLE tests
+independently reused the same small offsets for the same region, later
+tests' `create()` calls threw `P2002` unique-constraint violations against
+earlier tests' still-fresh rows.
+**Rule going forward:** for any fixture table with a `@@unique` constraint
+keyed on a "natural" dimension multiple tests are likely to reach for
+independently (a date, a slug, an order number), either (a) give every
+test in the file its own dedicated, far-apart, hardcoded date/value (e.g.
+one arbitrary historical year-month per test, not relative to "today"
+unless the test is SPECIFICALLY about relative-date behavior like a
+default-range or clamp test, which must stay relative), or (b) make the
+fixture helper use `upsert` instead of `create` as a defensive fallback.
+Prefer (a) as the primary fix — it keeps each test's fixtures fully
+independent and reviewable — and layer (b) on top defensively so a future
+accidental collision degrades to "silently overwrites, whichever test ran
+last wins" instead of a hard test-suite crash.
+
+## An intermittent, non-auth-related 404 from Next.js dev's own not-found-boundary machinery can appear under a spawned `next dev` server after many prior admin requests — verify it's not your bug before working around it
+**Symptom (M5-2e):** in a test file making 30+ real HTTP requests against
+one spawned `next dev` server (many via `createEnrolledAdmin`, each
+signing up a fresh user), one specific test's first-ever hit of a
+brand-new `(pathname, search)` combination on a `force-dynamic` admin page
+returned a genuine 404 (proper Next.js not-found HTML, `"c":[...
+"inventory?region=KE"...]` framework routing trace) even though every
+independently-checked precondition was correct: a direct `db.user`
+lookup showed `role: "ADMIN"`, `twoFactorEnabled: true`; a parallel
+`/api/auth/get-session` call against the same cookie resolved the exact
+same `userId`; and a temporary (since-reverted)
+`console.log` placed immediately before `adminAuth.ts`'s only
+`notFound()` call site never printed for that request — proving the
+framework's OWN not-found rendering fired, not the application's role
+check. The identical request succeeded (200) on an immediate retry, and
+consistently reproduced at the exact same test only when run as part of
+the full sequential file (never in isolation or a short subset), pointing
+at some request-count/timing-dependent Next.js 15.5 dev-mode artifact
+rather than a real auth/session bug.
+**Rule going forward:** before adding ANY retry/workaround for a
+surprising status code in a test, first PROVE it isn't your own code by
+independently re-verifying every precondition outside the page itself
+(direct DB query, a parallel framework endpoint hitting the same session,
+and — if available — a temporary source-level `console.log` at the
+suspected throw site, always reverted with `git diff` confirmed empty
+before handoff). Only once the app-level cause is ruled out is it
+legitimate to add a narrowly-scoped retry helper (here: retry exactly
+once, only on `404`, ~300ms later, documented inline with the full
+reasoning above) — and note explicitly why the retry does NOT mask a real
+regression (a genuine role/session rejection is a stable function of
+`(cookie, DB state)` and doesn't change between two immediate retries
+with no mutation in between, whereas the observed artifact demonstrably
+did self-correct with no state change at all).

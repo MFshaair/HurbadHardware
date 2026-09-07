@@ -551,3 +551,30 @@ in a file owned by a different agent (e.g. the payment-confirm transaction
 advancing `fulfillmentStatus` too), flag that as coordination required
 rather than silently writing the criterion against a value nothing sets,
 or silently expanding scope into the other agent's file.
+
+## A whole "pre-computed" summary/analytics table can have zero pipeline,
+## not just a partially-reachable status value
+**Symptom:** M5-2e's Linear summary ("`app/admin/analytics/page.tsx` reads
+pre-computed `DailySalesMetric`") reads as if the table is already fed by
+something else, upstream of this item — a pure UI-read task.
+**Cause:** Grepping every write site for `DailySalesMetric` across `src/`,
+`scripts/`, `vercel.json`'s crons, `src/app/api/cron/`, and the seed
+script directly showed zero code path anywhere inserts a row. This is the
+same family as this file's `eventType`/`fulfillmentStatus` entries above
+(a PRD-named mechanism nothing writes), but one level more severe: those
+were single reachable-vs-unreachable enum values on a table that *is*
+populated via other values; this is an entire summary table with no
+pipeline at all, meaning the dependent UI renders on zero rows forever in
+every environment, not just a narrower set of cases than the PRD implies.
+**Rule going forward:** For any acceptance criterion that says a
+dashboard/report/analytics page "reads pre-computed X" or "reads an
+aggregate/summary table," grep every write site of that exact table
+(cron configs, seed scripts, background jobs, not just `src/`) before
+treating the read side as the whole scope. If nothing writes it, do not
+silently build the aggregation job under the read-side item's own
+description (that's new, unassigned scope) and do not silently accept a
+permanently-empty page as if the criterion were satisfied either — split
+the item explicitly into (a) the read-side page, testable by seeding rows
+directly via fixtures, and (b) a named, unbuilt prerequisite (the
+aggregation job) flagged for orchestrator/platform-architect to schedule
+or explicitly defer as a documented limitation.

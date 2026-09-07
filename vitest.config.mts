@@ -323,6 +323,14 @@ export default defineConfig({
         // browser fetch — same "no RTL/jsdom in this repo" justification as
         // CartSummary.tsx/StripeCheckout.tsx above.
         "src/app/admin/\\(secure\\)/orders/\\[orderId\\]/MarkShippedForm.tsx",
+        // M5-2e (HRH-56): the analytics and inventory pages independently
+        // call requireAdmin()/next-headers/next-navigation and are only
+        // meaningfully exercised via
+        // tests/test30-admin-analytics.test.ts's spawned `next dev`
+        // subprocess — same measurement-gap justification as
+        // src/app/admin/** above, not a testing gap.
+        "src/app/admin/\\(secure\\)/analytics/page.tsx",
+        "src/app/admin/\\(secure\\)/inventory/page.tsx",
       ],
       thresholds: {
         // PRD Definition of Done requires >=80% lines/statements. Set at

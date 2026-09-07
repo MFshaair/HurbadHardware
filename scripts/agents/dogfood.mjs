@@ -345,6 +345,37 @@
 // CONFIRMED state came from a real signed Stripe webhook delivery, not a
 // Prisma fixture shortcut, and finishes at the real owning customer's own
 // dashboard render).
+//
+// M5-2e (2026-09-07, qa-dogfood-engineer, HRH-56, admin analytics/inventory
+// read-only dashboards): NOT given a brand-new top-level leg. Checked both
+// halves of this file's own standing rule (see the M5-2a-precedent
+// learnings entry): (1) tests/test30-admin-analytics.test.ts's own Tier B
+// already spawns a real `next dev` server and drives every one of its 33
+// scenarios over real HTTP (confirmed by grep for `spawn` -- no in-process
+// route-handler calls anywhere in that file), so there is no
+// route-registration/middleware-interception/env-loading gap left to close
+// the way M4-1b/M4-2b/M4-2c's legs closed one. (2) The analytics page has
+// zero real writer anywhere in this repo by design (ADR M5-2e Decision
+// 1/2, DailySalesMetric aggregation deliberately deferred to an unassigned
+// M5-2f) -- there is no real state a leg could chain into it that test30's
+// own tests 15/16 don't already assert (the honest permanently-empty
+// production state, over real HTTP). That rules out a leg for analytics
+// entirely, by the same "zero real caller is theater" reasoning this file
+// already applies to writeAdminAuditLog() and mergeGuestCartOnLogin().
+// The inventory page is different: every one of test30's RegionalInventory
+// fixtures is a raw `db.regionalInventory.create()` (grep-confirmed), never
+// a row produced by the real reservation/checkout state machine -- the
+// exact same fixture-shortcut-vs-real-state-machine-provenance gap the
+// M5-2b entry above already identified and closed for admin mark-shipped.
+// Rather than add a fourth top-level leg with its own fixture/port/cleanup,
+// this was folded into dogfoodAdminMarkShipped() (same M5-1b-style folding
+// precedent): that leg's real webhook confirm already decrements the
+// fixture variant's onHand 10 -> 9 (reserved 1 -> 0), which is already
+// below LOW_STOCK_THRESHOLD (10) with zero extra fixture manipulation, so a
+// real GET /admin/inventory?region=KE as the same real promoted admin,
+// asserting availableForSale === 9 for that exact sku, was added
+// immediately after the admin-promotion step and before the mark-shipped
+// call. See the inline comment at that call site for the full account.
 
 import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -2363,6 +2394,47 @@ async function dogfoodAdminMarkShipped() {
       data: { role: "ADMIN", twoFactorEnabled: true },
     });
 
+    // M5-2e (added 2026-09-07, qa-dogfood-engineer, HRH-56): real admin
+    // /admin/inventory read of the SAME variant this leg just decremented
+    // via a real webhook confirm (onHand 10 -> 9, reserved 1 -> 0 above),
+    // not a raw-Prisma-inserted fixture row. tests/test30-admin-analytics
+    // .test.ts's own 33 tests always seed RegionalInventory via direct
+    // db.regionalInventory.create (confirmed by grep) -- never chain a real
+    // reservation/checkout state-machine decrement into what the admin
+    // inventory page renders. That is the exact same "fixture-shortcut vs.
+    // real-state-machine-provenance" gap this file's M5-2b leg closed for
+    // admin mark-shipped (see the "M5-2b STATUS" comment above and this
+    // file's own qa-dogfood-engineer learnings entry on the subject) --
+    // 9 < LOW_STOCK_THRESHOLD (10), so the row renders with zero extra
+    // fixture manipulation needed. The analytics dashboard has no
+    // equivalent leg: it has zero real writer anywhere in this repo by
+    // design (ADR M5-2e Decision 1/2), so there is no real state to chain
+    // into it -- dogfooding it would mean asserting the same permanently-
+    // empty state test30's own tests 15/16 already assert over real HTTP.
+    const inventoryPageRes = await fetch(`${BASE_URL}/admin/inventory?region=KE`, {
+      headers: { cookie: adminCookieHeader },
+    });
+    if (inventoryPageRes.status !== 200) {
+      throw new Error(`GET /admin/inventory?region=KE returned ${inventoryPageRes.status}, expected 200`);
+    }
+    const inventoryHtml = await inventoryPageRes.text();
+    const availableMatch = inventoryHtml.match(
+      new RegExp(`data-testid="low-stock-available-${variant.sku}"[^>]*>(-?\\d+)<`),
+    );
+    if (!availableMatch) {
+      throw new Error(
+        `Expected /admin/inventory?region=KE to render a low-stock-available-${variant.sku} cell for the ` +
+          `real webhook-decremented variant, found none. Body snippet: ${inventoryHtml.slice(0, 500)}`,
+      );
+    }
+    if (availableMatch[1] !== "9") {
+      throw new Error(
+        `Expected the real admin inventory page to render availableForSale === 9 (onHand 10 - reserved 0 - ` +
+          `safetyBuffer 0, after the real webhook confirm decremented onHand 10 -> 9) for sku ${variant.sku}, ` +
+          `got ${availableMatch[1]}`,
+      );
+    }
+
     // Real admin mark-shipped call against the REAL webhook-confirmed order.
     const shipRes = await fetch(`${BASE_URL}/api/admin/orders/${order.id}/ship`, {
       method: "POST",
@@ -3297,5 +3369,13 @@ console.log(
     "over real HTTP, and the real owning customer's own /dashboard/orders/[orderId] and /dashboard/orders " +
     "pages are asserted to genuinely render Shipped afterward — see dogfoodAdminMarkShipped()'s own " +
     "'M5-2b STATUS' header comment for why this is not duplicate of test29's own 29 tests; " +
+    "M5-2e (folded into the same dogfoodAdminMarkShipped() leg, added 2026-09-07): the real admin " +
+    "/admin/inventory?region=KE page is asserted to render availableForSale === 9 for the SAME variant " +
+    "this leg's real webhook confirm just decremented (onHand 10 -> 9), closing the exact " +
+    "fixture-shortcut-vs-real-state-machine-provenance gap test30's own 33 tests leave open (every " +
+    "RegionalInventory row there is a raw Prisma insert); the M5-2e analytics dashboard deliberately " +
+    "gets no leg — it has zero real writer anywhere in this repo by design (ADR M5-2e Decision 1/2), " +
+    "so there is no real state to chain into it, and test30's own spawned-server tests already assert " +
+    "its permanently-empty production state over real HTTP; " +
     "M1-2/M1-3 legs and M2-1 detail/variant-select leg still pending — see header comment)",
 );

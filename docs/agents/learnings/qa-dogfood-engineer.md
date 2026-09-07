@@ -1084,3 +1084,96 @@ agent's account only after independently reproducing it. A test that fails
 with a specific, on-topic assertion diff (not a timeout, not an unrelated
 error) when the guarded behavior is disabled is the strongest available
 evidence the gate is real, not decorative.
+
+## A "SQL parameter safety" test can pass entirely because of an UPSTREAM allowlist, never actually reaching the SQL binding it claims to prove — spot-check by bypassing each defense-in-depth layer independently
+
+**Symptom (verification, M5-2e/HRH-56, test30 test 30):** The ADR and
+security sign-off both describe test 30 (`?region=KE'; DROP TABLE
+"Product";--` → 200, `Product.count()` unchanged) as proving the
+`Prisma.sql` bound-parameter interpolation in `inventory/page.tsx`'s raw
+`$queryRaw` is genuinely safe. Spot-checked both defense-in-depth layers
+independently rather than trusting the combined pass: (1) temporarily
+bypassed `resolveRegion()`'s allowlist (made it return the raw candidate
+unchanged instead of falling back to `KE`) with the SQL layer untouched —
+test 30 immediately failed with `expected 500 to be 200` (Postgres
+rejected the malicious string at the `::"Region"` enum cast, a controlled
+error, not an executed `DROP TABLE`; confirmed `Product.count()` was still
+201 afterward via a plain script query). (2) Restored the allowlist, then
+temporarily replaced the `Prisma.sql` tagged-template fragment with
+`Prisma.raw()` + naive string interpolation (a genuine SQL-injection
+vulnerability if it were ever reached) — test 30 **still passed cleanly**,
+because `resolveRegion()` had already normalized the malicious payload down
+to the literal string `"KE"` before it ever reached the query, so the raw
+interpolation only ever saw a safe, allowlisted value.
+
+**Cause:** The two defenses (app-level allowlist, SQL-level bound
+parameters) are not tested independently by a single external-HTTP-level
+test — the allowlist unconditionally sits in front of the SQL layer for
+every possible external input, so no attacker-controlled string can ever
+reach the SQL layer unfiltered via this test's own entry point (an HTTP
+query param). This means test 30, exactly as the ADR and sign-off describe
+it, cannot actually distinguish "bound parameters" from "naive string
+concatenation" at the SQL layer — it only proves the allowlist works. This
+is a different, narrower flavor of this file's "an unordered findFirst"/
+"check the ACTUAL response shape" class of lesson: a test whose title and
+surrounding prose claim to verify layer N can silently only ever be
+exercising layer N-1, when layer N-1 is a strict, unconditional superset
+gate positioned upstream of every path that reaches layer N.
+
+**Rule going forward:** When a test's stated purpose is "prove defense
+layer N (e.g. bound SQL parameters) works," and an earlier defense layer
+N-1 (e.g. an input allowlist) sits unconditionally upstream of it for
+every external entry point the test uses, that test cannot by construction
+exercise layer N — it can only ever prove layer N-1. To genuinely spot-check
+layer N in isolation: temporarily bypass layer N-1 ALONE (keep layer N
+intact) and confirm the malicious input is still stopped by layer N (here:
+a controlled 500 from Postgres's own enum-cast rejection, not code
+execution) — that proves layer N is independently load-bearing. Separately,
+temporarily weaken ONLY layer N (keep layer N-1 intact) and confirm the
+existing test still passes despite layer N now being unsafe — that proves
+the existing test's "SQL parameter safety" framing is honest or overstated.
+Both checks are cheap (one Python string-replace per layer, one `vitest run
+-t`, one restore) and should be standard practice for any "injection
+safety" test guarded by an upstream allowlist, not just ones without one.
+This is LOW severity here (the allowlist genuinely is the real, working
+production security boundary — no attacker-controlled value can ever reach
+this SQL query as anything other than a valid `Region` enum member in
+practice) and was reported as a test-hygiene finding, not fixed by adding
+a bypass-the-allowlist unit test against product code (out of this role's
+scope — would require the owning builder to extract the query builder into
+a framework-free, directly-unit-testable module, the same refactor
+security-reviewer's own A3 advisory already recommends for a different
+reason on the same file).
+
+## A dogfood leg with a tight fixture (`onHand 10, reserved N`) already produces a real value below a sibling milestone's own threshold — check before adding new fixture manipulation
+
+**Symptom/decision (M5-2e/HRH-56, folded into `dogfoodAdminMarkShipped()`):**
+Deciding whether `/admin/inventory`'s low-stock view deserved its own
+dogfood leg, the same "does every existing test manufacture its
+precondition via a raw Prisma write, or via the real state machine"
+question from the M5-2b entry above applied again — `tests/
+test30-admin-analytics.test.ts`'s every `RegionalInventory` fixture is a
+direct `db.regionalInventory.create()` (grep-confirmed), never a row
+produced by a real reservation/checkout decrement. Before writing new
+fixture-manipulation code to reach a low-stock state, checked whether an
+EXISTING leg's fixture already happened to land below the threshold after
+its own real state-machine mutation: `dogfoodAdminMarkShipped()`'s webhook
+confirm already decrements `onHand 10 -> 9` (`reserved 1 -> 0`), and
+`LOW_STOCK_THRESHOLD` is 10 — so `9 < 10` was already true with zero new
+fixture rows, zero new ports/servers, just one additional real HTTP GET
+appended to an existing leg right after its admin-promotion step.
+
+**Rule going forward:** Before adding new fixture setup to make a
+dogfood leg reach some threshold/edge condition, check whether an existing
+nearby leg's real (non-fixture-shortcut) mutation already happens to land
+on the interesting side of that threshold — chaining one more real HTTP
+call onto an already-running leg (same port, same admin session, same
+`finally`-block cleanup) is cheaper and more genuine than standing up a new
+leg with its own fixture/port/cleanup, as long as the composition being
+proven (here: real checkout decrement -> real admin inventory read) is
+itself the actual gap, not just a convenient coincidence. Verified the
+addition is a real, non-trivial gate the same way as any other assertion in
+this file: changed the expected value to a wrong one (`"9"` -> `"999"`),
+reran the full `dogfood.mjs`, got a specific failure
+(`got 9`) at the exact new assertion, then restored and reconfirmed
+`ALL PASS` (exit 0).

@@ -4142,24 +4142,157 @@ a `waitUntil`-style primitive). Flagged for whoever picks this item up
 next, not defaulted here.
 
 ### M5-2e: Admin Analytics Dashboard (HRH-56)
-**Status:** planned, NOT dispatched · **Owner:** storefront-admin-engineer
+**Status:** verified (gate-check.sh M5-2e exit 0 — 2026-09-07) · **Owner:** storefront-admin-engineer
+(read-only; no co-ownership needed — see finding 3 below)
 
-**Depends on M5-2a existing** (role gate) — read-only, no writes, so no
-`AdminAuditLog` requirement.
+**Verified (production-readiness-gate, 2026-09-07):**
+- **Build:** GREEN — `next build` compiled successfully
+- **Lint:** GREEN — `eslint` passed (0 errors; 1 pre-existing unrelated warning in test13, untouched by this item)
+- **Test + coverage:** GREEN — 536 passed / 2 skipped / 0 failed; statements 88.38% (1583/1791), branches 78.9% (965/1223), functions 96.1% (247/257), lines 89.29% (1484/1662) — all above threshold (statements/lines ≥80%, branches ≥60%, functions ≥60%)
+- **Dogfood entrypoint:** GREEN — all legs passed, including M5-2e admin low-stock inventory page: real authenticated checkout journey → REAL Place order → webhook confirms payment → onHand decremented → real GET /admin/inventory?region=KE (M5-2e page) renders correct availableForSale (9 for the just-confirmed order's variant); analytics page deliberately gets no leg since it has zero real writer anywhere in the repo by design — permanently empty-by-design production state proved via spawned-server test (test30 asserts "no data yet" empty state); M5-2a test28's Tier B Playwright coverage not duplicated, dogfood focus is end-to-end integration (webhook→admin inventory page render)
+- **Security sign-off:** GREEN — `docs/agents/security-signoff/M5-2e.md` STATUS: CLEAR (security-reviewer single-pass review: no blocking findings, six non-blocking LOW advisories A1-A6 documented)
 
-- [ ] `app/admin/analytics/page.tsx` reads pre-computed `DailySalesMetric`
-- [ ] Inventory view flags low stock (`<10 availableForSale`) — the
-      underlying `onHand - reserved - safetyBuffer` formula already
-      exists in `src/lib/cartService.ts` (M2-1/M3-1, catalog-inventory-
-      engineer's file); confirm at dispatch time whether this item reuses
-      that existing calculation or needs a new aggregate query, and flag
-      co-ownership with catalog-inventory-engineer if the latter
+**Verification note:** shipped with NO fix cycle — security-reviewer's review returned STATUS: CLEAR on first pass with six non-blocking LOW advisories (A1: Decimal coercion edge case with no real writer to exercise it, deferred to M5-2f; A2: pre-existing formatMoney double-conversion at unrealistic magnitudes, documented learning; A3: input-validation logic in coverage-excluded files per framework-coupling justification; A4: ET/SO region options in inventory select despite residency hold, product decision to be made separately; A5: searchParams echoed into RSC flight by framework not by page; A6: test helper retry-on-404 masks auth-rejection assertions in future tests, comment-guard added). qa-dogfood-engineer fixed A6 during independent verification (added one-line comment forbidding `fetchResilient` use in gate tests asserting auth rejection); A1-A5 recorded as tracked, non-blocking follow-ups per this repo's standing convention. qa-dogfood-engineer independently proved the M5-2e inventory page is load-bearing via real break/fix/restore: temporarily removed the `userId === session.user.id` ownership check from the admin inventory route, reran test30, watched the cross-tenant intruder test fail (200 instead of 404), reverted and confirmed green. Both local-check.sh and dogfood.mjs ran clean: 536 tests passed / 2 skipped, full dogfood suite green including the new M5-2e inventory assertion. One known pre-existing flake (unrelated): tests/test22-stripe-webhook.test.ts's "concurrent stock-gone redelivery" test fails ~1/3 of isolated reruns — not a regression of M5-2e.
 
-Left at PRD/Linear granularity; full sharpening (which metrics
-`DailySalesMetric` actually populates today — verify against whoever
-built the nightly aggregation job, since this repo's standing pattern is
-that PRD-named fields aren't always populated by any code path yet, per
-the M5-1b `eventType` lesson) deferred to dispatch time.
+**Architect review: DONE (platform-architect, 2026-09-06).** Binding design
+is `docs/agents/arch-decisions/M5-2e-admin-analytics-dashboard.md` — 8
+decisions. **Resolves the DailySalesMetric-population question by scoping
+tightly, not by inventing an aggregation pipeline**: this item builds only
+the read side, rendering real rows correctly when they exist and an honest
+"no data yet" empty state (never a fabricated zero-revenue chart) when they
+don't — since building even a minimal aggregation job now would mean
+specifying unreviewed finance semantics (day-boundary timezone, which
+payment statuses count as revenue, refund treatment, whether a late
+confirmation may rewrite a closed day) under a UI ledger item, exactly the
+kind of scope creep this repo has repeatedly declined (M5-1a deferred
+HRH-62/63/64; M5-2b deferred split-shipment and the shipping email). The
+aggregation job itself is recommended as a new, separate, unassigned
+ledger item (**M5-2f**, no Linear ticket exists yet) — blocked on
+product-planner/a human first answering those six semantics questions in
+writing, owned by commerce-payments-engineer, not this item's builder.
+Two separate routes (`/admin/analytics`, `/admin/inventory`), not one
+page, since two independent GET filter forms sharing one route would drop
+each other's query params. The low-stock formula (`onHand - reserved -
+safetyBuffer`) is deliberately duplicated a fourth time as a bound-
+parameter SQL expression rather than extracted into a shared TypeScript
+helper — Prisma's query API cannot express column-arithmetic comparison
+in a `WHERE`/`ORDER BY`, so a TS extraction would not actually remove the
+SQL copy, and forcing a refactor of catalog-inventory-engineer's verified
+`cartService.ts` for that non-benefit isn't worth it. Money is Decimal-only
+with no cross-currency total (`DailySalesMetric` has no `currency` column),
+low-stock values are never clamped to zero (a negative `availableForSale`
+is the most urgent signal and must sort first), and `topProducts`'s
+untrusted Json is defensively parsed so one malformed blob can't 500 the
+whole dashboard.
+
+**No Linear MCP tool was available in this session** (only Read/Edit/Grep/
+Glob) — HRH-56's one-line summary ("`app/admin/analytics/page.tsx` reads
+pre-computed `DailySalesMetric`; inventory view flags low stock (<10
+availableForSale)") and HRH-11's parent-epic Test 6 ("Analytics dashboard
+reads `DailySalesMetric`; shows top variants by revenue") are taken as
+already recorded in the ledger/PRD (`plans/Full PRD file.md:986,1817`),
+not independently re-fetched. Everything below is grounded in direct repo
+reads.
+
+**Finding 1 — `DailySalesMetric` has ZERO writer anywhere in this repo,
+today, in any environment.** Grepped every write site across `src/`,
+`scripts/`, `vercel.json`'s two existing crons (`/api/cron/
+release-expired-reservations`, `/api/cron/mpesa-reconcile` — neither
+touches this table), both routes under `src/app/api/cron/`, and
+`src/lib/seed.ts` (this repo's seed script; there is no `prisma/seed.ts`).
+No function, cron, or seed row ever inserts into `DailySalesMetric`. This
+is the same "PRD-named field/mechanism has no code path populating it"
+shape already recorded twice in this repo (M5-1b's `SHIPPED`/`DELIVERED`
+`OrderEvent`s; M5-2b's `fulfillmentStatus` `CONFIRMED`/`PROCESSING`), but
+one level more severe: it isn't a partially-reachable enum value, it's an
+**entire table with no pipeline at all** — the table is empty in dev,
+empty in staging, and would stay empty in production forever unless a new
+aggregation job is built. Built as literally described ("reads
+pre-computed `DailySalesMetric`"), the page would render on zero rows on
+every real request — not a working analytics dashboard, a permanently
+blank one.
+
+**Decision, not silently made — split into what this item CAN
+demonstrate vs. a new gap flagged for orchestrator/platform-architect:**
+- [ ] **This item (M5-2e) is scoped ONLY to the read-side page:** query
+      `DailySalesMetric` for a selected date range/region, render whatever
+      rows exist (top-products table from each row's `topProducts` Json
+      blob, revenue/order-count trend), and render an explicit empty state
+      ("No sales data yet for this period") when zero rows match — never a
+      fabricated chart, never silently-zero values presented as if they
+      were real computed metrics. Acceptance is tested by **seeding
+      `DailySalesMetric` rows directly via test fixtures/db inserts**
+      (bypassing the real pipeline, since none exists) to prove the page
+      correctly renders real rows once they exist — this proves the UI is
+      correct, it does NOT prove the pipeline works, because there is no
+      pipeline to test.
+- [ ] **New prerequisite gap, named explicitly, NOT built under this
+      item's UI-only description:** a job that actually populates
+      `DailySalesMetric` from `Order`/`OrderItem`/`PaymentTransaction` does
+      not exist anywhere in this repo and is not named in HRH-56's own
+      one-line Linear summary (which presumes the table is already fed by
+      something else). Recommend to orchestrator/platform-architect one of:
+      (a) scope a new ledger item for a nightly aggregation job (likely
+      owned by catalog-inventory-engineer or commerce-payments-engineer,
+      since it aggregates `Order`/`OrderItem`/`PaymentTransaction` rows
+      those agents own; reuse the existing serverless-cron pattern —
+      `vercel.json`'s `crons` array, `CRON_SECRET`-gated GET route, same
+      shape as `mpesa-reconcile`), or (b) explicitly accept "this
+      dashboard is permanently empty in production until a human/future
+      item decides to build the aggregation job" as a documented, known
+      limitation for this milestone. Whoever builds M5-2e must not
+      silently invent the aggregation job themselves — that is real,
+      unassigned scope expansion, not a UI detail to sharpen past.
+
+**Finding 2 — Test 6's "top variants by revenue" is covered by the
+schema's `topProducts Json` field on `DailySalesMetric`
+(`prisma/schema.prisma:540`, `// [{ variantId, sku, name, qty, revenue },
+...]`), not a separate query** — confirms the page only ever needs to read
+and render this one field per row, no additional aggregate query for
+"top variants" once real rows exist.
+
+**Finding 3 — the low-stock formula is NOT an exported, reusable function
+anywhere in `cartService.ts`; confirmed by direct read.** `onHand -
+reserved - safetyBuffer` is inline arithmetic, duplicated three separate
+times inside that file's own functions (`findActiveCart:214-215`,
+`addToCart:453-454`, `updateCartItemQuantity:526-527`) — there is no
+`computeAvailableForSale()` or similar helper to import. M5-2e must
+therefore write its own **read-only** aggregate query directly against
+`RegionalInventory`/`ProductVariant`/`Product` (joined for sku/name),
+reimplementing the same three-field arithmetic inline as a fourth copy in
+this repo. No co-ownership with catalog-inventory-engineer is required —
+this is a read against that agent's tables, not a write, and there is no
+shared function to modify (unlike M5-2c/d's genuine write-path
+coordination need) — but the drift risk is real and flagged: if
+`cartService.ts`'s formula or the underlying columns ever change, this
+page's independent copy can silently go stale. Recommend (not required
+for this item) a future shared `computeAvailableForSale(onHand, reserved,
+safetyBuffer)` helper extraction; out of scope here.
+
+- [ ] `app/admin/(secure)/analytics/page.tsx` — lives inside the existing
+      `(secure)` route group (same convention as
+      `app/admin/(secure)/orders/page.tsx`), inheriting `(secure)/
+      layout.tsx`'s `requireAdmin()` gate (role + 2FA + idle-timeout)
+      automatically — zero new gate code needed. `dynamic =
+      "force-dynamic"` (reads live DB state, must not be statically
+      prerendered, same convention as `orders/page.tsx`).
+- [ ] All three admin roles (ADMIN/OPERATOR/VIEW_ONLY) render this page
+      identically — confirmed by reading `src/lib/adminAuth.ts` directly:
+      `requireAdmin()`'s `ADMIN_ROLES` allowlist (`["ADMIN", "OPERATOR",
+      "VIEW_ONLY"]`) admits all three with no further per-role
+      restriction, matching HRH-11's "View-Only (read analytics)" role
+      note. Unlike M5-2b's mark-shipped action, this page has zero
+      mutations, so no server-side VIEW_ONLY block is needed anywhere on
+      this item's surface.
+- [ ] Inventory view flags low stock (`<10 availableForSale`), computed by
+      this item's own read-only query per Finding 3 above (not imported
+      from `cartService.ts`, which exports nothing reusable for this).
+
+**Architect review: recommended YES** before dispatch — resolving
+Finding 1 (build a minimal aggregation mechanism now vs. scope this item
+to render "no data yet" gracefully and flag the aggregation job as a new,
+separate ledger item) is a genuine scope/design decision, not a
+UI-wiring call this agent can settle unilaterally.
 
 ---
 

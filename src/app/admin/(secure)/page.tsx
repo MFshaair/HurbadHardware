@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/adminAuth";
 
 // Reads live DB state (this page's own requireAdmin() call refreshes the
@@ -23,13 +24,29 @@ export default async function AdminLandingPage() {
           Role: <span className="font-medium">{admin.role}</span>
         </p>
       </div>
+      <div className="flex flex-col gap-2 text-sm">
+        <Link
+          href="/admin/analytics"
+          data-testid="admin-nav-analytics"
+          className="flex min-h-[44px] items-center rounded border border-gray-300 px-4 hover:bg-gray-50"
+        >
+          Analytics
+        </Link>
+        <Link
+          href="/admin/inventory"
+          data-testid="admin-nav-inventory"
+          className="flex min-h-[44px] items-center rounded border border-gray-300 px-4 hover:bg-gray-50"
+        >
+          Low stock
+        </Link>
+      </div>
+
       <div className="flex flex-col gap-1 text-sm text-gray-600">
         <p className="font-medium text-gray-800">Coming soon</p>
         <ul className="list-disc pl-5">
           <li>Order management (M5-2b)</li>
           <li>Product &amp; variant CRUD (M5-2c)</li>
           <li>Bulk CSV import (M5-2d)</li>
-          <li>Analytics dashboard (M5-2e)</li>
         </ul>
       </div>
     </main>

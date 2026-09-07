@@ -97,6 +97,24 @@ before this tag was created. `checkpoint/m3` (commit `274c813`,
 can't be cheaply fixed forward.
 
 ### OPEN RISKS / ESCALATIONS
+- **New unassigned ledger item recommended, not yet created: "M5-2f — Daily
+  sales metrics aggregation job."** Flagged by platform-architect during
+  M5-2e (HRH-56) design, 2026-09-06: `DailySalesMetric` has zero code path
+  writing to it anywhere in this repo (no cron, no seed, confirmed by
+  grep), and no Linear ticket exists for building one. M5-2e was
+  deliberately scoped to the read-side only (a working low-stock view, an
+  honest "no data yet" empty state for sales) rather than inventing this
+  job under a UI item — see `docs/agents/arch-decisions/
+  M5-2e-admin-analytics-dashboard.md` Decision 2 for the full spec and the
+  six unanswered finance-semantics questions (day-boundary timezone,
+  which `paymentStatus` values count as revenue, refund treatment,
+  whether a late confirmation may rewrite a closed day, `topProducts`
+  definition, backfill-on-first-run) that must be answered by a human/
+  product-planner before this can be dispatched to a builder. Recommended
+  owner: commerce-payments-engineer. The admin analytics dashboard will
+  render empty in every environment, including production, until this is
+  prioritized and built — this is a known, documented state, not a defect
+  in M5-2e.
 - **PRD (`eu-west-1`/Dublin) vs. repo (`eu-west-2`/London) region mismatch**
   — deliberate, not a bug (see ACTIVE DECISIONS above), but the PRD's
   compliance appendix reasons about GDPR/EU jurisdiction assuming
@@ -138,6 +156,58 @@ can't be cheaply fixed forward.
 ---
 
 ## TIER 2 — DECISION LOG (append-only; read on demand)
+
+### 2026-09-06 — M5-2e (HRH-56, admin analytics dashboard) sharpened; `DailySalesMetric` has zero writer anywhere — real gap flagged, not fixed
+`product-planner` was dispatched to sharpen M5-2e's two bare bullets now
+that M5-2a (role gate) is `verified`. No Linear MCP tool was available
+this session — HRH-56's one-line summary and HRH-11's Test 6 were taken
+as already recorded (`plans/Full PRD file.md:986,1817`), not re-fetched.
+
+**The single most important finding, checked first per this repo's own
+standing pattern (M5-1b `eventType`, M5-2b `fulfillmentStatus`):**
+grepped every write site for `DailySalesMetric` across `src/`, `scripts/`,
+`vercel.json`'s two existing crons, both `src/app/api/cron/` routes, and
+`src/lib/seed.ts` — **zero code path anywhere writes a `DailySalesMetric`
+row.** This is one level more severe than the two prior instances: not a
+partially-reachable enum/status value, but an entire pre-computed table
+with no pipeline at all. Built literally as "reads pre-computed
+`DailySalesMetric`," the dashboard would render on zero rows in dev,
+staging, and production, permanently, until something new populates it.
+
+**Decision, not silently made:** split M5-2e's own scope into (a) the
+read-side page only — query the table, render whatever rows exist plus an
+explicit "no data yet" empty state, tested via test-fixture rows seeded
+directly (bypassing the nonexistent real pipeline) — and (b) a new,
+explicitly-named prerequisite gap (a nightly aggregation job from
+`Order`/`OrderItem`/`PaymentTransaction`, likely owned by
+catalog-inventory-engineer or commerce-payments-engineer, reusing the
+existing `vercel.json` serverless-cron pattern) that this agent did
+**not** invent or assign — flagged in `FEATURES.md`'s M5-2e entry for
+orchestrator/platform-architect to decide: build a minimal aggregation
+mechanism now, or accept a documented "permanently empty until a future
+item" limitation for this milestone.
+
+**Second finding, lower stakes:** the low-stock formula (`onHand -
+reserved - safetyBuffer`) is not exported anywhere in `cartService.ts` —
+confirmed by direct read, it's inline arithmetic duplicated three times
+already inside that file. M5-2e needs its own read-only aggregate query
+directly against `RegionalInventory`/`ProductVariant`/`Product` (a fourth
+copy of the same formula) — no co-ownership needed (read-only, no shared
+function to modify), but the drift risk (four independent copies of one
+formula) is flagged in the ledger entry.
+
+**Third finding:** confirmed by reading `src/lib/adminAuth.ts` directly —
+`requireAdmin()`'s `ADMIN_ROLES` allowlist admits ADMIN/OPERATOR/
+VIEW_ONLY identically with no further per-role restriction, so this
+page needs zero new gating logic beyond inheriting `(secure)/layout.tsx`,
+consistent with HRH-11's "View-Only (read analytics)" role note.
+
+**Architect review: recommended YES** — resolving the `DailySalesMetric`
+gap is a genuine scope decision (new aggregation-job ledger item vs.
+graceful-empty-state acceptance), not a UI-wiring call.
+
+**Not done, deliberately:** no code written; only `FEATURES.md`'s M5-2e
+section and this file were edited.
 
 ### 2026-09-05 — M5-2 split into M5-2a..M5-2e (HRH-54/55/57/58/56), M5-2a's RBAC/2FA criteria sharpened
 `product-planner` was dispatched to split the bundled `M5-2` ("Admin
