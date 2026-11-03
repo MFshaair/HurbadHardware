@@ -923,4 +923,110 @@ Resulting JSON env vars (fill once Content SIDs exist):
 
 ## Gate output
 
-(pasted in Task 22)
+Date: 2026-11-03. Commit SHA: `e326026b649f0e54f339de1d1845f70f0baeffde`.
+
+Docker is still not installed on this machine — substituted the native Postgres 16 instance approved since Task 8/HRN-9 (`postgresql://hurbad:hurbad@localhost:5432`). `pnpm prisma migrate reset`/`db:seed` ran against the real local dev database with the user's explicit per-run consent (named command, target confirmed local-only) before this gate; the same consent covered the idempotency and `--prod`-subset checks folded into this run.
+
+```
+$ node --env-file=.env.local <prisma-cli> migrate reset --force --skip-seed
+Database reset successful
+Applying migration `20261025054613_init`
+Applying migration `20261025054632_raw_search_and_constraints`
+
+$ pnpm exec tsx --env-file=.env.local prisma/seed/index.ts
+seeded reference + demo data
+
+$ pnpm typecheck
+(clean, exit 0)
+
+$ pnpm lint
+(clean, exit 0)
+
+$ pnpm format:check
+Checking formatting...
+All matched files use Prettier code style!
+
+$ pnpm i18n:check
+i18n:check ok — 185 keys in both locales
+
+$ pnpm test:unit
+ Test Files  37 passed (37)
+      Tests  165 passed (165)
+
+$ DATABASE_URL_TEST="postgresql://hurbad:hurbad@localhost:5432/hurbad_test" \
+  PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="<user's consent message>" \
+  pnpm test:int
+ Test Files  7 passed (7)
+      Tests  26 passed (26)
+
+$ pnpm build
+✓ Compiled successfully
+✓ Generating static pages (12/12)
+Route (app)                                 Size  First Load JS
+┌ ƒ /__fake/messages                         0 B            0 B
+├ ƒ /__fake/upload/[...key]                  0 B            0 B
+├ ○ /_not-found                          1.15 kB         181 kB
+├ ● /[locale]                            1.72 kB         197 kB
+├ ƒ /[locale]/[...rest]                    310 B         180 kB
+├ ● /[locale]/sign-in                    1.92 kB         269 kB
+├ ● /[locale]/sign-in/check-email        3.78 kB         209 kB
+├ ● /[locale]/sign-in/recover              896 B         268 kB
+├ ƒ /api/auth/[...nextauth]                311 B         180 kB
+└ ƒ /api/health                            311 B         180 kB
+ƒ Middleware                              108 kB
+
+$ pnpm exec playwright install --with-deps chromium   # not part of the Phase 0 gate itself
+$ pnpm test:e2e
+Running 6 tests using 4 workers
+  ✓ [desktop] health endpoint is green
+  ✓ [mobile] health endpoint is green
+  ✓ [desktop] home renders the shell in both locales
+  ✓ [mobile] home renders the shell in both locales
+  ✓ [desktop] home has no serious accessibility violations
+  ✓ [mobile] home has no serious accessibility violations
+  6 passed (6.1s)
+
+$ pnpm test:unit --coverage   # coverage table only — not gated (see HRN-22's ENFORCE_COVERAGE deviation)
+File               | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s
+All files          |   48.17 |    75.19 |   60.77 |   48.17 |
+ src/lib           |   80.16 |    82.86 |   76.92 |   80.16 |
+ src/features/auth |   64.44 |    78.12 |   66.66 |   64.44 |
+ src/components/ui | (excluded — shadcn primitives, see vitest.config.ts)
+(full per-file table in the coverage/ artifact; most 0%-covered files are UI
+components exercised only by the e2e smoke spec and Phase 1+ business-logic
+directories, consistent with the ENFORCE_COVERAGE deviation recorded under
+Task 21/HRN-22 — most `src/features/**` thresholds target code that doesn't
+exist until later phases)
+```
+
+**Follow-up fixes made during this gate** (commit `e326026`, see its message for full detail), re-verified by the full run above:
+- `src/middleware.ts` never fed the resolved country into next-intl's locale negotiation, so a first-time Somali visitor never landed on `/so`. Seeded the `NEXT_LOCALE` request cookie from `defaultLocaleForCountry(country)` when no locale cookie exists yet; added two regression tests to `tests/unit/middleware.test.ts`.
+- `src/components/layout/logo.tsx`'s "HURBAD"/"HARDWARE" text nodes had no space between them, so the flattened visible text didn't match the wrapping link's `aria-label` — a real WCAG 2.5.3 violation axe correctly caught, not a false positive.
+- `tests/e2e/smoke.spec.ts`'s `getByRole('link', { name: 'Gal' })` used Playwright's default substring match, which also matched "na**gal**a" inside the WhatsApp FAB's Somali `aria-label` added in Task 18; and the sign-in link lives inside the mobile hamburger drawer on narrow viewports, not the collapsed header row.
+
+**Manual checklist (Step 4), verified via curl + the built-in browser against the production build on `localhost:3000`, fake providers:**
+
+- [x] `pnpm dev` serves `/en` and `/so` with header, footer, switchers and the WhatsApp button — read via accessibility tree, both locales confirmed.
+- [x] `/` redirects to `/en` (confirmed with `x-vercel-ip-country: KE`) or `/so` (confirmed with `x-vercel-ip-country: SO`, and as the no-header default — `DEFAULT_COUNTRY` is `SO`).
+- [x] `/admin` without a session redirects to `/en/sign-in?next=%2Fadmin`.
+- [x] `/api/health` returns `{"ok":true,"db":true,"redis":true,...}`.
+- [x] Sign-in by phone works end-to-end in fake mode: requested a code on `/so/sign-in`, read the real 6-digit code from `GET /__fake/messages`, entered it, and landed signed-in on `/so/account` (header switched from "Gal" to "Akoonkayga").
+- [x] `hh_cart`, `hh_country`, `hh_currency` cookies are set on the first request; `hh_cart` is `httpOnly` (confirmed via `curl -I`, `Set-Cookie` headers).
+- [x] The response carries a `content-security-policy` with a per-request nonce (confirmed via `curl -I`, nonce differs per request).
+- [x] `pnpm db:seed` twice in a row leaves identical counts (`Product=40`, `User=3`, `Category=31`); `pnpm db:seed:prod` on a freshly reset DB leaves `Product=0`/`User=0` with `Category=31` populated. Dev DB reseeded to its normal demo state afterward.
+- [x] Dark mode follows the system setting by default (`Muuqaalka: Sida nidaamka`) and the footer toggle overrides it, cycling `system → light → dark`, each applying the matching `<html>` class — confirmed via `document.documentElement.className`.
+- [x] `messages/en.json` and `messages/so.json` have identical key sets — `pnpm i18n:check` → `185 keys in both locales`.
+
+## Deviations
+
+Only entries the user explicitly approved, copied from "## Spec issues found" at the end of `docs/plans/phase-00-foundation.md`, to the extent this phase actually acted on them:
+
+1. **`verifyHuman` return type.** Followed the throwing `Promise<void>` form (Task 10/HRN-11), not the `Promise<boolean>` some later phase plans show, because a boolean a caller forgets to check silently disables bot protection, and Phase 6 is the only plan that specifies the body.
+2. **`mergeGuestCartIntoUser` location and argument order.** Followed `src/features/cart/merge.ts` with `(guestToken, userId)` (Task 16/HRN-17), matching this plan's own file map and the next phase that replaces the body.
+3. **`StoreContext` file path.** Followed `src/components/layout/store-context.tsx` (Task 18/HRN-19), matching Phase 2's expectation.
+4. **Logger call signature.** Followed `logger.warn(msg, fields)`, the signature already committed in Task 5/HRN-6.
+5. **`hh_cart` cookie and Server Actions.** Followed middleware setting the cookie on first navigation (Task 20/HRN-21) with `resolveRequestContext` returning `''` when absent; flagged for Phase 2's cart service to treat an empty `cartToken` as "create a cart and set the cookie in the action."
+6. **`ExchangeRate.source` for seeded rows.** Followed `'seed'` (Task 12/HRN-13), per `03 §6`'s explicit instruction.
+7. **Somali WhatsApp template language code.** Not yet acted on — WhatsApp template submission (Task 1/HRN-2) remains open, manual provisioning.
+
+**Additional deviations recorded in this phase's own task sections above** (not from the plan's "Spec issues found" list, but real gaps found and fixed while implementing — see each task's entry for full detail): the Docker→native-Postgres substitution (HRN-9 onward); several RECONCILIATION-driven corrections to plan text (H2/H4 design tokens, I6 BotID field removal, A7 kebab-case naming, I4/I5 Cloudflare→Vercel headers); the `next-auth`/`@auth/prisma-adapter` security upgrade and `ENFORCE_COVERAGE` opt-in (HRN-22); and this gate's own middleware/logo/test fixes above.
