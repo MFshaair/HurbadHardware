@@ -7,7 +7,10 @@ test('home renders the shell in both locales', async ({ page }) => {
   await expect(page.getByRole('contentinfo')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Hurbad Hardware' }).first()).toBeVisible();
   await page.goto('/so');
-  await expect(page.getByRole('link', { name: 'Gal' })).toBeVisible();
+  // On mobile the sign-in link lives inside the hamburger drawer, not the collapsed header row.
+  const menuButton = page.getByRole('button', { name: 'Fur liiska' });
+  if (await menuButton.isVisible().catch(() => false)) await menuButton.click();
+  await expect(page.getByRole('link', { name: 'Gal', exact: true })).toBeVisible();
 });
 
 test('health endpoint is green', async ({ request }) => {

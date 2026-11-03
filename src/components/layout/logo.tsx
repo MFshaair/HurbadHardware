@@ -38,7 +38,7 @@ export function Logo({
               mono ? 'text-on-dark' : 'text-primary',
             )}
           >
-            {'HURBAD'}
+            {'HURBAD '}
           </span>
           <span
             className={cn(

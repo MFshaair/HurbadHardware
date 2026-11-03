@@ -2,7 +2,12 @@ import createIntlMiddleware from 'next-intl/middleware';
 import { NextRequest, NextResponse } from 'next/server';
 import { CART_COOKIE_OPTIONS, COOKIES, PREFERENCE_COOKIE_OPTIONS } from '@/lib/cookies';
 import { buildCsp } from '@/lib/csp';
-import { defaultCurrencyForCountry, isCurrencyCode, normaliseCountry } from '@/lib/geo';
+import {
+  defaultCurrencyForCountry,
+  defaultLocaleForCountry,
+  isCurrencyCode,
+  normaliseCountry,
+} from '@/lib/geo';
 import { routing } from '@/lib/i18n/routing';
 import { randomToken } from '@/lib/utils';
 
@@ -38,6 +43,10 @@ export default function middleware(req: NextRequest): NextResponse {
     defaults.push([COOKIES.currency, defaultCurrencyForCountry(country)]);
   if (!req.cookies.get(COOKIES.cart)?.value) defaults.push([COOKIES.cart, randomToken(32)]);
   for (const [key, value] of defaults) forwarded.cookies.set(key, value);
+  // 07 §1: on a first visit (no locale cookie yet), feed next-intl the country-based default
+  // locale so a visitor from Somalia lands on /so instead of always falling back to /en.
+  if (!req.cookies.get(COOKIES.locale)?.value)
+    forwarded.cookies.set(COOKIES.locale, defaultLocaleForCountry(country));
   const res = admin ? NextResponse.next() : intlMiddleware(forwarded);
   // Preserve next-intl's locale override, rewrite and response cookies while forwarding defaults.
   const renderHeaders = new Headers(forwarded.headers);

@@ -75,6 +75,18 @@ describe('middleware (02 §10, 11 §7)', () => {
   });
 });
 
+it('feeds next-intl the country-based default locale on a first visit (07 §1)', () => {
+  const res = middleware(request('/', { headers: { 'x-vercel-ip-country': 'SO' } }));
+  expect(res.headers.get('x-middleware-request-cookie')).toContain('NEXT_LOCALE=so');
+});
+
+it('does not override an existing locale cookie', () => {
+  const res = middleware(
+    request('/en', { headers: { 'x-vercel-ip-country': 'SO' }, cookies: { NEXT_LOCALE: 'en' } }),
+  );
+  expect(res.headers.get('x-middleware-request-cookie')).toContain('NEXT_LOCALE=en');
+});
+
 it('forwards the same first-request cart, preferences and CSP to rendering', () => {
   const res = middleware(
     request('/en', { headers: { 'x-vercel-ip-country': 'KE', 'x-nonce': 'untrusted' } }),
