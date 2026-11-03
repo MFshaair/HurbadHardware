@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ENV: test
+  PROVIDER_MODE: fake
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_MEDIA_HOST: media.test.local
+  SUPPORT_WHATSAPP_E164: '+252611111111'
+  SUPPORT_EMAIL: support@hurbad.local
+  DATABASE_URL: postgresql://hurbad:hurbad@localhost:5432/hurbad_test
+  DIRECT_URL: postgresql://hurbad:hurbad@localhost:5432/hurbad_test
+  DATABASE_URL_TEST: postgresql://hurbad:hurbad@localhost:5432/hurbad_test
+  AUTH_SECRET: ci-secret-ci-secret-ci-secret-1234
+  AUTH_URL: http://localhost:3000
+  OTP_PEPPER: ci-pepper
+  EMAIL_FROM: 'Hurbad Hardware <ci@hurbad.local>'
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm i18n:check
+      - run: pnpm audit --prod --audit-level=high
+      - name: Secret grep (11 §11)
+        run: |
+          if git grep -nIE '(sk_live_|SG\.[A-Za-z0-9_-]{20,}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) )' -- ':!docs' ':!pnpm-lock.yaml'; then
+            echo "possible secret committed"; exit 1
+          fi
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm test:unit --coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: coverage-unit, path: coverage }
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: hurbad, POSTGRES_PASSWORD: hurbad, POSTGRES_DB: hurbad_test }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hurbad" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm test:int:ci --coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: coverage-int, path: coverage }
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_USER: hurbad, POSTGRES_PASSWORD: hurbad, POSTGRES_DB: hurbad_test }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U hurbad" --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm db:seed
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build
+      - run: pnpm test:e2e --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-report-${{ matrix.shard }}, path: playwright-report }
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_PROD_DEPLOY == 'true'
+    needs: [static, unit, integration, e2e]
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      DATABASE_URL: ${{ secrets.PROD_DIRECT_URL }}
+      DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dlx vercel@latest pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: pnpm dlx vercel@latest build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - run: pnpm prisma migrate deploy
+      - run: pnpm dlx vercel@latest deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

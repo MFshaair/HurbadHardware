@@ -5,3 +5,5 @@ coverage
 playwright-report
 prisma/migrations
 docs
+design
+.github
