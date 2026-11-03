@@ -1,0 +1,54 @@
+{
+  "slug": "intel-core-i5-13400f",
+  "sku": "INT-I5-13400F",
+  "name": "Intel Core i5-13400F",
+  "brand": "intel",
+  "category": "processors",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "intel core i5 13400f processor lga1700",
+  "publishedDaysAgo": 48,
+  "translations": {
+    "en": {
+      "name": "Intel Core i5-13400F",
+      "shortDescription": "10-core desktop processor for gaming and everyday computing, LGA1700 socket.",
+      "description": "## Intel Core i5-13400F\n\nA 10-core, 16-thread desktop processor that balances gaming performance with everyday productivity.\n\n- 10 cores (6 performance + 4 efficient), 16 threads\n- Up to 4.6 GHz boost clock\n- Requires a discrete graphics card (no integrated GPU)"
+    },
+    "so": {
+      "name": "Intel Core i5-13400F",
+      "shortDescription": "Processor desktop ah oo 10-core ah, loogu talagalay ciyaaraha iyo shaqada maalinlaha ah, socket LGA1700.",
+      "description": "## Intel Core i5-13400F\n\nProcessor desktop ah oo 10-core, 16-thread ah, oo isku dheellitira waxqabadka ciyaaraha iyo shaqada maalinlaha ah.\n\n- 10 cores (6 waxqabad sare + 4 tamar badan), 16 thread\n- Xawaaraha ugu sarreeya 4.6 GHz\n- Waxay u baahan tahay kaadhka sawirka gaarka ah (ma lahan GPU ku dheggan)"
+    }
+  },
+  "attributes": {
+    "component_type": "cpu",
+    "socket": "lga1700",
+    "cores": 10,
+    "boost_clock_ghz": 4.6
+  },
+  "media": [
+    {
+      "key": "seed/products/intel-core-i5-13400f/0.webp",
+      "alt": "intel core i5 13400f",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "INT-I5-13400F-STD",
+      "options": [],
+      "priceUsdCents": 16900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 6,
+        "NBO": 4
+      }
+    }
+  ]
+}

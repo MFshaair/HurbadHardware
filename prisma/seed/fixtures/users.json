@@ -1,0 +1,26 @@
+[
+  {
+    "email": "admin@hurbad.local",
+    "name": "Hurbad Admin",
+    "role": "ADMIN",
+    "locale": "en",
+    "currency": "USD",
+    "country": "SO"
+  },
+  {
+    "email": "staff@hurbad.local",
+    "name": "Hurbad Staff",
+    "role": "STAFF",
+    "locale": "en",
+    "currency": "USD",
+    "country": "SO"
+  },
+  {
+    "phone": "+252612345678",
+    "name": "Amina Yusuf",
+    "role": "CUSTOMER",
+    "locale": "so",
+    "currency": "USD",
+    "country": "SO"
+  }
+]

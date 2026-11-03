@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{--p:#ff7417;--p-press:#d95f0e;--p-deep:#b84d05;--p-soft:#ffe8d6;--p-tint:#fff4eb;--on-p:#1a0c02;--ink:#0f0f10;--ink2:#3d3d42;--ink3:#6f6f78;--ink4:#a2a2aa;--od:#f7f5f0;--od2:#b9b6ad;--od3:#7d7b74;--night:#0a0a0b;--night2:#141416;--night3:#1d1d21;--cream:#fbfaf6;--soft:#f4f2ec;--light:#fff;--hl:#e6e3db;--hl2:#d6d2c7;--hld:#26262b;--ok:#157347;--ok-s:#d7f5e3;--warn:#9a5b00;--warn-s:#fff0c2;--bad:#b3261e;--bad-s:#fde3e1;--info:#1f4fbf;--info-s:#e3ebfb;--wa:#25d366;--evc:#1a9bd7;--mpesa:#3cb44b;--fd:"Sora","Helvetica Neue",Arial,sans-serif;--fb:"DM Sans","Helvetica Neue",Arial,sans-serif;--fm:"JetBrains Mono",ui-monospace,Menlo,monospace;--sh2:0 8px 8px rgba(0,0,0,.06),0 4px 4px rgba(0,0,0,.06),0 2px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.06)}
+  *{box-sizing:border-box} body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5}
+  a{color:var(--ink)} a:hover{color:var(--p-deep)}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink3)}
+  .display{font-family:var(--fd);font-weight:300;letter-spacing:-.03em;line-height:1.02}
+  .sec{display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--light);border:1px solid var(--hl);border-radius:14px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:9999px;font:600 15px/1 var(--fb);border:1px solid transparent;white-space:nowrap}
+  .btn-p{background:var(--p);color:var(--on-p)} .btn-pp{background:var(--p-press);color:var(--on-p)} .btn-ink{background:var(--ink);color:var(--od)} .btn-o{background:var(--light);color:var(--ink);border-color:var(--ink)} .btn-g{color:var(--ink2)} .btn-wa{background:var(--wa);color:var(--ink)} .btn-od{color:var(--od);border-color:var(--od)} .btn-dis{background:var(--soft);color:var(--ink4)}
+  .input{height:44px;padding:0 14px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);display:flex;align-items:center;gap:10px;font-size:15px}
+  .label{font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:6px;display:block}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:600}
+  .pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .pay{display:flex;align-items:center;gap:14px;height:64px;padding:0 16px;border:1px solid var(--hl);border-radius:12px;background:var(--light)}
+  .pay.on{border:2px solid var(--p);background:var(--p-tint)}
+  .pay .g{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:600 11px var(--fb);background:var(--soft);color:var(--ink2)}
+  .pay .r{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--hl2);margin-left:auto}
+  .pay.on .r{border:6px solid var(--p);background:#fff}
+  .product{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;width:240px}
+  .product .img{aspect-ratio:1;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;position:relative}
+  .price{font-family:var(--fd);font-weight:500;font-size:20px;letter-spacing:-.2px;font-feature-settings:"tnum"}
+  .otp{display:flex;gap:10px} .otp i{width:52px;height:60px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);display:flex;align-items:center;justify-content:center;font:500 24px var(--fd);font-style:normal}
+  .otp i.on{outline:2px solid var(--p);outline-offset:2px}
+  .tl .ev{display:flex;gap:16px;padding-bottom:18px;position:relative}
+  .tl .ev:before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:2px;background:var(--hl)} .tl .ev:last-child:before{display:none}
+  .tl .d{width:12px;height:12px;border-radius:50%;background:var(--ink);flex:none;margin-top:4px}
+  .tl .now .d{background:var(--p);box-shadow:0 0 0 4px var(--p-soft)} .tl .next .d{background:var(--hl2)} .tl .next{color:var(--ink3)}
+  .table{width:100%;border-collapse:collapse} .table th{background:var(--soft);font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--hl)} .table td{padding:0 16px;height:48px;border-bottom:1px solid var(--hl);font-size:14px;font-feature-settings:"tnum"} .r{text-align:right}
+  .sh{width:120px;height:80px;border-radius:14px;background:#fff;display:flex;align-items:flex-end;padding:10px;font-size:11px;color:var(--ink3)}
+</style>
+</helmet>
+<div style="width:1440px;padding:64px;background:#fbfaf6;display:flex;flex-direction:column;gap:56px">
+  <div><div class="eyebrow">Design system</div><div class="display" style="font-size:56px;letter-spacing:-1.6px;margin-top:8px">Components</div></div>
+
+  <div class="sec"><div class="eyebrow">Buttons · pill only · 48 / 44 / 36</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <span class="btn btn-p">Add to cart</span><span class="btn btn-pp">Pressed</span><span class="btn btn-ink">Continue</span><span class="btn btn-o">Compare</span><span class="btn btn-g">Cancel</span><span class="btn btn-wa"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"></path></svg>Chat on WhatsApp</span><span class="btn btn-dis">Out of stock</span>
+      <span style="background:#0a0a0b;padding:12px;border-radius:14px;display:flex;gap:12px"><span class="btn btn-p">Shop now</span><span class="btn btn-od">Compare</span></span>
+      <span class="btn btn-o" style="width:44px;padding:0"><svg class="ico" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A4.5 4.5 0 0 0 12 6a4.5 4.5 0 0 0-10 2.5C2 11 4 13 5.5 14.5L12 21z"></path></svg></span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:32px">
+    <div class="sec"><div class="eyebrow">Inputs · 44px · focus ring 2px orange</div>
+      <div><span class="label">Phone number</span><div class="input"><span style="font:600 12px var(--fb);background:var(--soft);border-radius:6px;padding:4px 8px">SO +252</span><span>61 234 5678</span></div></div>
+      <div><span class="label">Email</span><div class="input" style="outline:2px solid var(--p);outline-offset:2px"><span>amina@</span><span style="width:1px;height:18px;background:var(--ink)"></span></div></div>
+      <div><span class="label">Coupon</span><div class="input" style="border-color:var(--bad)"><span>WELCOME5</span></div><div style="font-size:13px;color:var(--bad);margin-top:6px">This coupon expired on 31 Aug.</div></div>
+      <div><span class="label">Verification code</span><div class="otp"><i>4</i><i>8</i><i>2</i><i class="on"></i><i></i><i></i></div></div>
+    </div>
+    <div class="sec"><div class="eyebrow">Status pills</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span class="pill" style="background:var(--warn-s);color:var(--warn)"><i></i>Pending payment</span>
+        <span class="pill" style="background:var(--info-s);color:var(--info)"><i></i>Confirmed</span>
+        <span class="pill" style="background:var(--info-s);color:var(--info)"><i></i>Processing</span>
+        <span class="pill" style="background:var(--info-s);color:var(--info)"><i></i>Shipped</span>
+        <span class="pill" style="background:var(--info-s);color:var(--info)"><i></i>Out for delivery</span>
+        <span class="pill" style="background:var(--ok-s);color:var(--ok)"><i></i>Delivered</span>
+        <span class="pill" style="background:var(--ok-s);color:var(--ok)"><i></i>Paid</span>
+        <span class="pill" style="background:var(--bad-s);color:var(--bad)"><i></i>Cancelled</span>
+        <span class="pill" style="background:var(--bad-s);color:var(--bad)"><i></i>Payment failed</span>
+        <span class="pill" style="background:var(--soft);color:var(--ink2)"><i></i>Refunded</span>
+        <span class="pill" style="background:var(--ok-s);color:var(--ok)"><i></i>In stock</span>
+        <span class="pill" style="background:var(--warn-s);color:var(--warn)"><i></i>Only 2 left</span>
+        <span class="pill" style="background:var(--soft);color:var(--ink3)"><i></i>Out of stock</span>
+        <span class="pill" style="background:var(--p-soft);color:var(--p-deep)">-18%</span>
+        <span class="pill" style="background:var(--p-soft);color:var(--p-deep)">Verified purchase</span>
+      </div>
+      <div class="eyebrow" style="margin-top:8px">Order timeline</div>
+      <div class="tl">
+        <div class="ev"><div class="d"></div><div><div style="font-weight:600;font-size:14px">Paid via EVC Plus</div><div style="font-size:13px;color:var(--ink3)">Sat 13 Sep · 10:42</div></div></div>
+        <div class="ev now"><div class="d"></div><div><div style="font-weight:600;font-size:14px">Being packed in Mogadishu</div><div style="font-size:13px;color:var(--ink3)">Sat 13 Sep · 11:05</div></div></div>
+        <div class="ev next"><div class="d"></div><div><div style="font-weight:600;font-size:14px">Out for delivery</div><div style="font-size:13px">Expected Sun 14 Sep</div></div></div>
+      </div>
+    </div>
+    <div class="sec"><div class="eyebrow">Payment method tiles · brand colour only when selected</div>
+      <div class="pay on"><div class="g" style="background:var(--evc)">EVC</div><div><div style="font-weight:600;font-size:14px">EVC Plus</div><div style="font-size:12px;color:var(--ink3)">Confirm the prompt on your Hormuud line</div></div><div class="r"></div></div>
+      <div class="pay"><div class="g">eD</div><div><div style="font-weight:600;font-size:14px">eDahab</div><div style="font-size:12px;color:var(--ink3)">Somtel wallet</div></div><div class="r"></div></div>
+      <div class="pay"><div class="g">M</div><div><div style="font-weight:600;font-size:14px">M-Pesa</div><div style="font-size:12px;color:var(--ink3)">STK push · KES</div></div><div class="r"></div></div>
+      <div class="pay"><div class="g">VISA</div><div><div style="font-weight:600;font-size:14px">Visa / Mastercard</div><div style="font-size:12px;color:var(--ink3)">Secure hosted checkout</div></div><div class="r"></div></div>
+      <div class="pay"><div class="g"><svg class="ico" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="3"></circle></svg></div><div><div style="font-weight:600;font-size:14px">Cash on delivery</div><div style="font-size:12px;color:var(--ink3)">Mogadishu, Nairobi, Kampala, Djibouti</div></div><div class="r"></div></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:auto 1fr;gap:32px;align-items:start">
+    <div class="sec"><div class="eyebrow">Product card · default / hover / saved</div>
+      <div style="display:flex;gap:16px">
+        <div class="product"><div class="img"><div style="width:80px;height:160px;border-radius:14px;background:linear-gradient(160deg,#3a3a40,#17171a)"></div><svg class="ico" style="position:absolute;top:10px;right:10px" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A4.5 4.5 0 0 0 12 6a4.5 4.5 0 0 0-10 2.5C2 11 4 13 5.5 14.5L12 21z"></path></svg></div><div class="eyebrow" style="font-size:11px">Samsung</div><div style="font:500 15px/1.3 var(--fd)">Galaxy S25 Ultra 256 GB</div><div class="price">$1,299</div><div style="display:flex;justify-content:space-between"><span class="pill" style="background:var(--ok-s);color:var(--ok)"><i></i>In stock</span><span style="font-size:12px;color:var(--ink3)"><svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;stroke:none;vertical-align:-1px;display:inline-block"><path d="m12 2 3 6.6 7 .8-5.2 4.8 1.4 7L12 17.7 5.8 21.2l1.4-7L2 9.4l7-.8z"></path></svg> 4.8 (212)</span></div></div>
+        <div class="product" style="box-shadow:var(--sh2);border-color:transparent"><div class="img"><div style="width:80px;height:160px;border-radius:14px;background:linear-gradient(160deg,#3a3a40,#17171a)"></div><svg class="ico" style="position:absolute;top:10px;right:10px;fill:#ff7417;stroke:#ff7417" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A4.5 4.5 0 0 0 12 6a4.5 4.5 0 0 0-10 2.5C2 11 4 13 5.5 14.5L12 21z"></path></svg><span style="position:absolute;left:10px;bottom:10px;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;background:#fff;border-radius:9999px;padding:4px 10px;border:1px solid var(--hl)"><span style="width:14px;height:14px;border:1.5px solid var(--ink);border-radius:4px"></span>Compare</span></div><div class="eyebrow" style="font-size:11px">Samsung</div><div style="font:500 15px/1.3 var(--fd)">Galaxy S25 Ultra 256 GB</div><div class="price">$1,299</div><span class="btn btn-p" style="height:40px">Add to cart</span></div>
+      </div>
+    </div>
+    <div class="sec"><div class="eyebrow">Table · tabular figures · numeric right-aligned</div>
+      <div class="card" style="overflow:hidden"><table class="table"><tr><th>Order</th><th>Customer</th><th>Method</th><th class="r">Total</th><th>Status</th></tr>
+        <tr><td style="font-family:var(--fm);font-size:13px">HH-260913-K7Q2M</td><td>Amina Warsame</td><td>EVC Plus</td><td class="r">$1,299.00</td><td><span class="pill" style="background:var(--ok-s);color:var(--ok)"><i></i>Paid</span></td></tr>
+        <tr style="background:var(--p-tint)"><td style="font-family:var(--fm);font-size:13px">HH-260913-B3X9P</td><td>Brian Otieno</td><td>M-Pesa</td><td class="r">KSh 37,900</td><td><span class="pill" style="background:var(--warn-s);color:var(--warn)"><i></i>Pending</span></td></tr>
+        <tr><td style="font-family:var(--fm);font-size:13px">HH-260912-Q1M4D</td><td>Selam Tesfaye</td><td>Telebirr</td><td class="r">Br 188,300</td><td><span class="pill" style="background:var(--info-s);color:var(--info)"><i></i>Shipped</span></td></tr>
+      </table></div>
+      <div class="eyebrow" style="margin-top:8px">Elevation · radius</div>
+      <div style="display:flex;gap:16px;align-items:flex-end">
+        <div class="sh" style="border:1px solid var(--hl)">0 · hairline</div>
+        <div class="sh" style="box-shadow:0 1px 2px rgba(15,15,16,.06),0 4px 12px rgba(15,15,16,.06)">1 · hover</div>
+        <div class="sh" style="box-shadow:var(--sh2)">2 · stacked tiny</div>
+        <div class="sh" style="box-shadow:0 25px 50px -12px rgba(15,15,16,.25)">3 · modal</div>
+        <div style="display:flex;gap:8px;margin-left:16px"><span style="width:40px;height:40px;background:var(--soft);border-radius:4px"></span><span style="width:40px;height:40px;background:var(--soft);border-radius:10px"></span><span style="width:40px;height:40px;background:var(--soft);border-radius:14px"></span><span style="width:40px;height:40px;background:var(--soft);border-radius:22px"></span><span style="width:40px;height:40px;background:var(--soft);border-radius:9999px"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,75 @@
+{
+  "slug": "anker-nano-charger-30w",
+  "sku": "ANK-NANO30",
+  "name": "Anker Nano II 30W Charger",
+  "brand": "anker",
+  "category": "chargers-cables",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "anker nano charger 30w usb-c fast",
+  "publishedDaysAgo": 40,
+  "translations": {
+    "en": {
+      "name": "Anker Nano II 30W Charger",
+      "shortDescription": "Compact 30W USB-C fast charger, pocket-sized.",
+      "description": "## Anker Nano II 30W\n\nA pocket-sized GaN charger that fast-charges phones and laptops alike.\n\n- 30W USB-C Power Delivery output\n- 54% smaller than the standard Apple 30W adapter\n- Compatible with iPhone, Samsung and most USB-C laptops"
+    },
+    "so": {
+      "name": "Anker Nano II 30W Charger",
+      "shortDescription": "Chaajiye USB-C 30W ah oo yar, ku filan jeebka.",
+      "description": "## Anker Nano II 30W\n\nChaajiye GaN ah oo cabbirkeedu yar yahay oo si degdeg ah u chaajiya taleefannada iyo laptops-ka.\n\n- Bixinta USB-C Power Delivery 30W\n- 54% ka yar adapter-ka caadiga ah ee Apple 30W\n- La jaanqaadaa iPhone, Samsung iyo inta badan laptops-ka USB-C leh"
+    }
+  },
+  "attributes": {
+    "accessory_type": "charger",
+    "compatibility": "USB-C Power Delivery devices",
+    "wattage_w": 30,
+    "connector": ["usb-c"],
+    "wireless": false
+  },
+  "media": [
+    {
+      "key": "seed/products/anker-nano-charger-30w/0.webp",
+      "alt": "anker nano charger 30w",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "ANK-NANO30-STD",
+      "options": [],
+      "priceUsdCents": 1900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 50,
+        "NBO": 30,
+        "KLA": 15
+      }
+    },
+    {
+      "sku": "ANK-NANO30-WHT",
+      "options": [
+        {
+          "key": "color",
+          "value": "white",
+          "labelEn": "White",
+          "labelSo": "Cad"
+        }
+      ],
+      "priceUsdCents": 1900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 20,
+        "NBO": 12
+      }
+    }
+  ]
+}

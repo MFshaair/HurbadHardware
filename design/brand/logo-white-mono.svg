@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" width="1000" height="330" role="img" aria-label="Hurbad Hardware">
+  <!-- Single-colour white: mark is a white square with a knocked-out H (transparent), for one-colour print, embroidery, and dark photography -->
+  <path fill="#ffffff" fill-rule="evenodd" d="M30 0h270a30 30 0 0 1 30 30v270a30 30 0 0 1-30 30H30a30 30 0 0 1-30-30V30A30 30 0 0 1 30 0zm40 50a4 4 0 0 0-4 4v222a4 4 0 0 0 4 4h36a4 4 0 0 0 4-4v-87h110v87a4 4 0 0 0 4 4h36a4 4 0 0 0 4-4V54a4 4 0 0 0-4-4h-36a4 4 0 0 0-4 4v87H110V54a4 4 0 0 0-4-4z"/>
+  <text x="392" y="168" font-family="'DM Sans', Montserrat, 'Helvetica Neue', Arial, sans-serif" font-size="126" font-weight="700" letter-spacing="2" fill="#ffffff">HURBAD</text>
+  <text x="392" y="276" font-family="'DM Sans', Montserrat, 'Helvetica Neue', Arial, sans-serif" font-size="76" font-weight="300" letter-spacing="12" fill="#ffffff">HARDWARE</text>
+</svg>

@@ -1,0 +1,15 @@
+pre-commit:
+  parallel: true
+  commands:
+    eslint:
+      glob: '*.{ts,tsx,mjs}'
+      run: pnpm eslint --fix {staged_files} && git add {staged_files}
+    prettier:
+      glob: '*.{ts,tsx,mjs,json,css,md,yml,yaml}'
+      run: pnpm prettier --write {staged_files} && git add {staged_files}
+pre-push:
+  commands:
+    typecheck:
+      run: pnpm typecheck
+    i18n:
+      run: pnpm i18n:check

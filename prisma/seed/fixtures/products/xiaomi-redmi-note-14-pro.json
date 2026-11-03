@@ -1,0 +1,72 @@
+{
+  "slug": "xiaomi-redmi-note-14-pro",
+  "sku": "XIA-RN14P",
+  "name": "Xiaomi Redmi Note 14 Pro",
+  "brand": "xiaomi",
+  "category": "smartphones",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "xiaomi redmi note 14 pro android amoled",
+  "publishedDaysAgo": 30,
+  "translations": {
+    "en": {
+      "name": "Xiaomi Redmi Note 14 Pro",
+      "shortDescription": "Mid-range 6.67\" AMOLED phone with a 200 MP camera and 120 Hz display.",
+      "description": "## Xiaomi Redmi Note 14 Pro\n\nA 6.67-inch curved AMOLED display at 120 Hz with a 200 MP main camera.\n\n- 8 GB RAM, 256 GB storage\n- 5000 mAh battery with 45 W fast charging\n- IP68 water and dust resistance\n- Dual SIM, NFC\n\nOne year warranty through our local service partner."
+    },
+    "so": {
+      "name": "Xiaomi Redmi Note 14 Pro",
+      "shortDescription": "Taleefan heer-dhexaad ah oo leh shaashad AMOLED 6.67\" iyo kaamiro 200 MP ah, shaashaduna waa 120 Hz.",
+      "description": "## Xiaomi Redmi Note 14 Pro\n\nShaashad AMOLED qalloocan oo 6.67 inch ah oo 120 Hz ah, leh kaamiro weyn oo 200 MP ah.\n\n- 8 GB RAM, kayd 256 GB\n- Baytari 5000 mAh oo leh chaajin degdeg ah oo 45 W ah\n- IP68 biyo iyo boodh ka celin\n- Laba SIM, NFC\n\nDammaanad hal sano ah oo lagu maamulo iskaashatadeena maxalliga ah."
+    }
+  },
+  "attributes": {
+    "os": "android",
+    "chipset": "MediaTek Dimensity 7300 Ultra",
+    "ram": "8gb",
+    "storage": "256gb",
+    "screen_size": 6.67,
+    "display_type": "amoled",
+    "refresh_rate": "120hz",
+    "main_camera_mp": 200,
+    "battery_mah": 5000,
+    "charging_w": 45,
+    "network": ["4g"],
+    "dual_sim": true,
+    "nfc": true,
+    "water_resistance": "ip68"
+  },
+  "media": [
+    {
+      "key": "seed/products/xiaomi-redmi-note-14-pro/0.webp",
+      "alt": "xiaomi redmi note 14 pro",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "XIA-RN14P-256-BLU",
+      "options": [
+        {
+          "key": "color",
+          "value": "blue",
+          "labelEn": "Blue",
+          "labelSo": "Buluug"
+        }
+      ],
+      "priceUsdCents": 32900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 14,
+        "NBO": 9,
+        "KLA": 5
+      }
+    }
+  ]
+}

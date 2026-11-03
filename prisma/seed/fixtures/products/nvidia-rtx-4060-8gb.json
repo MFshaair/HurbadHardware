@@ -1,0 +1,54 @@
+{
+  "slug": "nvidia-rtx-4060-8gb",
+  "sku": "NVD-RTX4060",
+  "name": "NVIDIA GeForce RTX 4060 8GB",
+  "brand": "nvidia",
+  "category": "graphics-cards",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "nvidia rtx 4060 8gb graphics card gddr6",
+  "publishedDaysAgo": 22,
+  "translations": {
+    "en": {
+      "name": "NVIDIA GeForce RTX 4060 8GB",
+      "shortDescription": "8GB graphics card for 1080p/1440p gaming with DLSS 3 support.",
+      "description": "## NVIDIA GeForce RTX 4060 8GB\n\nAn efficient graphics card for smooth 1080p and 1440p gaming, with DLSS 3 frame generation for a big performance boost.\n\n- 8 GB GDDR6 memory\n- PCIe 4.0 interface\n- Ray tracing and DLSS 3 support"
+    },
+    "so": {
+      "name": "NVIDIA GeForce RTX 4060 8GB",
+      "shortDescription": "Kaadhka sawirka 8GB ah, loogu talagalay ciyaaraha 1080p/1440p, taageerta DLSS 3.",
+      "description": "## NVIDIA GeForce RTX 4060 8GB\n\nKaadhka sawirka ah oo tamar yar isticmaala, loogu talagalay ciyaaraha 1080p iyo 1440p oo si fiican u socda, leh DLSS 3 oo kordhisa waxqabadka si weyn.\n\n- Xusuus 8 GB GDDR6 ah\n- Interface PCIe 4.0 ah\n- Taageerta ray tracing iyo DLSS 3"
+    }
+  },
+  "attributes": {
+    "component_type": "gpu",
+    "vram_gb": 8,
+    "memory_type": "gddr6",
+    "interface": "pcie4"
+  },
+  "media": [
+    {
+      "key": "seed/products/nvidia-rtx-4060-8gb/0.webp",
+      "alt": "nvidia rtx 4060 8gb",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "NVD-RTX4060-STD",
+      "options": [],
+      "priceUsdCents": 29900,
+      "compareAtUsdCents": 32900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 3,
+        "NBO": 2
+      }
+    }
+  ]
+}

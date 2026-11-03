@@ -1,0 +1,469 @@
+{
+  "pages": [
+    {
+      "id": "brand",
+      "name": "Brand & design system"
+    },
+    {
+      "id": "storefront",
+      "name": "1 · Storefront"
+    },
+    {
+      "id": "auth",
+      "name": "2 · Auth"
+    },
+    {
+      "id": "account",
+      "name": "3 · Customer account"
+    },
+    {
+      "id": "admin",
+      "name": "4 · Admin"
+    },
+    {
+      "id": "system",
+      "name": "5 · System states & templates"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "BrandIdentity.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1500,
+      "page": "brand"
+    },
+    {
+      "file": "DesignSystem.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1500,
+      "page": "brand"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 3400,
+      "page": "storefront",
+      "title": "Home"
+    },
+    {
+      "file": "CategoryListing.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 2900,
+      "page": "storefront"
+    },
+    {
+      "file": "ProductDetail.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 3080,
+      "page": "storefront"
+    },
+    {
+      "file": "SearchResults.dc.html",
+      "x": 0,
+      "y": 3520,
+      "w": 1440,
+      "h": 1780,
+      "page": "storefront"
+    },
+    {
+      "file": "Compare.dc.html",
+      "x": 1520,
+      "y": 3520,
+      "w": 1440,
+      "h": 2120,
+      "page": "storefront"
+    },
+    {
+      "file": "Cart.dc.html",
+      "x": 3040,
+      "y": 3520,
+      "w": 1440,
+      "h": 1960,
+      "page": "storefront"
+    },
+    {
+      "file": "Checkout.dc.html",
+      "x": 0,
+      "y": 5760,
+      "w": 1440,
+      "h": 1560,
+      "page": "storefront"
+    },
+    {
+      "file": "PaymentPush.dc.html",
+      "x": 1520,
+      "y": 5760,
+      "w": 1440,
+      "h": 1640,
+      "page": "storefront"
+    },
+    {
+      "file": "OrderConfirmation.dc.html",
+      "x": 3040,
+      "y": 5760,
+      "w": 1440,
+      "h": 1900,
+      "page": "storefront"
+    },
+    {
+      "file": "OrderTracking.dc.html",
+      "x": 0,
+      "y": 7780,
+      "w": 1440,
+      "h": 1800,
+      "page": "storefront"
+    },
+    {
+      "file": "InfoWarranty.dc.html",
+      "x": 1520,
+      "y": 7780,
+      "w": 1440,
+      "h": 2680,
+      "page": "storefront"
+    },
+    {
+      "file": "MobileHome.dc.html",
+      "x": 3040,
+      "y": 7780,
+      "w": 390,
+      "h": 3050,
+      "page": "storefront"
+    },
+    {
+      "file": "MobileProduct.dc.html",
+      "x": 3510,
+      "y": 7780,
+      "w": 390,
+      "h": 2320,
+      "page": "storefront"
+    },
+    {
+      "file": "MobileCheckout.dc.html",
+      "x": 3980,
+      "y": 7780,
+      "w": 390,
+      "h": 1380,
+      "page": "storefront"
+    },
+    {
+      "file": "Login.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1140,
+      "page": "auth"
+    },
+    {
+      "file": "Signup.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1230,
+      "page": "auth"
+    },
+    {
+      "file": "OtpVerify.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 1480,
+      "page": "auth"
+    },
+    {
+      "file": "ResetAccess.dc.html",
+      "x": 0,
+      "y": 1600,
+      "w": 1440,
+      "h": 1530,
+      "page": "auth"
+    },
+    {
+      "file": "MagicLinkSent.dc.html",
+      "x": 1520,
+      "y": 1600,
+      "w": 1440,
+      "h": 1010,
+      "page": "auth"
+    },
+    {
+      "file": "MobileLogin.dc.html",
+      "x": 3040,
+      "y": 1600,
+      "w": 390,
+      "h": 1120,
+      "page": "auth"
+    },
+    {
+      "file": "MobileOtp.dc.html",
+      "x": 3510,
+      "y": 1600,
+      "w": 390,
+      "h": 890,
+      "page": "auth"
+    },
+    {
+      "file": "AccountOverview.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 2050,
+      "page": "account"
+    },
+    {
+      "file": "AccountOrders.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1980,
+      "page": "account"
+    },
+    {
+      "file": "AccountOrderDetail.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 2680,
+      "page": "account"
+    },
+    {
+      "file": "AccountReturns.dc.html",
+      "x": 0,
+      "y": 2800,
+      "w": 1440,
+      "h": 2540,
+      "page": "account"
+    },
+    {
+      "file": "AccountAddresses.dc.html",
+      "x": 1520,
+      "y": 2800,
+      "w": 1440,
+      "h": 2320,
+      "page": "account"
+    },
+    {
+      "file": "AccountProfile.dc.html",
+      "x": 3040,
+      "y": 2800,
+      "w": 1440,
+      "h": 2760,
+      "page": "account"
+    },
+    {
+      "file": "AccountWishlist.dc.html",
+      "x": 0,
+      "y": 5680,
+      "w": 1440,
+      "h": 2180,
+      "page": "account"
+    },
+    {
+      "file": "AccountLoyalty.dc.html",
+      "x": 1520,
+      "y": 5680,
+      "w": 1440,
+      "h": 2120,
+      "page": "account"
+    },
+    {
+      "file": "MobileAccountOrders.dc.html",
+      "x": 3040,
+      "y": 5680,
+      "w": 390,
+      "h": 1760,
+      "page": "account"
+    },
+    {
+      "file": "AdminDashboard.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 2190,
+      "page": "admin"
+    },
+    {
+      "file": "AdminOrders.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1040,
+      "page": "admin"
+    },
+    {
+      "file": "AdminOrderDetail.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 1440,
+      "h": 2480,
+      "page": "admin"
+    },
+    {
+      "file": "AdminProducts.dc.html",
+      "x": 0,
+      "y": 2600,
+      "w": 1440,
+      "h": 1110,
+      "page": "admin"
+    },
+    {
+      "file": "AdminProductEditor.dc.html",
+      "x": 1520,
+      "y": 2600,
+      "w": 1440,
+      "h": 1400,
+      "page": "admin"
+    },
+    {
+      "file": "AdminInventory.dc.html",
+      "x": 3040,
+      "y": 2600,
+      "w": 1440,
+      "h": 1490,
+      "page": "admin"
+    },
+    {
+      "file": "AdminCustomers.dc.html",
+      "x": 0,
+      "y": 4210,
+      "w": 1440,
+      "h": 1510,
+      "page": "admin"
+    },
+    {
+      "file": "AdminReports.dc.html",
+      "x": 1520,
+      "y": 4210,
+      "w": 1440,
+      "h": 1360,
+      "page": "admin"
+    },
+    {
+      "file": "AdminSettings.dc.html",
+      "x": 3040,
+      "y": 4210,
+      "w": 1440,
+      "h": 1590,
+      "page": "admin"
+    },
+    {
+      "file": "EmptyStates.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1720,
+      "page": "system"
+    },
+    {
+      "file": "ErrorPages.dc.html",
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 2930,
+      "page": "system"
+    },
+    {
+      "file": "Offline.dc.html",
+      "x": 3040,
+      "y": 0,
+      "w": 390,
+      "h": 1640,
+      "page": "system"
+    },
+    {
+      "file": "SmsTemplates.dc.html",
+      "x": 0,
+      "y": 3050,
+      "w": 1440,
+      "h": 2100,
+      "page": "system"
+    },
+    {
+      "file": "WhatsAppTemplates.dc.html",
+      "x": 1520,
+      "y": 3050,
+      "w": 1440,
+      "h": 1950,
+      "page": "system"
+    },
+    {
+      "file": "EmailOrderConfirmed.dc.html",
+      "x": 3040,
+      "y": 3050,
+      "w": 1440,
+      "h": 1900,
+      "page": "system"
+    },
+    {
+      "file": "EmailShipped.dc.html",
+      "x": 0,
+      "y": 5270,
+      "w": 1440,
+      "h": 3230,
+      "page": "system"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-brand",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "brand",
+      "text": "Brand & design system\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    },
+    {
+      "id": "note-storefront",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "storefront",
+      "text": "1 · Storefront\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    },
+    {
+      "id": "note-auth",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "auth",
+      "text": "2 · Auth\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    },
+    {
+      "id": "note-account",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "account",
+      "text": "3 · Customer account\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    },
+    {
+      "id": "note-admin",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "admin",
+      "text": "4 · Admin\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    },
+    {
+      "id": "note-system",
+      "x": 0,
+      "y": -140,
+      "w": 520,
+      "page": "system",
+      "text": "5 · System states & templates\nHurbad Hardware · static hi-fi mockups · desktop 1440 / mobile 390. Tokens in design/DESIGN.md."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "storefront"
+  }
+}

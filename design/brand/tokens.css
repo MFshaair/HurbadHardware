@@ -1,0 +1,58 @@
+/* Hurbad Hardware — design tokens (source of truth: design/DESIGN.md) */
+:root {
+  --hh-primary: #ff7417;
+  --hh-primary-press: #d95f0e;
+  --hh-primary-deep: #b84d05;
+  --hh-primary-soft: #ffe8d6;
+  --hh-primary-tint: #fff4eb;
+  --hh-on-primary: #1a0c02;
+
+  --hh-ink: #0f0f10;
+  --hh-ink-2: #3d3d42;
+  --hh-ink-3: #6f6f78;
+  --hh-ink-4: #a2a2aa;
+  --hh-on-dark: #f7f5f0;
+  --hh-on-dark-2: #b9b6ad;
+  --hh-on-dark-3: #7d7b74;
+
+  --hh-night: #0a0a0b;
+  --hh-night-2: #141416;
+  --hh-night-3: #1d1d21;
+  --hh-cream: #fbfaf6;
+  --hh-soft: #f4f2ec;
+  --hh-light: #ffffff;
+  --hh-hairline: #e6e3db;
+  --hh-hairline-2: #d6d2c7;
+  --hh-hairline-dark: #26262b;
+  --hh-hairline-dark-2: #333339;
+
+  --hh-success: #157347;
+  --hh-success-soft: #d7f5e3;
+  --hh-warning: #9a5b00;
+  --hh-warning-soft: #fff0c2;
+  --hh-danger: #b3261e;
+  --hh-danger-soft: #fde3e1;
+  --hh-info: #1f4fbf;
+  --hh-info-soft: #e3ebfb;
+  --hh-whatsapp: #25d366;
+  --hh-mpesa: #3cb44b;
+  --hh-evc: #1a9bd7;
+
+  --hh-font-display: 'Sora', 'Helvetica Neue', Arial, sans-serif;
+  --hh-font-body: 'DM Sans', 'Helvetica Neue', Arial, sans-serif;
+  --hh-font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+
+  --hh-r-xs: 4px;
+  --hh-r-sm: 6px;
+  --hh-r-md: 10px;
+  --hh-r-lg: 14px;
+  --hh-r-xl: 22px;
+  --hh-r-pill: 9999px;
+
+  --hh-shadow-1: 0 1px 2px rgba(15, 15, 16, 0.06), 0 4px 12px rgba(15, 15, 16, 0.06);
+  --hh-shadow-2:
+    0 8px 8px rgba(0, 0, 0, 0.06), 0 4px 4px rgba(0, 0, 0, 0.06), 0 2px 2px rgba(0, 0, 0, 0.06),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  --hh-shadow-3: 0 25px 50px -12px rgba(15, 15, 16, 0.25);
+  --hh-sheen: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}

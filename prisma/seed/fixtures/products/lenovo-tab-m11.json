@@ -1,0 +1,68 @@
+{
+  "slug": "lenovo-tab-m11",
+  "sku": "LEN-TABM11",
+  "name": "Lenovo Tab M11",
+  "brand": "lenovo",
+  "category": "tablets",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "lenovo tab m11 android tablet budget",
+  "publishedDaysAgo": 20,
+  "translations": {
+    "en": {
+      "name": "Lenovo Tab M11",
+      "shortDescription": "11\" entry-level tablet bundled with a folio case and stylus.",
+      "description": "## Lenovo Tab M11\n\nAn 11-inch 2K display tablet that ships with a folio case and a precision stylus in the box.\n\n- 4 GB RAM, 128 GB storage\n- 7040 mAh battery with 10 W charging\n- Kids Space mode for family sharing"
+    },
+    "so": {
+      "name": "Lenovo Tab M11",
+      "shortDescription": "Tablet 11\" heer bilowga ah oo la socota kiis folio iyo qalin.",
+      "description": "## Lenovo Tab M11\n\nTablet 2K ah oo 11 inch ah, oo la socota kiis folio ah iyo qalin saxiixa leh.\n\n- 4 GB RAM, kayd 128 GB\n- Baytari 7040 mAh oo leh chaajin 10 W ah\n- Qaab 'Kids Space' oo loogu talagalay qoysaska"
+    }
+  },
+  "attributes": {
+    "os": "android",
+    "chipset": "MediaTek Helio G88",
+    "ram": "4gb",
+    "storage": "128gb",
+    "screen_size": 11,
+    "display_type": "lcd",
+    "refresh_rate": "60hz",
+    "cellular": false,
+    "stylus_support": true,
+    "battery_mah": 7040
+  },
+  "media": [
+    {
+      "key": "seed/products/lenovo-tab-m11/0.webp",
+      "alt": "lenovo tab m11",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "LEN-TABM11-128-BLU",
+      "options": [
+        {
+          "key": "color",
+          "value": "blue",
+          "labelEn": "Blue",
+          "labelSo": "Buluug"
+        }
+      ],
+      "priceUsdCents": 0,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 0,
+        "NBO": 0,
+        "KLA": 0
+      }
+    }
+  ]
+}

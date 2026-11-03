@@ -1,0 +1,258 @@
+[
+  {
+    "slug": "smartphones",
+    "parent": null,
+    "iconName": "smartphone",
+    "position": 1,
+    "attributeSet": "Smartphones",
+    "en": "Smartphones",
+    "so": "Taleefannada casriga ah"
+  },
+  {
+    "slug": "laptops",
+    "parent": null,
+    "iconName": "laptop",
+    "position": 2,
+    "attributeSet": "Laptops",
+    "en": "Laptops",
+    "so": "Kombuyuutarrada la qaadan karo"
+  },
+  {
+    "slug": "business-laptops",
+    "parent": "laptops",
+    "position": 1,
+    "attributeSet": "Laptops",
+    "en": "Business Laptops",
+    "so": "Laptop ganacsi"
+  },
+  {
+    "slug": "gaming-laptops",
+    "parent": "laptops",
+    "position": 2,
+    "attributeSet": "Laptops",
+    "en": "Gaming Laptops",
+    "so": "Laptop ciyaaraha"
+  },
+  {
+    "slug": "ultrabooks",
+    "parent": "laptops",
+    "position": 3,
+    "attributeSet": "Laptops",
+    "en": "Ultrabooks",
+    "so": "Ultrabook"
+  },
+  {
+    "slug": "tablets",
+    "parent": null,
+    "iconName": "tablet",
+    "position": 3,
+    "attributeSet": "Tablets",
+    "en": "Tablets",
+    "so": "Tablet"
+  },
+  {
+    "slug": "networking",
+    "parent": null,
+    "iconName": "router",
+    "position": 4,
+    "attributeSet": "Networking",
+    "en": "Networking",
+    "so": "Shabakadaha"
+  },
+  {
+    "slug": "routers",
+    "parent": "networking",
+    "position": 1,
+    "attributeSet": "Networking",
+    "en": "Routers",
+    "so": "Router"
+  },
+  {
+    "slug": "switches",
+    "parent": "networking",
+    "position": 2,
+    "attributeSet": "Networking",
+    "en": "Switches",
+    "so": "Switch"
+  },
+  {
+    "slug": "access-points",
+    "parent": "networking",
+    "position": 3,
+    "attributeSet": "Networking",
+    "en": "Access Points",
+    "so": "Access Point"
+  },
+  {
+    "slug": "cables-adapters",
+    "parent": "networking",
+    "position": 4,
+    "attributeSet": "Networking",
+    "en": "Cables & Adapters",
+    "so": "Fiilooyin & Adabtar"
+  },
+  {
+    "slug": "cctv",
+    "parent": null,
+    "iconName": "cctv",
+    "position": 5,
+    "attributeSet": "CCTV",
+    "en": "CCTV",
+    "so": "Kaamirooyinka ammaanka"
+  },
+  {
+    "slug": "cameras",
+    "parent": "cctv",
+    "position": 1,
+    "attributeSet": "CCTV",
+    "en": "Cameras",
+    "so": "Kaamirooyin"
+  },
+  {
+    "slug": "recorders",
+    "parent": "cctv",
+    "position": 2,
+    "attributeSet": "CCTV",
+    "en": "NVR / DVR",
+    "so": "NVR / DVR"
+  },
+  {
+    "slug": "cctv-kits",
+    "parent": "cctv",
+    "position": 3,
+    "attributeSet": "CCTV",
+    "en": "CCTV Kits",
+    "so": "Xirmooyin CCTV"
+  },
+  {
+    "slug": "printers",
+    "parent": null,
+    "iconName": "printer",
+    "position": 6,
+    "attributeSet": "Printers",
+    "en": "Printers",
+    "so": "Daabacayaal"
+  },
+  {
+    "slug": "inkjet-printers",
+    "parent": "printers",
+    "position": 1,
+    "attributeSet": "Printers",
+    "en": "Inkjet Printers",
+    "so": "Daabace inkjet"
+  },
+  {
+    "slug": "laser-printers",
+    "parent": "printers",
+    "position": 2,
+    "attributeSet": "Printers",
+    "en": "Laser Printers",
+    "so": "Daabace laser"
+  },
+  {
+    "slug": "ink-toner",
+    "parent": "printers",
+    "position": 3,
+    "attributeSet": "Printers",
+    "en": "Ink & Toner",
+    "so": "Khad & Toner"
+  },
+  {
+    "slug": "accessories",
+    "parent": null,
+    "iconName": "headphones",
+    "position": 7,
+    "attributeSet": "Accessories",
+    "en": "Accessories",
+    "so": "Agabka"
+  },
+  {
+    "slug": "chargers-cables",
+    "parent": "accessories",
+    "position": 1,
+    "attributeSet": "Accessories",
+    "en": "Chargers & Cables",
+    "so": "Chaajiyo & Fiilooyin"
+  },
+  {
+    "slug": "cases-protection",
+    "parent": "accessories",
+    "position": 2,
+    "attributeSet": "Accessories",
+    "en": "Cases & Protection",
+    "so": "Kiisas & Ilaalin"
+  },
+  {
+    "slug": "audio",
+    "parent": "accessories",
+    "position": 3,
+    "attributeSet": "Accessories",
+    "en": "Audio",
+    "so": "Codka"
+  },
+  {
+    "slug": "storage-devices",
+    "parent": "accessories",
+    "position": 4,
+    "attributeSet": "Accessories",
+    "en": "Storage Devices",
+    "so": "Qalabka kaydinta"
+  },
+  {
+    "slug": "components",
+    "parent": null,
+    "iconName": "cpu",
+    "position": 8,
+    "attributeSet": "Components",
+    "en": "Components",
+    "so": "Qaybaha kombuyuutarka"
+  },
+  {
+    "slug": "processors",
+    "parent": "components",
+    "position": 1,
+    "attributeSet": "Components",
+    "en": "Processors",
+    "so": "Processor"
+  },
+  {
+    "slug": "graphics-cards",
+    "parent": "components",
+    "position": 2,
+    "attributeSet": "Components",
+    "en": "Graphics Cards",
+    "so": "Kaadhadhka sawirka"
+  },
+  {
+    "slug": "memory",
+    "parent": "components",
+    "position": 3,
+    "attributeSet": "Components",
+    "en": "Memory",
+    "so": "Xusuusta (RAM)"
+  },
+  {
+    "slug": "internal-storage",
+    "parent": "components",
+    "position": 4,
+    "attributeSet": "Components",
+    "en": "Internal Storage",
+    "so": "Kaydka gudaha"
+  },
+  {
+    "slug": "power-supplies",
+    "parent": "components",
+    "position": 5,
+    "attributeSet": "Components",
+    "en": "Power Supplies",
+    "so": "Korontada (PSU)"
+  },
+  {
+    "slug": "motherboards",
+    "parent": "components",
+    "position": 6,
+    "attributeSet": "Components",
+    "en": "Motherboards",
+    "so": "Motherboard"
+  }
+]

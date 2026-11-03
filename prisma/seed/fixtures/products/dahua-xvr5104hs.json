@@ -1,0 +1,60 @@
+{
+  "slug": "dahua-xvr5104hs",
+  "sku": "DAH-XVR5104",
+  "name": "Dahua XVR5104HS 4-Channel DVR",
+  "brand": "dahua",
+  "category": "recorders",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "dahua dvr 4 channel analog",
+  "publishedDaysAgo": 75,
+  "translations": {
+    "en": {
+      "name": "Dahua XVR5104HS 4-Channel DVR",
+      "shortDescription": "4-channel DVR for analog cameras with 1TB storage included.",
+      "description": "## Dahua XVR5104HS\n\nA 4-channel digital video recorder compatible with HDCVI, analog, IP and AHD cameras, with a 1 TB hard drive pre-installed.\n\n- 4 camera channels, up to 4MP per channel\n- 1 TB included storage\n- Remote viewing via DMSS app"
+    },
+    "so": {
+      "name": "Dahua XVR5104HS 4-Channel DVR",
+      "shortDescription": "DVR 4-kanaal ah oo loogu talagalay kaamiradaha analog, leh kayd 1TB ah oo horey loo geliyay.",
+      "description": "## Dahua XVR5104HS\n\nQalab duubista muuqaalka dijital ah oo 4-kanaal ah, la jaanqaada kaamiradaha HDCVI, analog, IP iyo AHD, leh kayd adag oo 1 TB ah oo horey loo geliyay.\n\n- 4 kanaal oo kaamirad ah, ilaa 4MP kanaal kasta\n- Kayd 1 TB ah oo ku jira\n- Daawasho fog oo lagu maro app-ka DMSS"
+    }
+  },
+  "attributes": {
+    "camera_type": "dvr",
+    "resolution_mp": 4,
+    "night_vision_m": 0,
+    "ip_or_analog": "analog",
+    "poe": "none",
+    "channels": 4,
+    "storage_included_tb": 1,
+    "outdoor": false,
+    "audio": false,
+    "ai_detection": false
+  },
+  "media": [
+    {
+      "key": "seed/products/dahua-xvr5104hs/0.webp",
+      "alt": "dahua xvr5104hs",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "DAH-XVR5104-STD",
+      "options": [],
+      "priceUsdCents": 7900,
+      "compareAtUsdCents": 8900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 6,
+        "NBO": 3
+      }
+    }
+  ]
+}

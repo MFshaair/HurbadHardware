@@ -1,0 +1,42 @@
+[
+  {
+    "country": "SO",
+    "nameEn": "Somalia",
+    "nameSo": "Soomaaliya",
+    "defaultCurrency": "USD",
+    "vatBps": 0,
+    "phonePrefix": "+252"
+  },
+  {
+    "country": "KE",
+    "nameEn": "Kenya",
+    "nameSo": "Kenya",
+    "defaultCurrency": "KES",
+    "vatBps": 1600,
+    "phonePrefix": "+254"
+  },
+  {
+    "country": "ET",
+    "nameEn": "Ethiopia",
+    "nameSo": "Itoobiya",
+    "defaultCurrency": "ETB",
+    "vatBps": 1500,
+    "phonePrefix": "+251"
+  },
+  {
+    "country": "DJ",
+    "nameEn": "Djibouti",
+    "nameSo": "Jabuuti",
+    "defaultCurrency": "DJF",
+    "vatBps": 1000,
+    "phonePrefix": "+253"
+  },
+  {
+    "country": "UG",
+    "nameEn": "Uganda",
+    "nameSo": "Uganda",
+    "defaultCurrency": "UGX",
+    "vatBps": 1800,
+    "phonePrefix": "+256"
+  }
+]

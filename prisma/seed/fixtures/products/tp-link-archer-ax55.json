@@ -1,0 +1,55 @@
+{
+  "slug": "tp-link-archer-ax55",
+  "sku": "TPL-AX55",
+  "name": "TP-Link Archer AX55",
+  "brand": "tp-link",
+  "category": "routers",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "archer ax55 wifi6 router dual band",
+  "publishedDaysAgo": 90,
+  "translations": {
+    "en": {
+      "name": "TP-Link Archer AX55",
+      "shortDescription": "Wi-Fi 6 dual-band router, AX3000, four gigabit LAN ports.",
+      "description": "## TP-Link Archer AX55\n\nAX3000 dual-band Wi-Fi 6 router for homes and small offices.\n\n- 2402 Mbps on 5 GHz + 574 Mbps on 2.4 GHz\n- Four gigabit LAN ports and one gigabit WAN\n- OFDMA and MU-MIMO for many devices at once\n- WPA3 security and parental controls"
+    },
+    "so": {
+      "name": "TP-Link Archer AX55",
+      "shortDescription": "Router Wi-Fi 6 laba-baanto ah, AX3000, afar dekedood oo gigabit ah.",
+      "description": "## TP-Link Archer AX55\n\nRouter Wi-Fi 6 AX3000 oo loogu talagalay guryaha iyo xafiisyada yaryar.\n\n- 2402 Mbps 5 GHz + 574 Mbps 2.4 GHz\n- Afar dekedood LAN gigabit ah iyo mid WAN\n- OFDMA iyo MU-MIMO qalab badan oo isku mar ah\n- Ammaan WPA3 iyo xakameyn waalid"
+    }
+  },
+  "attributes": {
+    "device_type": "router",
+    "wifi_standard": "wifi6",
+    "max_speed_mbps": 3000,
+    "ports_count": 4,
+    "port_speed": "1g",
+    "poe": "none",
+    "managed": false,
+    "mesh": true
+  },
+  "media": [
+    {
+      "key": "seed/products/tp-link-archer-ax55/front.webp",
+      "alt": "TP-Link Archer AX55",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "TPL-AX55-STD",
+      "options": [],
+      "priceUsdCents": 7900,
+      "compareAtUsdCents": 8900,
+      "isDefault": true,
+      "position": 0,
+      "stock": { "MGQ": 25, "NBO": 18, "KLA": 10 }
+    }
+  ]
+}

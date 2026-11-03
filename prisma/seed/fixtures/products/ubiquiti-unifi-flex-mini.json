@@ -1,0 +1,58 @@
+{
+  "slug": "ubiquiti-unifi-flex-mini",
+  "sku": "UBI-FLEXMINI",
+  "name": "Ubiquiti UniFi Flex Mini Switch",
+  "brand": "ubiquiti",
+  "category": "cables-adapters",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "ubiquiti flex mini 5 port switch",
+  "publishedDaysAgo": 110,
+  "translations": {
+    "en": {
+      "name": "Ubiquiti UniFi Flex Mini Switch",
+      "shortDescription": "Compact 5-port gigabit switch, perfect for extending a UniFi network.",
+      "description": "## Ubiquiti UniFi Flex Mini\n\nA palm-sized 5-port gigabit switch that extends your network to a desk, TV unit or small cabinet.\n\n- Five auto-sensing Gigabit Ethernet ports\n- USB-C powered\n- Fanless, silent"
+    },
+    "so": {
+      "name": "Ubiquiti UniFi Flex Mini Switch",
+      "shortDescription": "Switch 5-dekedood ah oo yar oo gigabit ah, ku habboon kordhinta shabakadda UniFi.",
+      "description": "## Ubiquiti UniFi Flex Mini\n\nSwitch 5-dekedood ah oo cabbirkeedu yar yahay, kordhiya shabakaddaada miiska, TV-ga ama armaajo yar.\n\n- Shan dekedood oo Gigabit Ethernet ah oo otomaatig dareema\n- Waxaa lagu shaqaysiiyaa USB-C\n- Ma leh fan, aamusan"
+    }
+  },
+  "attributes": {
+    "device_type": "cable",
+    "wifi_standard": "none",
+    "max_speed_mbps": 1000,
+    "ports_count": 5,
+    "port_speed": "1g",
+    "poe": "none",
+    "managed": false,
+    "mesh": false
+  },
+  "media": [
+    {
+      "key": "seed/products/ubiquiti-unifi-flex-mini/0.webp",
+      "alt": "ubiquiti unifi flex mini",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "UBI-FLEXMINI-STD",
+      "options": [],
+      "priceUsdCents": 3900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 18,
+        "NBO": 11
+      }
+    }
+  ]
+}

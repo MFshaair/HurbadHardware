@@ -1,0 +1,58 @@
+{
+  "slug": "tp-link-tl-sg1008d",
+  "sku": "TPL-SG1008D",
+  "name": "TP-Link TL-SG1008D 8-Port Switch",
+  "brand": "tp-link",
+  "category": "switches",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "tp-link 8 port gigabit switch unmanaged",
+  "publishedDaysAgo": 80,
+  "translations": {
+    "en": {
+      "name": "TP-Link TL-SG1008D 8-Port Switch",
+      "shortDescription": "8-port unmanaged gigabit switch for home and small office networks.",
+      "description": "## TP-Link TL-SG1008D\n\nAn 8-port unmanaged gigabit switch that plugs in and works, no configuration needed.\n\n- Eight 10/100/1000 Mbps auto-negotiating ports\n- Fanless, silent operation\n- Sturdy metal casing"
+    },
+    "so": {
+      "name": "TP-Link TL-SG1008D 8-Port Switch",
+      "shortDescription": "Switch 8-dekedood ah oo gigabit ah, loogu talagalay guryaha iyo xafiisyada yaryar.",
+      "description": "## TP-Link TL-SG1008D\n\nSwitch 8-dekedood ah oo aan la maamulin, oo gigabit ah, kaliya geli oo wuu shaqeeyaa, dejin looma baahna.\n\n- Siddeed dekedood oo 10/100/1000 Mbps otomaatig u heshiiya\n- Ma leh fan, si aamusan ayuu u shaqeeyaa\n- Dabool bir ah oo adag"
+    }
+  },
+  "attributes": {
+    "device_type": "switch",
+    "wifi_standard": "none",
+    "max_speed_mbps": 1000,
+    "ports_count": 8,
+    "port_speed": "1g",
+    "poe": "none",
+    "managed": false,
+    "mesh": false
+  },
+  "media": [
+    {
+      "key": "seed/products/tp-link-tl-sg1008d/0.webp",
+      "alt": "tp link tl sg1008d",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "TPL-SG1008D-STD",
+      "options": [],
+      "priceUsdCents": 2900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 30,
+        "NBO": 20
+      }
+    }
+  ]
+}

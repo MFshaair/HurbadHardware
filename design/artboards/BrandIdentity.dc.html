@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{--p:#ff7417;--p-deep:#b84d05;--p-soft:#ffe8d6;--on-p:#1a0c02;--ink:#0f0f10;--ink2:#3d3d42;--ink3:#6f6f78;--od:#f7f5f0;--od2:#b9b6ad;--night:#0a0a0b;--night2:#141416;--cream:#fbfaf6;--soft:#f4f2ec;--light:#fff;--hl:#e6e3db;--fd:"Sora","Helvetica Neue",Arial,sans-serif;--fb:"DM Sans","Helvetica Neue",Arial,sans-serif;--fm:"JetBrains Mono",ui-monospace,Menlo,monospace}
+  *{box-sizing:border-box} body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5}
+  a{color:var(--ink)} a:hover{color:var(--p-deep)}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink3)}
+  .display{font-family:var(--fd);font-weight:300;letter-spacing:-.03em;line-height:1.02}
+  .card{background:var(--light);border:1px solid var(--hl);border-radius:14px}
+  .mark{background:var(--p);display:grid;align-items:center;justify-content:center;flex:none}
+  .mark i{display:block;background:#fff;border-radius:1px} .mark b{display:block;background:#fff}
+  .wm1{font-family:var(--fb);font-weight:700;color:var(--p);text-transform:uppercase;line-height:1}
+  .wm2{font-family:var(--fb);font-weight:300;color:var(--ink);text-transform:uppercase;line-height:1}
+  .sw{border-radius:12px;padding:14px;display:flex;flex-direction:column;justify-content:flex-end;height:120px;font-size:12px;font-weight:600}
+  .sw .hex{font-family:var(--fm);font-weight:500;opacity:.8}
+</style>
+</helmet>
+<div style="width:1440px;padding:64px;background:#fbfaf6;display:flex;flex-direction:column;gap:48px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end">
+    <div><div class="eyebrow">Brand identity</div><div class="display" style="font-size:56px;letter-spacing:-1.6px;margin-top:8px">Hurbad Hardware</div><div style="margin-top:14px;font-size:14px;color:var(--ink3)">Logo supplied by Hurbad; recreated as vector in <span style="font-family:var(--fm);font-size:12px">brand/logo.svg</span>, <span style="font-family:var(--fm);font-size:12px">logo-on-dark.svg</span>, <span style="font-family:var(--fm);font-size:12px">mark.svg</span>.</div></div>
+    <div style="font-size:14px;color:var(--ink3);max-width:420px;text-align:right">The confidence of a flagship store on Maka Al-Mukarama road, with prices you can see from across the street.</div>
+  </div>
+
+  <!-- Logo lockups -->
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:24px">
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:260px">
+      <div class="eyebrow">Primary lockup · on cream</div>
+      <div style="display:flex;align-items:center;gap:18px"><div class="mark" style="width:96px;height:96px;border-radius:9px;grid-template-columns:13px 32px 13px"><i style="height:67px"></i><b style="height:14px"></b><i style="height:67px"></i></div><div style="display:flex;flex-direction:column;gap:8px"><span class="wm1" style="font-size:38px;letter-spacing:.6px">Hurbad</span><span class="wm2" style="font-size:22px;letter-spacing:4px">Hardware</span></div></div>
+    </div>
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:260px;background:#0a0a0b;border-color:#26262b">
+      <div class="eyebrow" style="color:#7d7b74">Primary lockup · on night</div>
+      <div style="display:flex;align-items:center;gap:18px"><div class="mark" style="width:96px;height:96px;border-radius:9px;grid-template-columns:13px 32px 13px"><i style="height:67px"></i><b style="height:14px"></b><i style="height:67px"></i></div><div style="display:flex;flex-direction:column;gap:8px"><span class="wm1" style="font-size:38px;letter-spacing:.6px">Hurbad</span><span class="wm2" style="font-size:22px;letter-spacing:4px;color:#f7f5f0">Hardware</span></div></div>
+    </div>
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:260px">
+      <div class="eyebrow">Mark · app icon · favicon · invoice stamp · clear space = one H bar</div>
+      <div style="display:flex;gap:20px;align-items:flex-end">
+        <div class="mark" style="width:96px;height:96px;border-radius:9px;grid-template-columns:13px 32px 13px"><i style="height:67px"></i><b style="height:14px"></b><i style="height:67px"></i></div>
+        <div class="mark" style="width:64px;height:64px;border-radius:6px;grid-template-columns:9px 21px 9px"><i style="height:45px"></i><b style="height:9px"></b><i style="height:45px"></i></div>
+        <div class="mark" style="width:44px;height:44px;border-radius:4px;grid-template-columns:6px 15px 6px"><i style="height:31px"></i><b style="height:6px"></b><i style="height:31px"></i></div>
+        <div class="mark" style="width:32px;height:32px;border-radius:3px;grid-template-columns:4px 11px 4px"><i style="height:22px"></i><b style="height:5px"></b><i style="height:22px"></i></div>
+        <div class="mark" style="width:24px;height:24px;border-radius:2px;grid-template-columns:3px 8px 3px"><i style="height:17px"></i><b style="height:4px"></b><i style="height:17px"></i></div>
+        <div style="margin-left:12px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink3)"><span>Header lockup, one line:</span><div class="logo" style="display:flex;align-items:center;gap:10px;font-family:var(--fb);font-weight:700;font-size:17px;letter-spacing:.6px;text-transform:uppercase;color:var(--p)"><div class="mark" style="width:32px;height:32px;border-radius:7px;grid-template-columns:4px 9px 4px"><i style="height:20px"></i><b style="height:4px"></b><i style="height:20px"></i></div>Hurbad <span style="font-weight:300;color:var(--ink);letter-spacing:2.6px;font-size:12px">Hardware</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- White versions -->
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:24px">
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:220px;background:#0a0a0b;border-color:#26262b">
+      <div class="eyebrow" style="color:#7d7b74">White lockup · on night · orange H</div>
+      <div style="display:flex;align-items:center;gap:18px"><div class="mark" style="width:80px;height:80px;border-radius:8px;grid-template-columns:11px 27px 11px;background:#fff"><i style="height:56px;background:var(--p)"></i><b style="height:12px;background:var(--p)"></b><i style="height:56px;background:var(--p)"></i></div><div style="display:flex;flex-direction:column;gap:7px"><span class="wm1" style="font-size:32px;letter-spacing:.5px;color:#fff">Hurbad</span><span class="wm2" style="font-size:18px;letter-spacing:3.4px;color:#fff">Hardware</span></div></div>
+    </div>
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:220px;background:var(--p);border-color:var(--p)">
+      <div class="eyebrow" style="color:#1a0c02;opacity:.7">Mono white · on orange · knocked-out H</div>
+      <div style="display:flex;align-items:center;gap:18px"><div class="mark" style="width:80px;height:80px;border-radius:8px;grid-template-columns:11px 27px 11px;background:#fff"><i style="height:56px;background:var(--p)"></i><b style="height:12px;background:var(--p)"></b><i style="height:56px;background:var(--p)"></i></div><div style="display:flex;flex-direction:column;gap:7px"><span class="wm1" style="font-size:32px;letter-spacing:.5px;color:#fff">Hurbad</span><span class="wm2" style="font-size:18px;letter-spacing:3.4px;color:#fff">Hardware</span></div></div>
+    </div>
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;justify-content:space-between;height:220px;background:linear-gradient(160deg,#3a3a40,#17171a);border-color:#26262b">
+      <div class="eyebrow" style="color:#b9b6ad">Mono white · on photography</div>
+      <div style="display:flex;align-items:center;gap:18px"><div class="mark" style="width:80px;height:80px;border-radius:8px;grid-template-columns:11px 27px 11px;background:#fff"><i style="height:56px;background:#2a2a2f"></i><b style="height:12px;background:#2a2a2f"></b><i style="height:56px;background:#2a2a2f"></i></div><div style="display:flex;flex-direction:column;gap:7px"><span class="wm1" style="font-size:32px;letter-spacing:.5px;color:#fff">Hurbad</span><span class="wm2" style="font-size:18px;letter-spacing:3.4px;color:#fff">Hardware</span></div></div>
+    </div>
+  </div>
+
+  <!-- Palette -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div class="eyebrow">Colour · one saturated colour, two canvases</div>
+    <div style="display:grid;grid-template-columns:repeat(8, minmax(0, 1fr));gap:12px">
+      <div class="sw" style="background:#ff7417;color:#1a0c02;grid-column:span 2">Signal Orange<span class="hex">#ff7417</span></div>
+      <div class="sw" style="background:#d95f0e;color:#1a0c02">Press<span class="hex">#d95f0e</span></div>
+      <div class="sw" style="background:#b84d05;color:#fff">Deep (text)<span class="hex">#b84d05</span></div>
+      <div class="sw" style="background:#ffe8d6;color:#b84d05">Soft<span class="hex">#ffe8d6</span></div>
+      <div class="sw" style="background:#fff4eb;color:#b84d05;border:1px solid #e6e3db">Tint<span class="hex">#fff4eb</span></div>
+      <div class="sw" style="background:#25d366;color:#0f0f10">WhatsApp<span class="hex">#25d366</span></div>
+      <div class="sw" style="background:#157347;color:#fff">Success<span class="hex">#157347</span></div>
+      <div class="sw" style="background:#0a0a0b;color:#f7f5f0;grid-column:span 2">Night<span class="hex">#0a0a0b</span></div>
+      <div class="sw" style="background:#141416;color:#f7f5f0">Night 2<span class="hex">#141416</span></div>
+      <div class="sw" style="background:#1d1d21;color:#f7f5f0">Night 3<span class="hex">#1d1d21</span></div>
+      <div class="sw" style="background:#fbfaf6;color:#0f0f10;border:1px solid #e6e3db">Cream<span class="hex">#fbfaf6</span></div>
+      <div class="sw" style="background:#f4f2ec;color:#0f0f10">Soft<span class="hex">#f4f2ec</span></div>
+      <div class="sw" style="background:#0f0f10;color:#f7f5f0">Ink<span class="hex">#0f0f10</span></div>
+      <div class="sw" style="background:#6f6f78;color:#fff">Ink 3<span class="hex">#6f6f78</span></div>
+    </div>
+  </div>
+
+  <!-- Type -->
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:24px">
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;gap:24px">
+      <div class="eyebrow">Type · Sora 300 display, DM Sans body, JetBrains Mono identifiers</div>
+      <div class="display" style="font-size:72px;letter-spacing:-2.2px">Real warranty.<br>Local prices.</div>
+      <div style="font:400 28px var(--fd);letter-spacing:-.4px">Galaxy S25 Ultra 256 GB</div>
+      <div style="font-size:18px;color:var(--ink2);max-width:560px">Official-warranty electronics delivered across Somalia, Kenya, Ethiopia, Djibouti and Uganda. Pay the way you already pay.</div>
+      <div style="display:flex;gap:32px;align-items:baseline"><span style="font:400 32px var(--fd);letter-spacing:-.6px;font-feature-settings:'tnum'">$1,299.00</span><span style="font:500 20px var(--fd);font-feature-settings:'tnum'">KSh 167,900</span><span style="font-family:var(--fm);font-size:13px;color:var(--ink3)">HH-260913-K7Q2M · SKU SGS25U-256-BLK</span></div>
+    </div>
+    <div class="card" style="padding:40px;display:flex;flex-direction:column;gap:20px;background:#0a0a0b;border-color:#26262b;color:#f7f5f0">
+      <div class="eyebrow" style="color:#7d7b74">Voice · English and Somali carry equal weight</div>
+      <div style="display:flex;flex-direction:column;gap:14px;font-size:16px">
+        <div style="display:flex;gap:16px"><span style="width:56px;color:#7d7b74;font-size:12px;font-weight:600;padding-top:3px">EN</span><span>Pay with EVC Plus. Confirm on your phone.</span></div>
+        <div style="display:flex;gap:16px"><span style="width:56px;color:#7d7b74;font-size:12px;font-weight:600;padding-top:3px">SO</span><span>Ku bixi EVC Plus. Ka xaqiiji taleefankaaga.</span></div>
+        <div style="height:1px;background:#26262b"></div>
+        <div style="display:flex;gap:16px"><span style="width:56px;color:#7d7b74;font-size:12px;font-weight:600;padding-top:3px">EN</span><span>Your order HH-260913-K7Q2M is on its way.</span></div>
+        <div style="display:flex;gap:16px"><span style="width:56px;color:#7d7b74;font-size:12px;font-weight:600;padding-top:3px">SO</span><span>Dalabkaaga HH-260913-K7Q2M waa soo socdaa.</span></div>
+        <div style="height:1px;background:#26262b"></div>
+        <div style="font-size:14px;color:#b9b6ad">Direct, expert, warm. Short sentences. Exact money. Never "mobile money solutions" — always the name of the wallet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

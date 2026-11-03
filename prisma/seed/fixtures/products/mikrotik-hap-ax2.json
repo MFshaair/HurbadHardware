@@ -1,0 +1,58 @@
+{
+  "slug": "mikrotik-hap-ax2",
+  "sku": "MKT-HAPAX2",
+  "name": "MikroTik hAP ax2 Router",
+  "brand": "mikrotik",
+  "category": "routers",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "mikrotik hap ax2 router wifi6 routeros",
+  "publishedDaysAgo": 70,
+  "translations": {
+    "en": {
+      "name": "MikroTik hAP ax2 Router",
+      "shortDescription": "Dual-band Wi-Fi 6 router running RouterOS, for advanced home networks.",
+      "description": "## MikroTik hAP ax2\n\nA dual-band Wi-Fi 6 router running full RouterOS for advanced configuration, VPN and firewall rules.\n\n- Wi-Fi 6, up to 1.2 Gbps on 5 GHz\n- Five Gigabit Ethernet ports\n- RouterOS v7 with Winbox management"
+    },
+    "so": {
+      "name": "MikroTik hAP ax2 Router",
+      "shortDescription": "Router Wi-Fi 6 laba-baanto ah oo ku shaqeeya RouterOS, loogu talagalay shabakadaha horumarsan.",
+      "description": "## MikroTik hAP ax2\n\nRouter Wi-Fi 6 laba-baanto ah oo ku shaqeeya RouterOS buuxa, loogu talagalay dejin horumarsan, VPN iyo xeerar firewall.\n\n- Wi-Fi 6, ilaa 1.2 Gbps 5 GHz\n- Shan dekedood oo Gigabit Ethernet ah\n- RouterOS v7 oo lagu maamulo Winbox"
+    }
+  },
+  "attributes": {
+    "device_type": "router",
+    "wifi_standard": "wifi6",
+    "max_speed_mbps": 1200,
+    "ports_count": 5,
+    "port_speed": "1g",
+    "poe": "none",
+    "managed": true,
+    "mesh": false
+  },
+  "media": [
+    {
+      "key": "seed/products/mikrotik-hap-ax2/0.webp",
+      "alt": "mikrotik hap ax2",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "MKT-HAPAX2-STD",
+      "options": [],
+      "priceUsdCents": 7900,
+      "compareAtUsdCents": 8900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 9,
+        "NBO": 6
+      }
+    }
+  ]
+}

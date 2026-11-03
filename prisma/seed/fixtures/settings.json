@@ -1,0 +1,18 @@
+[
+  { "key": "store.name", "value": "Hurbad Hardware" },
+  { "key": "store.supportWhatsapp", "value": "" },
+  { "key": "store.supportEmail", "value": "" },
+  {
+    "key": "store.announcement",
+    "value": {
+      "en": "Free delivery on orders over $500",
+      "so": "Gaarsiin bilaash ah dalabyada ka badan $500"
+    }
+  },
+  { "key": "loyalty.earnPointsPerUsd", "value": 1 },
+  { "key": "loyalty.redeemPointsPerUsd", "value": 100 },
+  { "key": "loyalty.maxRedeemBps", "value": 5000 },
+  { "key": "cart.reservationMinutes", "value": 15 },
+  { "key": "cart.abandonHours", "value": 4 },
+  { "key": "stock.lowThresholdDefault", "value": 3 }
+]

@@ -1,0 +1,56 @@
+{
+  "slug": "anker-soundcore-motion-300",
+  "sku": "ANK-SC300",
+  "name": "Anker Soundcore Motion 300 Speaker",
+  "brand": "anker",
+  "category": "audio",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "anker soundcore motion 300 bluetooth speaker",
+  "publishedDaysAgo": 52,
+  "translations": {
+    "en": {
+      "name": "Anker Soundcore Motion 300 Speaker",
+      "shortDescription": "Portable Bluetooth speaker with BassUp technology, IPX7 waterproof.",
+      "description": "## Anker Soundcore Motion 300\n\nA portable speaker with BassUp technology for deeper bass and IPX7 waterproofing for poolside or beach use.\n\n- 30W output, stereo sound\n- 13-hour battery life\n- IPX7 waterproof rating"
+    },
+    "so": {
+      "name": "Anker Soundcore Motion 300 Speaker",
+      "shortDescription": "Weheliye Bluetooth ah oo la qaadan karo, leh tiknoolajiyad bass dheer iyo IPX7 biyo ka celin.",
+      "description": "## Anker Soundcore Motion 300\n\nWeheliye la qaadan karo oo leh tiknoolajiyadda BassUp si bass-ku u sii dheeraado, leh IPX7 biyo ka celin oo ku habboon barkadda ama xeebta.\n\n- Awoodda 30W, cod stereo ah\n- Baytari socota 13 saacadood\n- Heerka biyo ka celinta IPX7"
+    }
+  },
+  "attributes": {
+    "accessory_type": "speaker",
+    "compatibility": "Any Bluetooth device",
+    "wattage_w": 30,
+    "connector": ["3.5mm"],
+    "wireless": true
+  },
+  "media": [
+    {
+      "key": "seed/products/anker-soundcore-motion-300/0.webp",
+      "alt": "anker soundcore motion 300",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "ANK-SC300-BLK",
+      "options": [],
+      "priceUsdCents": 0,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 0,
+        "NBO": 0,
+        "KLA": 0
+      }
+    }
+  ]
+}

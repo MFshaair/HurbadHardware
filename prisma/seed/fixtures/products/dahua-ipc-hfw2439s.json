@@ -1,0 +1,60 @@
+{
+  "slug": "dahua-ipc-hfw2439s",
+  "sku": "DAH-HFW2439S",
+  "name": "Dahua IPC-HFW2439S Bullet Camera",
+  "brand": "dahua",
+  "category": "cameras",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "dahua bullet camera ip ai 4mp",
+  "publishedDaysAgo": 85,
+  "translations": {
+    "en": {
+      "name": "Dahua IPC-HFW2439S Bullet Camera",
+      "shortDescription": "4MP bullet camera with AI human and vehicle detection.",
+      "description": "## Dahua IPC-HFW2439S\n\nA 4MP bullet camera with built-in AI detection that tells people apart from vehicles to cut false alarms.\n\n- 4MP resolution, full-color night vision\n- Built-in microphone\n- PoE powered, outdoor rated"
+    },
+    "so": {
+      "name": "Dahua IPC-HFW2439S Bullet Camera",
+      "shortDescription": "Kaamirad bullet ah oo 4MP ah, leh ogaanshaha AI ee dadka iyo baabuurta.",
+      "description": "## Dahua IPC-HFW2439S\n\nKaamirad bullet ah oo 4MP ah, oo si gudaha ah ugu dhisan ogaanshaha AI kaas oo kala saaraya dadka iyo baabuurta si loo yareeyo digniinaha been-abuurka ah.\n\n- Sawir 4MP ah, aragti habeen oo midab leh\n- Mic gudaha ku jira\n- Waxaa lagu shaqaysiiyaa PoE, u adkaysan karta banaanka"
+    }
+  },
+  "attributes": {
+    "camera_type": "bullet",
+    "resolution_mp": 4,
+    "night_vision_m": 40,
+    "ip_or_analog": "ip",
+    "poe": "poe",
+    "channels": 1,
+    "storage_included_tb": 0,
+    "outdoor": true,
+    "audio": true,
+    "ai_detection": true
+  },
+  "media": [
+    {
+      "key": "seed/products/dahua-ipc-hfw2439s/0.webp",
+      "alt": "dahua ipc hfw2439s",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "DAH-HFW2439S-STD",
+      "options": [],
+      "priceUsdCents": 6900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 0,
+        "NBO": 0
+      }
+    }
+  ]
+}

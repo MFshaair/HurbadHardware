@@ -1,0 +1,83 @@
+{
+  "slug": "jbl-tune-510bt",
+  "sku": "JBL-T510BT",
+  "name": "JBL Tune 510BT Wireless Headphones",
+  "brand": "jbl",
+  "category": "audio",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "jbl tune 510bt wireless headphones bluetooth",
+  "publishedDaysAgo": 38,
+  "translations": {
+    "en": {
+      "name": "JBL Tune 510BT Wireless Headphones",
+      "shortDescription": "On-ear wireless headphones with 40 hours of battery life.",
+      "description": "## JBL Tune 510BT\n\nLightweight on-ear Bluetooth headphones tuned with JBL Pure Bass sound and a 40-hour battery life.\n\n- Bluetooth 5.0\n- 40-hour battery, fast charging (5 min = 2 hours)\n- Foldable, multi-point connection"
+    },
+    "so": {
+      "name": "JBL Tune 510BT Wireless Headphones",
+      "shortDescription": "Dhegdhuumiyayaal wireless ah, leh baytari socota 40 saacadood.",
+      "description": "## JBL Tune 510BT\n\nDhegdhuumiyayaal Bluetooth ah oo fudud, leh cod JBL Pure Bass ah iyo baytari socota 40 saacadood.\n\n- Bluetooth 5.0\n- Baytari 40 saacadood ah, chaajin degdeg ah (5 daqiiqo = 2 saacadood)\n- La laaban karo, xiriir dhowr qalab ah"
+    }
+  },
+  "attributes": {
+    "accessory_type": "headphones",
+    "compatibility": "Any Bluetooth device",
+    "wattage_w": 0,
+    "connector": ["3.5mm"],
+    "wireless": true,
+    "battery_mah": 0
+  },
+  "media": [
+    {
+      "key": "seed/products/jbl-tune-510bt/0.webp",
+      "alt": "jbl tune 510bt",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "JBL-T510BT-BLK",
+      "options": [
+        {
+          "key": "color",
+          "value": "black",
+          "labelEn": "Black",
+          "labelSo": "Madow"
+        }
+      ],
+      "priceUsdCents": 3900,
+      "compareAtUsdCents": 4900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 20,
+        "NBO": 12,
+        "KLA": 8
+      }
+    },
+    {
+      "sku": "JBL-T510BT-BLU",
+      "options": [
+        {
+          "key": "color",
+          "value": "blue",
+          "labelEn": "Blue",
+          "labelSo": "Buluug"
+        }
+      ],
+      "priceUsdCents": 3900,
+      "compareAtUsdCents": 4900,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 10,
+        "NBO": 6
+      }
+    }
+  ]
+}

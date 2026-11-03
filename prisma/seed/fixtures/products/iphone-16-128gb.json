@@ -1,0 +1,109 @@
+{
+  "slug": "iphone-16-128gb",
+  "sku": "APL-IP16",
+  "name": "Apple iPhone 16 128GB",
+  "brand": "apple",
+  "category": "smartphones",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "iphone 16 apple ios 5g",
+  "publishedDaysAgo": 75,
+  "translations": {
+    "en": {
+      "name": "Apple iPhone 16 128GB",
+      "shortDescription": "Apple's latest 6.1\" Super Retina XDR phone with the A18 chip and a 48 MP main camera.",
+      "description": "## Apple iPhone 16\n\nA 6.1-inch Super Retina XDR display, the A18 chip and a 48 MP main camera with 2x optical-quality zoom.\n\n- 6 GB RAM, 128 GB or 256 GB storage\n- IP68 water and dust resistance\n- 5G, NFC for Apple Pay\n- Ceramic Shield front cover\n\nSold with the official Apple warranty via our East Africa partner."
+    },
+    "so": {
+      "name": "Apple iPhone 16 128GB",
+      "shortDescription": "Taleefanka ugu dambeeyay ee Apple oo leh shaashad 6.1\" Super Retina XDR, chip A18 iyo kaamiro 48 MP ah.",
+      "description": "## Apple iPhone 16\n\nShaashad 6.1 inch oo Super Retina XDR ah, chip A18 iyo kaamiro weyn oo 48 MP ah oo leh soo-dhoweyn 2x.\n\n- 6 GB RAM, kayd 128 GB ama 256 GB\n- IP68 biyo iyo boodh ka celin\n- 5G, NFC oo loogu talagalay Apple Pay\n- Dabool hore oo Ceramic Shield ah\n\nWaxaa la socda dammaanad rasmi ah oo Apple."
+    }
+  },
+  "attributes": {
+    "os": "ios",
+    "chipset": "Apple A18",
+    "ram": "6gb",
+    "storage": "128gb",
+    "screen_size": 6.1,
+    "display_type": "oled",
+    "refresh_rate": "60hz",
+    "main_camera_mp": 48,
+    "battery_mah": 3561,
+    "charging_w": 20,
+    "network": ["4g", "5g"],
+    "dual_sim": true,
+    "nfc": true,
+    "water_resistance": "ip68"
+  },
+  "media": [
+    {
+      "key": "seed/products/iphone-16-128gb/0.webp",
+      "alt": "iphone 16 128gb",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    },
+    {
+      "key": "seed/products/iphone-16-128gb/1.webp",
+      "alt": "iphone 16 128gb",
+      "width": 1200,
+      "height": 1200,
+      "position": 1
+    }
+  ],
+  "variants": [
+    {
+      "sku": "APL-IP16-128-BLK",
+      "options": [
+        {
+          "key": "color",
+          "value": "black",
+          "labelEn": "Black",
+          "labelSo": "Madow"
+        },
+        {
+          "key": "storage",
+          "value": "128gb",
+          "labelEn": "128 GB",
+          "labelSo": "128 GB"
+        }
+      ],
+      "priceUsdCents": 89900,
+      "compareAtUsdCents": 94900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 10,
+        "NBO": 6
+      }
+    },
+    {
+      "sku": "APL-IP16-256-BLK",
+      "options": [
+        {
+          "key": "color",
+          "value": "black",
+          "labelEn": "Black",
+          "labelSo": "Madow"
+        },
+        {
+          "key": "storage",
+          "value": "256gb",
+          "labelEn": "256 GB",
+          "labelSo": "256 GB"
+        }
+      ],
+      "priceUsdCents": 99900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 3,
+        "NBO": 2
+      }
+    }
+  ]
+}

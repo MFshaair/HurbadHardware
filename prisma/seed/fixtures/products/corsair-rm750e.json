@@ -1,0 +1,55 @@
+{
+  "slug": "corsair-rm750e",
+  "sku": "COR-RM750E",
+  "name": "Corsair RM750e Power Supply 750W",
+  "brand": "amd",
+  "category": "power-supplies",
+  "status": "ACTIVE",
+  "warrantyMonths": 60,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "corsair rm750e 750w power supply 80plus gold",
+  "publishedDaysAgo": 72,
+  "translations": {
+    "en": {
+      "name": "Corsair RM750e Power Supply 750W",
+      "shortDescription": "750W fully-modular 80 PLUS Gold power supply.",
+      "description": "## Corsair RM750e 750W\n\nA fully-modular 80 PLUS Gold-certified power supply with a near-silent 0 dB fan mode at low loads.\n\n- 750W continuous output\n- 80 PLUS Gold efficiency\n- Fully modular cables, 10-year warranty"
+    },
+    "so": {
+      "name": "Corsair RM750e Power Supply 750W",
+      "shortDescription": "Koronto bixiye 750W ah oo gebi ahaanba modular ah, heerka 80 PLUS Gold.",
+      "description": "## Corsair RM750e 750W\n\nKoronto bixiye gebi ahaanba modular ah oo leh shahaado 80 PLUS Gold, leh qaab fan 0 dB ah oo aamusan marka culeyska hooseeyo.\n\n- Bixinta joogtada ah ee 750W\n- Wax-ku-oolka 80 PLUS Gold\n- Fiilooyin gebi ahaanba modular ah, dammaanad 10 sano ah"
+    }
+  },
+  "attributes": {
+    "component_type": "psu",
+    "form_factor": "atx",
+    "wattage_w": 750,
+    "efficiency": "gold",
+    "interface": "sata"
+  },
+  "media": [
+    {
+      "key": "seed/products/corsair-rm750e/0.webp",
+      "alt": "corsair rm750e",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "COR-RM750E-STD",
+      "options": [],
+      "priceUsdCents": 9900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 5,
+        "NBO": 3
+      }
+    }
+  ]
+}

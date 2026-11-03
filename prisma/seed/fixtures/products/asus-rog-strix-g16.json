@@ -1,0 +1,112 @@
+{
+  "slug": "asus-rog-strix-g16",
+  "sku": "ASU-ROGG16",
+  "name": "ASUS ROG Strix G16",
+  "brand": "asus",
+  "category": "gaming-laptops",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "asus rog strix g16 gaming laptop rtx",
+  "publishedDaysAgo": 15,
+  "translations": {
+    "en": {
+      "name": "ASUS ROG Strix G16",
+      "shortDescription": "16\" gaming laptop, Intel Core i7, RTX 4060, 165 Hz display.",
+      "description": "## ASUS ROG Strix G16\n\nA 16-inch 165 Hz FHD+ display paired with an Intel Core i7 processor and NVIDIA GeForce RTX 4060 graphics.\n\n- 16 GB DDR5 RAM, upgradeable to 32 GB\n- 512 GB or 1 TB NVMe SSD\n- RGB backlit keyboard\n- Dedicated gaming-grade cooling"
+    },
+    "so": {
+      "name": "ASUS ROG Strix G16",
+      "shortDescription": "Laptop ciyaaro 16\" ah, Intel Core i7, RTX 4060, shaashad 165 Hz ah.",
+      "description": "## ASUS ROG Strix G16\n\nShaashad FHD+ 165 Hz ah oo 16 inch ah, oo wata processor Intel Core i7 iyo kaadhka sawirka NVIDIA GeForce RTX 4060.\n\n- 16 GB DDR5 RAM, waa la kordhin karaa ilaa 32 GB\n- 512 GB ama 1 TB NVMe SSD\n- Kiiboodh RGB iftiin leh\n- Qaboojin heer ciyaareed ah"
+    }
+  },
+  "attributes": {
+    "os": "windows",
+    "cpu_brand": "intel",
+    "cpu_model": "Core i7-14650HX",
+    "ram": "16gb",
+    "ram_upgradeable": true,
+    "storage": "512gb",
+    "storage_type": "ssd",
+    "gpu": "NVIDIA GeForce RTX 4060",
+    "gpu_type": "dedicated",
+    "screen_size": 16,
+    "resolution": "fhd",
+    "refresh_rate": "144hz",
+    "touchscreen": false,
+    "weight_kg": 2.5,
+    "battery_wh": 90,
+    "keyboard_backlit": true,
+    "ports": "1× Thunderbolt 4, 2× USB-A, HDMI 2.1, Ethernet"
+  },
+  "media": [
+    {
+      "key": "seed/products/asus-rog-strix-g16/0.webp",
+      "alt": "asus rog strix g16",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    },
+    {
+      "key": "seed/products/asus-rog-strix-g16/1.webp",
+      "alt": "asus rog strix g16",
+      "width": 1200,
+      "height": 1200,
+      "position": 1
+    }
+  ],
+  "variants": [
+    {
+      "sku": "ASU-ROGG16-16-512",
+      "options": [
+        {
+          "key": "ram",
+          "value": "16gb",
+          "labelEn": "16 GB",
+          "labelSo": "16 GB"
+        },
+        {
+          "key": "storage",
+          "value": "512gb",
+          "labelEn": "512 GB",
+          "labelSo": "512 GB"
+        }
+      ],
+      "priceUsdCents": 139900,
+      "compareAtUsdCents": 149900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 4,
+        "NBO": 2
+      }
+    },
+    {
+      "sku": "ASU-ROGG16-32-1TB",
+      "options": [
+        {
+          "key": "ram",
+          "value": "32gb",
+          "labelEn": "32 GB",
+          "labelSo": "32 GB"
+        },
+        {
+          "key": "storage",
+          "value": "1tb",
+          "labelEn": "1 TB",
+          "labelSo": "1 TB"
+        }
+      ],
+      "priceUsdCents": 169900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 1,
+        "NBO": 1
+      }
+    }
+  ]
+}

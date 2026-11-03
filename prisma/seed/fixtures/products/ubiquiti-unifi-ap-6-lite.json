@@ -1,0 +1,59 @@
+{
+  "slug": "ubiquiti-unifi-ap-6-lite",
+  "sku": "UBI-U6LITE",
+  "name": "Ubiquiti UniFi AP U6 Lite",
+  "brand": "ubiquiti",
+  "category": "access-points",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "ubiquiti unifi u6 lite access point wifi6",
+  "publishedDaysAgo": 35,
+  "translations": {
+    "en": {
+      "name": "Ubiquiti UniFi AP U6 Lite",
+      "shortDescription": "Wi-Fi 6 ceiling-mount access point managed through the UniFi app.",
+      "description": "## Ubiquiti UniFi AP U6 Lite\n\nA compact Wi-Fi 6 access point for ceiling or wall mounting, managed centrally through the UniFi mobile app or controller.\n\n- Dual-band Wi-Fi 6, up to 1.5 Gbps combined\n- Powered over Ethernet (802.3af)\n- Supports up to 300 concurrent clients"
+    },
+    "so": {
+      "name": "Ubiquiti UniFi AP U6 Lite",
+      "shortDescription": "Access point Wi-Fi 6 ah oo dusha saabka lagu rako, lagu maamulo app-ka UniFi.",
+      "description": "## Ubiquiti UniFi AP U6 Lite\n\nAccess point Wi-Fi 6 ah oo yar, loogu talagalay saabka ama derbiga, oo si dhexe loogu maamulo app-ka UniFi ama controller-ka.\n\n- Wi-Fi 6 laba-baanto ah, ilaa 1.5 Gbps\n- Waxaa lagu shaqaysiiyaa PoE (802.3af)\n- Waxay taageertaa ilaa 300 isticmaale oo isku mar ah"
+    }
+  },
+  "attributes": {
+    "device_type": "access-point",
+    "wifi_standard": "wifi6",
+    "max_speed_mbps": 1500,
+    "ports_count": 1,
+    "port_speed": "1g",
+    "poe": "poe",
+    "managed": true,
+    "mesh": true
+  },
+  "media": [
+    {
+      "key": "seed/products/ubiquiti-unifi-ap-6-lite/0.webp",
+      "alt": "ubiquiti unifi ap 6 lite",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "UBI-U6LITE-STD",
+      "options": [],
+      "priceUsdCents": 9900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 15,
+        "NBO": 10,
+        "KLA": 5
+      }
+    }
+  ]
+}

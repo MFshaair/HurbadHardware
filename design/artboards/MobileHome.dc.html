@@ -1,0 +1,244 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{--p:#ff7417;--p-press:#d95f0e;--p-deep:#b84d05;--p-soft:#ffe8d6;--p-tint:#fff4eb;--on-p:#1a0c02;
+    --ink:#0f0f10;--ink2:#3d3d42;--ink3:#6f6f78;--ink4:#a2a2aa;--od:#f7f5f0;--od2:#b9b6ad;--od3:#7d7b74;
+    --night:#0a0a0b;--night2:#141416;--night3:#1d1d21;--cream:#fbfaf6;--soft:#f4f2ec;--light:#ffffff;
+    --hl:#e6e3db;--hl2:#d6d2c7;--hld:#26262b;--hld2:#333339;
+    --ok:#157347;--ok-s:#d7f5e3;--warn:#9a5b00;--warn-s:#fff0c2;--bad:#b3261e;--bad-s:#fde3e1;--info:#1f4fbf;--info-s:#e3ebfb;
+    --wa:#25d366;--mpesa:#3cb44b;--evc:#1a9bd7;
+    --fd:"Sora","Helvetica Neue",Arial,sans-serif;--fb:"DM Sans","Helvetica Neue",Arial,sans-serif;--fm:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --sh1:0 1px 2px rgba(15,15,16,.06),0 4px 12px rgba(15,15,16,.06);
+    --sh2:0 8px 8px rgba(0,0,0,.06),0 4px 4px rgba(0,0,0,.06),0 2px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.06);
+    --sh3:0 25px 50px -12px rgba(15,15,16,.25);}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--ink);text-decoration:none} a:hover{color:var(--p-deep)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .display{font-family:var(--fd);font-weight:300;letter-spacing:-.03em;line-height:1.02}
+  .h{font-family:var(--fd);font-weight:400;letter-spacing:-.01em;line-height:1.2}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink3)}
+  .mono{font-family:var(--fm);font-size:13px;font-weight:500}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:9999px;font:600 15px/1 var(--fb);border:1px solid transparent;cursor:pointer;white-space:nowrap}
+  .btn-lg{height:48px;padding:0 26px;font-size:16px}
+  .btn-sm{height:36px;padding:0 16px;font-size:14px}
+  .btn-p{background:var(--p);color:var(--on-p)}
+  .btn-ink{background:var(--ink);color:var(--od)}
+  .btn-o{background:var(--light);color:var(--ink);border-color:var(--ink)}
+  .btn-od{background:transparent;color:var(--od);border-color:var(--od)}
+  .btn-g{background:transparent;color:var(--ink2)}
+  .btn-wa{background:var(--wa);color:var(--ink)}
+  .btn-icon{width:44px;padding:0}
+  .input{height:44px;padding:0 14px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);font:400 15px var(--fb);color:var(--ink);display:flex;align-items:center;gap:10px}
+  .input .ph{color:var(--ink3)}
+  .input.focus{outline:2px solid var(--p);outline-offset:2px}
+  .input.err{border-color:var(--bad)}
+  .label{font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:6px;display:block}
+  .help{font-size:13px;color:var(--ink3)}
+  .card{background:var(--light);border:1px solid var(--hl);border-radius:14px}
+  .card-n{background:var(--night2);border:1px solid var(--hld);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);color:var(--od)}
+  .tag{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:500;background:var(--soft);color:var(--ink2)}
+  .tag-p{background:var(--p-soft);color:var(--p-deep)}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:600}
+  .pill-ok{background:var(--ok-s);color:var(--ok)} .pill-warn{background:var(--warn-s);color:var(--warn)} .pill-bad{background:var(--bad-s);color:var(--bad)} .pill-info{background:var(--info-s);color:var(--info)} .pill-n{background:var(--soft);color:var(--ink2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .hr{height:1px;background:var(--hl)}
+  .container{width:1280px;margin:0 auto;padding:0 32px}
+  .nav{display:flex;align-items:center;gap:32px;height:64px;padding:0 32px}
+  .nav-links{display:flex;gap:24px;font-weight:500;font-size:14px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:var(--fb);font-weight:700;font-size:17px;letter-spacing:.6px;text-transform:uppercase;color:var(--p);line-height:1}
+  .logo .mk{width:32px;height:32px;border-radius:7px;background:var(--p);display:grid;grid-template-columns:4px 9px 4px;align-items:center;justify-content:center;flex:none}
+  .logo .mk i{display:block;height:20px;background:#fff;border-radius:1px}
+  .logo .mk b{display:block;height:4px;background:#fff}
+  .logo span{font-weight:300;color:var(--ink);letter-spacing:2.6px;font-size:12px;margin-left:2px}
+  .product{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .product .img{aspect-ratio:1;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;position:relative}
+  .product .name{font:500 15px/1.3 var(--fd);letter-spacing:-.01em}
+  .price{font-family:var(--fd);font-weight:500;font-size:20px;letter-spacing:-.2px;font-feature-settings:"tnum"}
+  .price-lg{font-family:var(--fd);font-weight:400;font-size:32px;letter-spacing:-.6px;font-feature-settings:"tnum";line-height:1}
+  .strike{font-size:13px;color:var(--ink3);text-decoration:line-through;font-feature-settings:"tnum"}
+  .table{width:100%;border-collapse:collapse}
+  .table th{background:var(--soft);font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--hl)}
+  .table td{padding:0 16px;height:48px;border-bottom:1px solid var(--hl);font-size:14px;font-feature-settings:"tnum"}
+  .table .r{text-align:right}
+  .fab{position:absolute;right:32px;bottom:32px;width:56px;height:56px;border-radius:9999px;background:var(--wa);display:flex;align-items:center;justify-content:center;box-shadow:var(--sh2)}
+  .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .ico-sm{width:16px;height:16px}
+  .photo{background:radial-gradient(120% 90% at 50% 40%,#2a2a2f 0%,#141416 60%,#0a0a0b 100%)}
+  .mat{background:var(--soft)}
+  .device{border-radius:18px;background:linear-gradient(160deg,#3a3a40,#17171a);box-shadow:0 20px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12)}
+  .laptop{border-radius:10px;background:linear-gradient(160deg,#d9d7d0,#a8a6a0)}
+  .footer{background:var(--night);color:var(--od2);padding:64px 32px 32px}
+  .footer h4{color:var(--od);font:600 13px var(--fb);margin:0 0 14px}
+  .footer a{color:var(--od2);font-size:14px;display:block;margin-bottom:10px}
+  .footer a:hover{color:var(--od)}
+  .side{width:240px;background:var(--night);color:var(--od2);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+  .side .item{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;border-left:3px solid transparent}
+  .side .item.on{background:var(--night3);color:var(--od);border-left-color:var(--p)}
+  .side .grp{font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--od3);padding:16px 12px 6px}
+  .topbar{height:56px;border-bottom:1px solid var(--hl);background:var(--light);display:flex;align-items:center;gap:16px;padding:0 24px}
+  .kpi{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:20px}
+  .kpi .v{font-family:var(--fd);font-weight:400;font-size:28px;letter-spacing:-.5px;font-feature-settings:"tnum"}
+  .steps{display:flex;gap:0;align-items:center}
+  .step{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink3)}
+  .step .n{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--hl2);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .step.done .n{background:var(--ink);border-color:var(--ink);color:var(--od)}
+  .step.on{color:var(--ink)} .step.on .n{border-color:var(--p);background:var(--p);color:var(--on-p)}
+  .step-line{width:40px;height:1px;background:var(--hl2);margin:0 10px}
+  .pay{display:flex;align-items:center;gap:14px;height:64px;padding:0 16px;border:1px solid var(--hl);border-radius:12px;background:var(--light)}
+  .pay.on{border:2px solid var(--p);background:var(--p-tint)}
+  .pay .glyph{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:600 11px var(--fb);background:var(--soft);color:var(--ink2)}
+  .pay.on .glyph{color:#fff}
+  .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--hl2);margin-left:auto}
+  .pay.on .radio{border:6px solid var(--p);background:#fff}
+  .tl{display:flex;flex-direction:column;position:relative}
+  .tl .ev{display:flex;gap:16px;padding-bottom:22px;position:relative}
+  .tl .ev:before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:2px;background:var(--hl)}
+  .tl .ev:last-child:before{display:none}
+  .tl .d{width:12px;height:12px;border-radius:50%;background:var(--ink);flex:none;margin-top:4px}
+  .tl .ev.now .d{background:var(--p);box-shadow:0 0 0 4px var(--p-soft)}
+  .tl .ev.next .d{background:var(--hl2)}
+  .tl .ev.next{color:var(--ink3)}
+  .otp{display:flex;gap:10px}
+  .otp i{width:52px;height:60px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);display:flex;align-items:center;justify-content:center;font:500 24px var(--fd);font-style:normal}
+  .otp i.on{outline:2px solid var(--p);outline-offset:2px}
+  .bottombar{position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--light);border-top:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+  .announce{height:36px;background:var(--ink);color:var(--od);font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
+</style>
+<style>
+  .m{padding:0 16px}
+  .cat2{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border:1px solid var(--hl);border-radius:12px;background:var(--light);font-size:12px;font-weight:500;text-align:center}
+  .cat2 .ic{width:36px;height:36px;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--ink2)}
+  .trustm{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--hl)}
+  .trustm:last-child{border-bottom:none}
+  .trustm .ic{width:34px;height:34px;border-radius:9px;background:var(--p-soft);color:var(--p-deep);display:flex;align-items:center;justify-content:center;flex:none}
+</style>
+</helmet>
+
+<div style="width:390px;background:#fbfaf6;position:relative;font-family:var(--fb);overflow:hidden">
+
+  <div class="announce" style="font-size:12px;padding:0 12px;text-align:center">Free delivery in Mogadishu over $500</div>
+
+  <!-- Two-row header -->
+  <div style="background:#0a0a0b;color:#f7f5f0;padding:0 16px 12px">
+    <div style="display:flex;align-items:center;height:56px;gap:12px">
+      <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;margin-left:-10px"><svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></div>
+      <div class="logo" style="color:#f7f5f0;font-size:18px;margin:0 auto"><div class="mk"><i></i><b></b><i></i></div>Hurbad <span style="color:#f7f5f0">Hardware</span></div>
+      <div style="position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;margin-right:-10px"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6h15l-1.5 9h-12z"></path><path d="M6 6 5 3H2"></path><circle cx="9" cy="20" r="1"></circle><circle cx="18" cy="20" r="1"></circle></svg><span style="position:absolute;top:4px;right:2px;min-width:18px;height:18px;border-radius:9px;background:#ff7417;color:#1a0c02;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 5px">2</span></div>
+    </div>
+    <div style="height:44px;border-radius:9999px;background:#1d1d21;border:1px solid #333339;display:flex;align-items:center;gap:10px;padding:0 16px;color:#7d7b74">
+      <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <span style="font-size:14px">Search phones, laptops, routers…</span>
+    </div>
+  </div>
+
+  <!-- Night hero -->
+  <div style="background:#0a0a0b;color:#f7f5f0;padding:24px 16px 32px;display:flex;flex-direction:column;gap:18px">
+    <div class="eyebrow" style="color:#ff7417">New arrival · Galaxy S25 Ultra</div>
+    <div class="display" style="font-size:40px;letter-spacing:-1.2px;line-height:1.05">Flagship phones.<br>Real warranty.<br>Local prices.</div>
+    <p style="margin:0;color:#b9b6ad;font-size:15px;line-height:1.55">Official-warranty electronics across Somalia, Kenya, Ethiopia, Djibouti and Uganda. Pay the way you already pay.</p>
+    <div style="position:relative;height:200px;border-radius:18px;background:radial-gradient(60% 70% at 50% 45%,#232327 0%,#0a0a0b 100%);display:flex;align-items:center;justify-content:center">
+      <div class="device" style="position:relative;width:104px;height:168px;transform:rotate(-6deg)"><div style="position:absolute;inset:8px;border-radius:10px;background:linear-gradient(170deg,#ff7417 0%,#3a1a08 45%,#0a0a0b 100%)"></div></div>
+      <div class="card-n" style="position:absolute;right:12px;bottom:12px;padding:10px 14px;border-radius:12px;display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:11px;color:#7d7b74">From</span>
+        <span class="price" style="font-size:20px;color:#f7f5f0">$1,299</span>
+      </div>
+    </div>
+    <div class="btn btn-lg btn-p" style="width:100%">Shop smartphones</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;color:#7d7b74;font-size:12px;font-weight:500">
+      <span style="height:24px;padding:0 10px;border:1px solid #333339;border-radius:6px;display:flex;align-items:center">EVC Plus</span>
+      <span style="height:24px;padding:0 10px;border:1px solid #333339;border-radius:6px;display:flex;align-items:center">eDahab</span>
+      <span style="height:24px;padding:0 10px;border:1px solid #333339;border-radius:6px;display:flex;align-items:center">M-Pesa</span>
+      <span style="height:24px;padding:0 10px;border:1px solid #333339;border-radius:6px;display:flex;align-items:center">Telebirr</span>
+      <span style="height:24px;padding:0 10px;border:1px solid #333339;border-radius:6px;display:flex;align-items:center">Cards</span>
+    </div>
+  </div>
+
+  <!-- Category tiles 2×4 -->
+  <div class="m" style="padding-top:24px">
+    <div class="h" style="font-size:20px;margin-bottom:14px">Shop by category</div>
+    <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:10px">
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"></rect></svg></div>Phones</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M2 20h20"></path></svg></div>Laptops</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"></rect></svg></div>Tablets</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="2" y="14" width="20" height="6" rx="2"></rect><path d="M6 14V9M18 14V6"></path></svg></div>Network</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M3 8l13-3 2 6-13 3z"></path><path d="M8 14v6M5 20h6"></path></svg></div>CCTV</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M6 9V3h12v6"></path><rect x="3" y="9" width="18" height="8" rx="2"></rect></svg></div>Printers</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg></div>Parts</div>
+      <div class="cat2"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M6 12h12M12 6v12"></path></svg></div>Extras</div>
+    </div>
+  </div>
+
+  <!-- Flash sale rail (scrolled horizontally) -->
+  <div style="margin-top:28px;background:#ffe8d6;padding:20px 0 22px">
+    <div class="m" style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div>
+        <div class="eyebrow" style="color:#b84d05">Flash sale · ends in</div>
+        <div class="mono" style="font-size:24px;letter-spacing:-.6px;color:#0f0f10;margin-top:4px">04 : 12 : 37</div>
+      </div>
+      <a style="margin-left:auto;font-size:13px;font-weight:600;color:#b84d05">See all <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;display:inline-block;margin-left:2px"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+    </div>
+    <!-- rail is scrolled: first card is clipped at the left edge -->
+    <div style="display:flex;gap:12px;padding-left:16px;margin-left:-56px">
+      <div class="product" style="width:168px;flex:none"><div class="img"><span class="tag tag-p" style="position:absolute;top:8px;left:8px">-18%</span><div style="width:96px;height:32px;border-radius:6px;background:#ddd;box-shadow:inset 0 0 0 1px #cfcfcf"></div></div><div class="eyebrow" style="font-size:11px">MikroTik</div><div class="name" style="font-size:14px">hAP ax³ Wi-Fi 6 Router</div><div style="display:flex;gap:8px;align-items:baseline"><span class="price" style="font-size:18px">$139</span><span class="strike">$169</span></div></div>
+      <div class="product" style="width:168px;flex:none"><div class="img"><span class="tag tag-p" style="position:absolute;top:8px;left:8px">-12%</span><div style="width:104px;height:62px;border-radius:6px;background:#1d1d21"></div></div><div class="eyebrow" style="font-size:11px">Hikvision</div><div class="name" style="font-size:14px">8-Camera 4MP NVR Kit</div><div style="display:flex;gap:8px;align-items:baseline"><span class="price" style="font-size:18px">$589</span><span class="strike">$669</span></div></div>
+      <div class="product" style="width:168px;flex:none"><div class="img"><span class="tag tag-p" style="position:absolute;top:8px;left:8px">-15%</span><div style="width:112px;height:22px;border-radius:3px;background:#2b7a4b"></div></div><div class="eyebrow" style="font-size:11px">Kingston</div><div class="name" style="font-size:14px">Fury 32 GB DDR5 Kit</div><div style="display:flex;gap:8px;align-items:baseline"><span class="price" style="font-size:18px">$109</span><span class="strike">$129</span></div></div>
+    </div>
+  </div>
+
+  <!-- Best sellers 2-up -->
+  <div class="m" style="padding-top:28px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px">
+      <div class="h" style="font-size:20px">Best sellers</div>
+      <a style="font-size:13px;font-weight:600">See all <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;display:inline-block;margin-left:2px"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></a>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px">
+      <div class="product"><div class="img"><div class="device" style="width:66px;height:132px"></div><svg class="ico ico-sm" style="position:absolute;top:8px;right:8px" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A4.5 4.5 0 0 0 12 6a4.5 4.5 0 0 0-10 2.5C2 11 4 13 5.5 14.5L12 21z"></path></svg></div><div class="eyebrow" style="font-size:11px">Samsung</div><div class="name" style="font-size:14px">Galaxy S25 Ultra 256 GB</div><div class="price" style="font-size:18px">$1,299</div><span class="pill pill-ok"><i class="dot"></i>In stock</span></div>
+      <div class="product"><div class="img"><div class="laptop" style="width:112px;height:70px"></div><svg class="ico ico-sm" style="position:absolute;top:8px;right:8px" viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A4.5 4.5 0 0 0 12 6a4.5 4.5 0 0 0-10 2.5C2 11 4 13 5.5 14.5L12 21z"></path></svg></div><div class="eyebrow" style="font-size:11px">Apple</div><div class="name" style="font-size:14px">MacBook Air 13" M4 512 GB</div><div class="price" style="font-size:18px">$1,449</div><span class="pill pill-warn"><i class="dot"></i>Only 2 left</span></div>
+      <div class="product"><div class="img"><div class="device" style="width:66px;height:132px;background:linear-gradient(160deg,#e8e6e0,#b8b6b0)"></div></div><div class="eyebrow" style="font-size:11px">Tecno</div><div class="name" style="font-size:14px">Camon 40 Pro 5G 256 GB</div><div style="display:flex;gap:8px;align-items:baseline"><span class="price" style="font-size:18px">$289</span><span class="strike">$319</span></div><span class="pill pill-ok"><i class="dot"></i>In stock</span></div>
+      <div class="product"><div class="img"><div style="width:100px;height:92px;border-radius:8px;background:#ececec;box-shadow:inset 0 0 0 1px #d8d8d8"></div></div><div class="eyebrow" style="font-size:11px">Epson</div><div class="name" style="font-size:14px">EcoTank L3250 Ink Tank</div><div class="price" style="font-size:18px">$239</div><span class="pill pill-ok"><i class="dot"></i>In stock</span></div>
+    </div>
+  </div>
+
+  <!-- Trust list -->
+  <div style="background:#f4f2ec;margin-top:28px;padding:20px 16px">
+    <div class="trustm"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V5z"></path><path d="m9 12 2 2 4-4"></path></svg></div><div><div style="font-weight:600;font-size:14px">Official warranty</div><div style="font-size:13px;color:var(--ink3)">12–24 months, serial registered on your invoice.</div></div></div>
+    <div class="trustm"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M2 10h20"></path></svg></div><div><div style="font-weight:600;font-size:14px">Pay your way</div><div style="font-size:13px;color:var(--ink3)">EVC Plus, eDahab, M-Pesa, Telebirr, cards or cash on delivery.</div></div></div>
+    <div class="trustm"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z"></path><circle cx="7" cy="18" r="1.5"></circle><circle cx="17" cy="18" r="1.5"></circle></svg></div><div><div style="font-weight:600;font-size:14px">Delivery in 5 countries</div><div style="font-size:13px;color:var(--ink3)">Courier or pickup in Mogadishu, Nairobi, Addis Ababa, Djibouti, Kampala.</div></div></div>
+    <div class="trustm"><div class="ic"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"></path></svg></div><div><div style="font-weight:600;font-size:14px">WhatsApp support</div><div style="font-size:13px;color:var(--ink3)">Order updates on the channel you already use.</div></div></div>
+  </div>
+
+  <!-- Condensed footer -->
+  <div class="footer" style="padding:32px 16px 24px">
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="logo" style="color:#f7f5f0;font-size:18px"><div class="mk"><i></i><b></b><i></i></div>Hurbad <span style="color:#f7f5f0">Hardware</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:16px">
+        <div><h4>Shop</h4><a>Smartphones</a><a>Laptops</a><a>Networking</a><a>CCTV</a></div>
+        <div><h4>Help</h4><a>Track your order</a><a>Warranty</a><a>Returns</a><a>Contact</a></div>
+      </div>
+      <div>
+        <h4>We accept</h4>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <span style="height:26px;padding:0 8px;border:1px solid #333339;border-radius:6px;font:600 10px var(--fb);display:flex;align-items:center">EVC Plus</span><span style="height:26px;padding:0 8px;border:1px solid #333339;border-radius:6px;font:600 10px var(--fb);display:flex;align-items:center">eDahab</span><span style="height:26px;padding:0 8px;border:1px solid #333339;border-radius:6px;font:600 10px var(--fb);display:flex;align-items:center">M-Pesa</span><span style="height:26px;padding:0 8px;border:1px solid #333339;border-radius:6px;font:600 10px var(--fb);display:flex;align-items:center">Telebirr</span><span style="height:26px;padding:0 8px;border:1px solid #333339;border-radius:6px;font:600 10px var(--fb);display:flex;align-items:center">VISA</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid #26262b;padding-top:16px;font-size:12px;color:#7d7b74;display:flex;flex-direction:column;gap:6px">
+        <span>English · Soomaali · USD · SOS · KES</span>
+        <span>© 2026 Hurbad Hardware</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fab" style="right:16px;bottom:16px"><svg class="ico" viewBox="0 0 24 24" style="width:24px;height:24px;color:#0f0f10"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"></path></svg></div>
+</div>
+</x-dc>
+</body>
+</html>

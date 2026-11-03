@@ -1,0 +1,18 @@
+{
+  "ci": {
+    "collect": {
+      "url": ["/en", "/en/c/smartphones", "/en/p/samsung-galaxy-s25-256gb"],
+      "numberOfRuns": 3,
+      "settings": { "preset": "mobile" }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["warn", { "minScore": 0.85 }],
+        "largest-contentful-paint": ["warn", { "maxNumericValue": 2500 }],
+        "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
+        "total-byte-weight": ["warn", { "maxNumericValue": 600000 }]
+      }
+    },
+    "upload": { "target": "temporary-public-storage" }
+  }
+}

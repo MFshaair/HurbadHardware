@@ -1,0 +1,266 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{--p:#ff7417;--p-press:#d95f0e;--p-deep:#b84d05;--p-soft:#ffe8d6;--p-tint:#fff4eb;--on-p:#1a0c02;
+    --ink:#0f0f10;--ink2:#3d3d42;--ink3:#6f6f78;--ink4:#a2a2aa;--od:#f7f5f0;--od2:#b9b6ad;--od3:#7d7b74;
+    --night:#0a0a0b;--night2:#141416;--night3:#1d1d21;--cream:#fbfaf6;--soft:#f4f2ec;--light:#ffffff;
+    --hl:#e6e3db;--hl2:#d6d2c7;--hld:#26262b;--hld2:#333339;
+    --ok:#157347;--ok-s:#d7f5e3;--warn:#9a5b00;--warn-s:#fff0c2;--bad:#b3261e;--bad-s:#fde3e1;--info:#1f4fbf;--info-s:#e3ebfb;
+    --wa:#25d366;--mpesa:#3cb44b;--evc:#1a9bd7;
+    --fd:"Sora","Helvetica Neue",Arial,sans-serif;--fb:"DM Sans","Helvetica Neue",Arial,sans-serif;--fm:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --sh1:0 1px 2px rgba(15,15,16,.06),0 4px 12px rgba(15,15,16,.06);
+    --sh2:0 8px 8px rgba(0,0,0,.06),0 4px 4px rgba(0,0,0,.06),0 2px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.06);
+    --sh3:0 25px 50px -12px rgba(15,15,16,.25);}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--ink);text-decoration:none} a:hover{color:var(--p-deep)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .display{font-family:var(--fd);font-weight:300;letter-spacing:-.03em;line-height:1.02}
+  .h{font-family:var(--fd);font-weight:400;letter-spacing:-.01em;line-height:1.2}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink3)}
+  .mono{font-family:var(--fm);font-size:13px;font-weight:500}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:9999px;font:600 15px/1 var(--fb);border:1px solid transparent;cursor:pointer;white-space:nowrap}
+  .btn-lg{height:48px;padding:0 26px;font-size:16px}
+  .btn-sm{height:36px;padding:0 16px;font-size:14px}
+  .btn-p{background:var(--p);color:var(--on-p)}
+  .btn-ink{background:var(--ink);color:var(--od)}
+  .btn-o{background:var(--light);color:var(--ink);border-color:var(--ink)}
+  .btn-od{background:transparent;color:var(--od);border-color:var(--od)}
+  .btn-g{background:transparent;color:var(--ink2)}
+  .btn-wa{background:var(--wa);color:var(--ink)}
+  .btn-icon{width:44px;padding:0}
+  .input{height:44px;padding:0 14px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);font:400 15px var(--fb);color:var(--ink);display:flex;align-items:center;gap:10px}
+  .input .ph{color:var(--ink3)}
+  .input.focus{outline:2px solid var(--p);outline-offset:2px}
+  .input.err{border-color:var(--bad)}
+  .label{font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:6px;display:block}
+  .help{font-size:13px;color:var(--ink3)}
+  .card{background:var(--light);border:1px solid var(--hl);border-radius:14px}
+  .card-n{background:var(--night2);border:1px solid var(--hld);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);color:var(--od)}
+  .tag{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:500;background:var(--soft);color:var(--ink2)}
+  .tag-p{background:var(--p-soft);color:var(--p-deep)}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:600}
+  .pill-ok{background:var(--ok-s);color:var(--ok)} .pill-warn{background:var(--warn-s);color:var(--warn)} .pill-bad{background:var(--bad-s);color:var(--bad)} .pill-info{background:var(--info-s);color:var(--info)} .pill-n{background:var(--soft);color:var(--ink2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .hr{height:1px;background:var(--hl)}
+  .container{width:1280px;margin:0 auto;padding:0 32px}
+  .nav{display:flex;align-items:center;gap:32px;height:64px;padding:0 32px}
+  .nav-links{display:flex;gap:24px;font-weight:500;font-size:14px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:var(--fb);font-weight:700;font-size:17px;letter-spacing:.6px;text-transform:uppercase;color:var(--p);line-height:1}
+  .logo .mk{width:32px;height:32px;border-radius:7px;background:var(--p);display:grid;grid-template-columns:4px 9px 4px;align-items:center;justify-content:center;flex:none}
+  .logo .mk i{display:block;height:20px;background:#fff;border-radius:1px}
+  .logo .mk b{display:block;height:4px;background:#fff}
+  .logo span{font-weight:300;color:var(--ink);letter-spacing:2.6px;font-size:12px;margin-left:2px}
+  .product{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .product .img{aspect-ratio:1;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;position:relative}
+  .product .name{font:500 15px/1.3 var(--fd);letter-spacing:-.01em}
+  .price{font-family:var(--fd);font-weight:500;font-size:20px;letter-spacing:-.2px;font-feature-settings:"tnum"}
+  .price-lg{font-family:var(--fd);font-weight:400;font-size:32px;letter-spacing:-.6px;font-feature-settings:"tnum";line-height:1}
+  .strike{font-size:13px;color:var(--ink3);text-decoration:line-through;font-feature-settings:"tnum"}
+  .table{width:100%;border-collapse:collapse}
+  .table th{background:var(--soft);font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--hl)}
+  .table td{padding:0 16px;height:48px;border-bottom:1px solid var(--hl);font-size:14px;font-feature-settings:"tnum"}
+  .table .r{text-align:right}
+  .fab{position:absolute;right:32px;bottom:32px;width:56px;height:56px;border-radius:9999px;background:var(--wa);display:flex;align-items:center;justify-content:center;box-shadow:var(--sh2)}
+  .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .ico-sm{width:16px;height:16px}
+  .photo{background:radial-gradient(120% 90% at 50% 40%,#2a2a2f 0%,#141416 60%,#0a0a0b 100%)}
+  .mat{background:var(--soft)}
+  .device{border-radius:18px;background:linear-gradient(160deg,#3a3a40,#17171a);box-shadow:0 20px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12)}
+  .laptop{border-radius:10px;background:linear-gradient(160deg,#d9d7d0,#a8a6a0)}
+  .footer{background:var(--night);color:var(--od2);padding:64px 32px 32px}
+  .footer h4{color:var(--od);font:600 13px var(--fb);margin:0 0 14px}
+  .footer a{color:var(--od2);font-size:14px;display:block;margin-bottom:10px}
+  .footer a:hover{color:var(--od)}
+  .side{width:240px;background:var(--night);color:var(--od2);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+  .side .item{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;border-left:3px solid transparent}
+  .side .item.on{background:var(--night3);color:var(--od);border-left-color:var(--p)}
+  .side .grp{font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--od3);padding:16px 12px 6px}
+  .topbar{height:56px;border-bottom:1px solid var(--hl);background:var(--light);display:flex;align-items:center;gap:16px;padding:0 24px}
+  .kpi{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:20px}
+  .kpi .v{font-family:var(--fd);font-weight:400;font-size:28px;letter-spacing:-.5px;font-feature-settings:"tnum"}
+  .steps{display:flex;gap:0;align-items:center}
+  .step{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink3)}
+  .step .n{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--hl2);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .step.done .n{background:var(--ink);border-color:var(--ink);color:var(--od)}
+  .step.on{color:var(--ink)} .step.on .n{border-color:var(--p);background:var(--p);color:var(--on-p)}
+  .step-line{width:40px;height:1px;background:var(--hl2);margin:0 10px}
+  .pay{display:flex;align-items:center;gap:14px;height:64px;padding:0 16px;border:1px solid var(--hl);border-radius:12px;background:var(--light)}
+  .pay.on{border:2px solid var(--p);background:var(--p-tint)}
+  .pay .glyph{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:600 11px var(--fb);background:var(--soft);color:var(--ink2)}
+  .pay.on .glyph{color:#fff}
+  .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--hl2);margin-left:auto}
+  .pay.on .radio{border:6px solid var(--p);background:#fff}
+  .tl{display:flex;flex-direction:column;position:relative}
+  .tl .ev{display:flex;gap:16px;padding-bottom:22px;position:relative}
+  .tl .ev:before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:2px;background:var(--hl)}
+  .tl .ev:last-child:before{display:none}
+  .tl .d{width:12px;height:12px;border-radius:50%;background:var(--ink);flex:none;margin-top:4px}
+  .tl .ev.now .d{background:var(--p);box-shadow:0 0 0 4px var(--p-soft)}
+  .tl .ev.next .d{background:var(--hl2)}
+  .tl .ev.next{color:var(--ink3)}
+  .otp{display:flex;gap:10px}
+  .otp i{width:52px;height:60px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);display:flex;align-items:center;justify-content:center;font:500 24px var(--fd);font-style:normal}
+  .otp i.on{outline:2px solid var(--p);outline-offset:2px}
+  .bottombar{position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--light);border-top:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+  .announce{height:36px;background:var(--ink);color:var(--od);font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
+</style>
+<style>
+  .tpl{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:16px}
+  .tpl .hd{display:flex;align-items:center;gap:10px}
+  .tpl .key{font-family:var(--fm);font-size:12px;font-weight:500;color:var(--ink2);background:var(--soft);border-radius:4px;padding:4px 8px}
+  .mat2{background:var(--soft);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
+  .sender{display:flex;align-items:center;gap:8px}
+  .sender .av{width:26px;height:26px;border-radius:9999px;background:var(--ink);color:var(--od);font:600 10px var(--fb);display:flex;align-items:center;justify-content:center;letter-spacing:.4px}
+  .sender .nm{font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:.6px;color:var(--ink2)}
+  .bub{background:var(--light);border:1px solid var(--hl);border-radius:14px 14px 14px 4px;padding:12px 14px;font-size:15px;line-height:1.5;color:var(--ink);max-width:100%;box-shadow:var(--sh1)}
+  .meta{display:flex;align-items:center;gap:10px;padding-left:34px}
+  .cnt{font-family:var(--fm);font-size:12px;font-weight:500;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .lang{font:600 11px var(--fb);letter-spacing:1.2px;color:var(--ink3);width:22px;flex:none;padding-top:4px}
+  .row{display:flex;gap:10px;align-items:flex-start}
+  .v{font-family:var(--fm);font-size:14px;background:var(--p-soft);color:var(--p-deep);border-radius:4px;padding:0 4px}
+</style>
+</helmet>
+
+<div style="width:1440px;position:relative;background:#fbfaf6;padding-bottom:88px">
+
+  <!-- header -->
+  <div style="padding:64px 66px 40px;display:flex;justify-content:space-between;align-items:flex-end;gap:48px">
+    <div style="display:flex;flex-direction:column;gap:12px;max-width:820px">
+      <div class="eyebrow">System states · 04</div>
+      <div class="display" style="font-size:48px;letter-spacing:-1.2px">SMS templates</div>
+      <p style="margin:0;font-size:18px;line-height:1.55;color:#3d3d42">Every transactional SMS in English and Soomaali, sent from the alphanumeric sender <span class="mono" style="font-size:15px">HURBAD</span> through the Twilio messaging service. Bodies are GSM-7 and must fit one segment; the counter is the design constraint, not a suggestion.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex:none">
+      <span class="tag">GSM-7 · 160 chars / segment</span>
+      <span class="tag">No emoji · no shortened tracking links</span>
+      <span class="tag">Transactional — no STOP footer</span>
+    </div>
+  </div>
+
+  <div style="padding:0 66px;display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:24px">
+
+    <!-- OTP -->
+    <div class="tpl">
+      <div class="hd"><span class="key">OTP</span><span class="pill pill-info">Authentication</span><span class="help" style="margin-left:auto">Sent in-process, never queued</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">14:26</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub"><span class="v">482915</span> is your Hurbad Hardware verification code. It expires in 10 minutes. Do not share it.</div></div>
+        <div class="meta"><span class="cnt">92 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub"><span class="v">482915</span> waa koodhkaaga xaqiijinta Hurbad Hardware. Wuxuu dhacayaa 10 daqiiqo gudahood. Cidna ha la wadaagin.</div></div>
+        <div class="meta"><span class="cnt">107 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- ORDER_CONFIRMED -->
+    <div class="tpl">
+      <div class="hd"><span class="key">ORDER_CONFIRMED</span><span class="pill pill-n">Utility</span><span class="help" style="margin-left:auto">Fallback after WhatsApp</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">14:31</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">Thank you Amina! Your Hurbad Hardware order <span class="v">HH-260913-K7Q2M</span> is confirmed. Total: <span class="v">$1,260.00</span>. Track it: hurbad.so/t/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">119 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">Mahadsanid Amina! Dalabkaaga Hurbad Hardware <span class="v">HH-260913-K7Q2M</span> waa la xaqiijiyay. Wadarta: <span class="v">$1,260.00</span>. Raac: hurbad.so/t/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">123 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- PAYMENT_RECEIVED -->
+    <div class="tpl">
+      <div class="hd"><span class="key">PAYMENT_RECEIVED</span><span class="pill pill-ok">Money in</span><span class="help" style="margin-left:auto">Reference is the provider's, verbatim</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">14:33</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">We received your payment of <span class="v">$1,260.00</span> for order <span class="v">HH-260913-K7Q2M</span> via <span class="v">EVC Plus</span>. Reference: <span class="v">EVC8H2K91Z</span>.</div></div>
+        <div class="meta"><span class="cnt">100 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">Waxaan helnay lacagtaada <span class="v">$1,260.00</span> ee dalabka <span class="v">HH-260913-K7Q2M</span> oo <span class="v">EVC Plus</span> ah. Tixraac: <span class="v">EVC8H2K91Z</span>.</div></div>
+        <div class="meta"><span class="cnt">98 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- ORDER_SHIPPED -->
+    <div class="tpl">
+      <div class="hd"><span class="key">ORDER_SHIPPED</span><span class="pill pill-info">Utility</span><span class="help" style="margin-left:auto">Carrier name never abbreviated</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">09:12</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">Good news! Order <span class="v">HH-260913-K7Q2M</span> shipped with <span class="v">Hurbad Express</span> (tracking <span class="v">HX448210</span>). Follow it: hurbad.so/t/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">110 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">War wanaagsan! Dalabka <span class="v">HH-260913-K7Q2M</span> waa la diray, <span class="v">Hurbad Express</span> (raadraac <span class="v">HX448210</span>). Raac: hurbad.so/t/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">112 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- OUT FOR DELIVERY -->
+    <div class="tpl">
+      <div class="hd"><span class="key">ORDER_OUT_FOR_DELIVERY</span><span class="pill pill-info">Utility</span><span class="help" style="margin-left:auto">Sent 07:00–09:00 EAT only</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">07:48</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">Your order <span class="v">HH-260913-K7Q2M</span> is out for delivery today. Questions? WhatsApp us: <span class="v">+252 61 234 5678</span></div></div>
+        <div class="meta"><span class="cnt">94 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">Dalabkaaga <span class="v">HH-260913-K7Q2M</span> maanta waa la keenayaa. Su'aal ma qabtaa? WhatsApp: <span class="v">+252 61 234 5678</span></div></div>
+        <div class="meta"><span class="cnt">95 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- DELIVERED -->
+    <div class="tpl">
+      <div class="hd"><span class="key">ORDER_DELIVERED</span><span class="pill pill-ok">Delivered</span><span class="help" style="margin-left:auto">Review link, not a rating widget</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">11:04</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">Order <span class="v">HH-260913-K7Q2M</span> was delivered. Enjoy! We'd love your review: hurbad.so/r/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">84 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">Dalabka <span class="v">HH-260913-K7Q2M</span> waa la gaarsiiyay. Ku raaxayso! Faallo nala wadaag: hurbad.so/r/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">93 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- PAYMENT FAILED -->
+    <div class="tpl">
+      <div class="hd"><span class="key">PAYMENT_FAILED</span><span class="pill pill-bad">Action needed</span><span class="help" style="margin-left:auto">Never says why in the SMS</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">14:29</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub">Payment for order <span class="v">HH-260913-K7Q2M</span> was not completed. Try again: hurbad.so/pay/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">83 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub">Lacag bixinta dalabka <span class="v">HH-260913-K7Q2M</span> lama dhammaystirin. Isku day mar kale: hurbad.so/pay/K7Q2M</div></div>
+        <div class="meta"><span class="cnt">96 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+    <!-- BACK IN STOCK -->
+    <div class="tpl">
+      <div class="hd"><span class="key">BACK_IN_STOCK</span><span class="pill pill-warn">Opt-in required</span><span class="help" style="margin-left:auto">Once per product per customer</span></div>
+      <div class="mat2">
+        <div class="sender"><span class="av">HH</span><span class="nm">HURBAD</span><span class="help" style="margin-left:auto">16:20</span></div>
+        <div class="row"><span class="lang">EN</span><div class="bub"><span class="v">MacBook Air M4 13-inch</span> is back in stock at Hurbad Hardware. Get it before it sells out: hurbad.so/p/mba-m4</div></div>
+        <div class="meta"><span class="cnt">106 / 160</span><span class="tag">1 segment</span></div>
+        <div class="row" style="margin-top:6px"><span class="lang">SO</span><div class="bub"><span class="v">MacBook Air M4 13-inch</span> ayaa dib u yimid Hurbad Hardware. Hel ka hor intaanu dhammaan: hurbad.so/p/mba-m4</div></div>
+        <div class="meta"><span class="cnt">104 / 160</span><span class="tag">1 segment</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- rules strip -->
+  <div style="padding:40px 66px 0">
+    <div style="background:#ffe8d6;border-radius:14px;padding:24px 28px;display:flex;gap:40px;align-items:center">
+      <div style="flex:1">
+        <div class="h" style="font-size:22px;margin-bottom:6px">Counting rules</div>
+        <p style="margin:0;font-size:15px;line-height:1.5;color:#3d3d42">Somali strings run <span class="num" style="font-weight:600">8–15%</span> longer than English. Every template is written so the Somali version — not the English one — stays inside a single segment. Any body over <span class="num" style="font-weight:600">160</span> characters shows the counter in warning and must be shortened before it ships.</p>
+      </div>
+      <div style="display:flex;gap:12px;flex:none">
+        <div style="background:#ffffff;border-radius:10px;padding:14px 18px;text-align:center"><div class="cnt" style="font-size:20px;color:#0f0f10">160</div><div class="help">chars / segment</div></div>
+        <div style="background:#ffffff;border-radius:10px;padding:14px 18px;text-align:center"><div class="cnt" style="font-size:20px;color:#0f0f10">123</div><div class="help">longest body</div></div>
+        <div style="background:#ffffff;border-radius:10px;padding:14px 18px;text-align:center"><div class="cnt" style="font-size:20px;color:#0f0f10">60s</div><div class="help">send SLA</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

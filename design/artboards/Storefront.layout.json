@@ -1,0 +1,15 @@
+[
+  { "file": "CategoryListing.dc.html", "w": 1440, "h": 2900 },
+  { "file": "ProductDetail.dc.html", "w": 1440, "h": 3080 },
+  { "file": "SearchResults.dc.html", "w": 1440, "h": 1780 },
+  { "file": "Compare.dc.html", "w": 1440, "h": 2120 },
+  { "file": "Cart.dc.html", "w": 1440, "h": 1960 },
+  { "file": "Checkout.dc.html", "w": 1440, "h": 1560 },
+  { "file": "PaymentPush.dc.html", "w": 1440, "h": 1640 },
+  { "file": "OrderConfirmation.dc.html", "w": 1440, "h": 1900 },
+  { "file": "OrderTracking.dc.html", "w": 1440, "h": 1800 },
+  { "file": "InfoWarranty.dc.html", "w": 1440, "h": 2680 },
+  { "file": "MobileHome.dc.html", "w": 390, "h": 3050 },
+  { "file": "MobileProduct.dc.html", "w": 390, "h": 2320 },
+  { "file": "MobileCheckout.dc.html", "w": 390, "h": 1380 }
+]

@@ -1,0 +1,58 @@
+{
+  "slug": "cisco-cbs350-24p",
+  "sku": "CIS-CBS350",
+  "name": "Cisco CBS350-24P Managed Switch",
+  "brand": "cisco",
+  "category": "switches",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "cisco cbs350 managed poe switch 24 port",
+  "publishedDaysAgo": 100,
+  "translations": {
+    "en": {
+      "name": "Cisco CBS350-24P Managed Switch",
+      "shortDescription": "24-port managed PoE+ switch for business networks.",
+      "description": "## Cisco CBS350-24P\n\nA 24-port managed Layer 2/3 switch with PoE+ on every port, built for growing business networks.\n\n- 24× Gigabit PoE+ ports, 195 W PoE budget\n- 4× 1G SFP uplinks\n- Web-based management and VLAN support"
+    },
+    "so": {
+      "name": "Cisco CBS350-24P Managed Switch",
+      "shortDescription": "Switch 24-dekedood ah oo la maamulo, leh PoE+, loogu talagalay shabakadaha ganacsiga.",
+      "description": "## Cisco CBS350-24P\n\nSwitch 24-dekedood ah oo Layer 2/3 ah oo la maamulo, leh PoE+ dekad kasta, loogu talagalay shabakadaha ganacsiga ee koraya.\n\n- 24× dekedood Gigabit PoE+ ah, miisaanka PoE 195 W\n- 4× SFP 1G ah oo kor loo xidho\n- Maamul web ku salaysan iyo taageero VLAN"
+    }
+  },
+  "attributes": {
+    "device_type": "switch",
+    "wifi_standard": "none",
+    "max_speed_mbps": 1000,
+    "ports_count": 24,
+    "port_speed": "1g",
+    "poe": "poe+",
+    "managed": true,
+    "mesh": false
+  },
+  "media": [
+    {
+      "key": "seed/products/cisco-cbs350-24p/0.webp",
+      "alt": "cisco cbs350 24p",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "CIS-CBS350-24P-STD",
+      "options": [],
+      "priceUsdCents": 49900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 2,
+        "NBO": 1
+      }
+    }
+  ]
+}

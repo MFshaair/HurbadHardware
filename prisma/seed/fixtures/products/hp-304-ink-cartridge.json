@@ -1,0 +1,55 @@
+{
+  "slug": "hp-304-ink-cartridge",
+  "sku": "HP-304-INK",
+  "name": "HP 304 Ink Cartridge (Black + Tri-color)",
+  "brand": "hp",
+  "category": "ink-toner",
+  "status": "ACTIVE",
+  "warrantyMonths": 6,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "hp 304 ink cartridge black tri-color",
+  "publishedDaysAgo": 100,
+  "translations": {
+    "en": {
+      "name": "HP 304 Ink Cartridge (Black + Tri-color)",
+      "shortDescription": "Original HP 304 ink cartridge set for HP DeskJet and ENVY printers.",
+      "description": "## HP 304 Ink Cartridge\n\nOriginal HP ink that protects your printer and delivers consistent print quality, compatible with HP DeskJet 2620/2630 and ENVY 5020/5030 series.\n\n- Black and tri-color cartridge pair\n- Prints up to 120 pages (black), 100 pages (color)"
+    },
+    "so": {
+      "name": "HP 304 Ink Cartridge (Black + Tri-color)",
+      "shortDescription": "Xirmo khad HP 304 ah oo asal ah, loogu talagalay daabacayaasha HP DeskJet iyo ENVY.",
+      "description": "## HP 304 Ink Cartridge\n\nKhad HP ah oo asal ah oo ilaalisa daabacahaaga oo bixisa daabacaad tayo leh, waxay la jaanqaadaa taxanaha HP DeskJet 2620/2630 iyo ENVY 5020/5030.\n\n- Lamaane khad oo madow iyo midab-kaladuwan\n- Waxay daabacdaa ilaa 120 bog (madow), 100 bog (midab)"
+    }
+  },
+  "attributes": {
+    "printer_type": "consumable",
+    "color": true,
+    "functions": [],
+    "compatible_models": "HP DeskJet 2620/2630, ENVY 5020/5030",
+    "page_yield": 120
+  },
+  "media": [
+    {
+      "key": "seed/products/hp-304-ink-cartridge/0.webp",
+      "alt": "hp 304 ink cartridge",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HP-304-INK-STD",
+      "options": [],
+      "priceUsdCents": 2500,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 40,
+        "NBO": 25
+      }
+    }
+  ]
+}

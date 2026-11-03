@@ -1,0 +1,55 @@
+{
+  "slug": "sandisk-extreme-portable-ssd-1tb",
+  "sku": "SAN-EXTSSD1TB",
+  "name": "SanDisk Extreme Portable SSD 1TB",
+  "brand": "western-digital",
+  "category": "storage-devices",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "sandisk extreme portable ssd 1tb usb-c",
+  "publishedDaysAgo": 28,
+  "translations": {
+    "en": {
+      "name": "SanDisk Extreme Portable SSD 1TB",
+      "shortDescription": "Rugged 1TB portable SSD with 1050 MB/s transfer speed.",
+      "description": "## SanDisk Extreme Portable SSD 1TB\n\nA rugged, IP55-rated portable SSD with up to 1050 MB/s read speeds, fast enough for 4K video editing on the go.\n\n- 1 TB capacity\n- USB-C 3.2 Gen 2 interface\n- IP55 dust and water resistance, drop-proof to 2m"
+    },
+    "so": {
+      "name": "SanDisk Extreme Portable SSD 1TB",
+      "shortDescription": "SSD la qaadan karo oo 1TB ah, xawaaraha wareejinta 1050 MB/s.",
+      "description": "## SanDisk Extreme Portable SSD 1TB\n\nSSD la qaadan karo oo adag, heerka IP55 leh, xawaaraha akhrinta ilaa 1050 MB/s, ku filan tifaftirka muuqaalka 4K marka aad socoto.\n\n- Awood 1 TB ah\n- Interface USB-C 3.2 Gen 2 ah\n- Boodh iyo biyo ka celin IP55, dhicis ka badbaadin ilaa 2m"
+    }
+  },
+  "attributes": {
+    "accessory_type": "external-drive",
+    "compatibility": "USB-C and USB-A hosts",
+    "wattage_w": 0,
+    "connector": ["usb-c"],
+    "wireless": false
+  },
+  "media": [
+    {
+      "key": "seed/products/sandisk-extreme-portable-ssd-1tb/0.webp",
+      "alt": "sandisk extreme portable ssd 1tb",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "SAN-EXTSSD1TB-STD",
+      "options": [],
+      "priceUsdCents": 7900,
+      "compareAtUsdCents": 8900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 9,
+        "NBO": 6
+      }
+    }
+  ]
+}

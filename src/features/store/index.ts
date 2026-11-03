@@ -1,0 +1,1 @@
+export { getStoreSettings } from './queries';

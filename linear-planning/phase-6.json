@@ -1,0 +1,303 @@
+{
+  "phase": 6,
+  "name": "Phase 6 \u2014 Modern Platform Features",
+  "source": "docs/plans/phase-06-modern.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "Re-read rules, install dependencies, verify prerequisites",
+      "scope": "**Files:**\n- Modify: `package.json`, `src/lib/ratelimit.ts`, `.env.example` (no new vars; verify `ANTHROPIC_API_KEY`, `TURNSTILE_SECRET_KEY`, `NEXT_PUBLIC_TURNSTILE_SITE_KEY` present)\n- Create (only if missing): `src/lib/turnstile.ts`, `tests/fakes/fake-turnstile.ts`\n- Test: `tests/unit/lib/turnstile.test.ts`, `tests/unit/phase6-prereqs.test.ts`\n\n**Interfaces:**\n- Consumes: `env` from `src/lib/env.ts`; `AppError` from `src/lib/errors.ts`.\n- Produces: `verifyHuman(token: string, ip: string): Promise<void>`; `rateLimit('contact:ip', ip)` (5 / 1 h).",
+      "steps": [
+        "Step 1: Re-read `docs/README.md` \"Rules for the implementing model\" and `docs/plans/00-phases.md` \"Cross-phase rules\". Then run the prerequisite existence test (written first so that missing prerequisites fail loudly):",
+        "Step 2: Run `pnpm vitest run tests/unit/phase6-prereqs.test.ts --project unit`. Expected: all green. If any row fails, STOP and report the missing prerequisite to the user with the file path; do not continue to Task 2 until the previous phase provides it (or the user approves creating it here).",
+        "Step 3: Install dependencies (exact majors):",
+        "Step 4: Add the `contact:ip` limiter. In `src/lib/ratelimit.ts` extend the limiter table following the existing pattern (each entry is `Ratelimit.slidingWindow(limit, window)` keyed by name under prefix `hh:<env>:rl:`):",
+        "Step 5: BotID helper. Write the failing test:",
+        "Step 6: Run `pnpm vitest run tests/unit/lib/turnstile.test.ts --project unit`. If `src/lib/turnstile.ts` already exists from Phase 0 and the test passes, skip Step 7. If it does not exist, expected failure: `Failed to resolve import \"@/lib/turnstile\"`.",
+        "Step 7 (only if missing): Implement.",
+        "Step 8: Seed check for the assistant journey. Add to `prisma/seed/products.json` (or whichever file Phase 0 uses for demo products \u2014 keep its shape) a product with slug `tecno-spark-30-5g`, brand `tecno`, category `smartphones`, one default variant priced `24900` USD cents, attribute `network` = `5g",
+        "Step 9: Run `pnpm typecheck && pnpm lint && pnpm vitest run tests/unit/lib/turnstile.test.ts tests/unit/phase6-prereqs.test.ts --project unit`. Expected: pass.",
+        "Step 10: Commit:"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Assistant ports, Anthropic client and fake LLM",
+      "scope": "**Files:**\n- Create: `src/features/assistant/ports.ts`, `src/features/assistant/providers/anthropic.ts`, `tests/fakes/fake-llm.ts`\n- Modify: `src/lib/providers.ts`\n- Test: `tests/unit/features/assistant/anthropic-client.test.ts`, `tests/unit/fakes/fake-llm.test.ts`\n\n**Interfaces:**\n- Consumes: `env.ANTHROPIC_API_KEY`, `env.PROVIDER_MODE`; `ProductCardDTO` from `src/features/catalog/dto.ts`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/assistant tests/unit/fakes --project unit`. Expected: `Failed to resolve import \"@/features/assistant/providers/anthropic\"` and `\"../../fakes/fake-llm\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/features/assistant tests/unit/fakes --project unit`. Expected: 6 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Assistant tools",
+      "scope": "**Files:**\n- Create: `src/features/assistant/tools.ts`\n- Test: `tests/unit/features/assistant/tools.test.ts`\n\n**Interfaces:**\n- Consumes: `listProducts`, `getProductBySlug`, `getCompareData`, `getCategoryTree` (`@/features/catalog`); `listDeliveryZones` (`@/features/checkout`); `formatMoney` (`@/lib/money`).\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/assistant/tools.test.ts --project unit`. Expected: `Failed to resolve import \"@/features/assistant/tools\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/features/assistant/tools.test.ts --project unit`. Expected: 11 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Assistant system prompt",
+      "scope": "**Files:**\n- Create: `src/features/assistant/prompt.ts`\n- Test: `tests/unit/features/assistant/prompt.test.ts`\n\n**Interfaces:**\n- Consumes: `Locale`, `CurrencyCode`, `CountryCode` from `@prisma/client`.\n- Produces:\n\n\n\nThe prompt must be **byte-stable for a given context** (no `new Date()`, no random ids) so the Anthropic prompt prefix caches between turns.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/assistant/prompt.test.ts --project unit`. Expected: `Failed to resolve import \"@/features/assistant/prompt\"`.",
+        "Step 3: Implement. Write the file exactly as below \u2014 the prompt text is part of the specification, not a sketch.",
+        "Step 4: Run `pnpm vitest run tests/unit/features/assistant/prompt.test.ts --project unit`. Expected: 9 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Conversation persistence and the chat request schema",
+      "scope": "**Files:**\n- Create: `src/features/assistant/repository.ts`, `src/features/assistant/schemas.ts`\n- Test: `tests/unit/features/assistant/schemas.test.ts`, `tests/integration/assistant/repository.test.ts`\n\n**Interfaces:**\n- Consumes: `prisma` from `src/lib/db.ts`; model `AssistantConversation` (`prisma/schema.prisma`: `id`, `userId`, `sessionKey`, `messages: Json`, `createdAt`, `updatedAt`).\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/assistant/schemas.test.ts --project unit` then `pnpm vitest run tests/integration/assistant/repository.test.ts --project integration`. Expected: `Failed to resolve import \"@/features/assistant/schemas\"` and `\"@/features/assistant/repository\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run both commands from Step 2. Expected: 5 unit tests and 7 integration tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Assistant service \u2014 rate limit, tool loop, streaming events",
+      "scope": "**Files:**\n- Create: `src/features/assistant/service.ts`, `src/features/assistant/index.ts`\n- Test: `tests/unit/features/assistant/service.test.ts`\n\n**Interfaces:**\n- Consumes: `LlmClient` (`./ports`); `buildSystemPrompt` (`./prompt`); `executeTool`, `toolsForMode`, `ToolDeps` (`./tools`); `loadConversation`, `saveConversation`, `StoredMessage` (`./repository`); `rateLimit` (`@/lib/ratelimit`); `getLlmClient` (`@/lib/providers`); `logger` (`@/lib/logger`).\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/assistant/service.test.ts --project unit`. Expected: `Failed to resolve import \"@/features/assistant/service\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/features/assistant --project unit`. Expected: 8 new tests pass and the Task 2-4 tests stay green.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "SSE encoder and POST /api/ai/chat",
+      "scope": "**Files:**\n- Create: `src/lib/sse.ts`, `src/app/api/ai/chat/route.ts`\n- Test: `tests/unit/lib/sse.test.ts`, `tests/integration/assistant/chat-route.test.ts`\n\n**Interfaces:**\n- Consumes: `chatRequestSchema`, `runAssistantTurn` (`@/features/assistant`); `auth()` (`@/lib/auth`); cookies `hh_cart`, `hh_currency`, `hh_country`, `NEXT_LOCALE` (`02-architecture.md \u00a710`).\n- Produces: `formatSse(event: string, data: unknown): string`; `POST` route handler with `runtime = 'nodejs'`, `dynamic = 'force-dynamic'`, `maxDuration = 60`; SSE event names `text-delta`, `tool-result`, `done`, `error` (`04-api-contracts.md \u00a712`).",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/lib/sse.test.ts --project unit` then `pnpm vitest run tests/integration/assistant/chat-route.test.ts --project integration`. Expected: unresolved imports for `@/lib/sse` and `@/app/api/ai/chat/route`.",
+        "Step 3: Implement.",
+        "Step 4: Run both commands from Step 2, then `pnpm typecheck`. Expected: 2 unit tests and 6 integration tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Client SSE hook useAssistantChat",
+      "scope": "**Files:**\n- Create: `src/components/assistant/use-assistant-chat.ts`\n- Test: `tests/unit/components/assistant/use-assistant-chat.test.ts`\n\n**Interfaces:**\n- Consumes: `ProductCardDTO` (`@/features/catalog/dto`).\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/components/assistant/use-assistant-chat.test.ts --project unit`. Expected: `Failed to resolve import \"@/components/assistant/use-assistant-chat\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/components/assistant/use-assistant-chat.test.ts --project unit`. Expected: 8 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "AssistantChat UI and the assistant message namespace",
+      "scope": "**Files:**\n- Create: `src/components/assistant/assistant-message.tsx`, `src/components/assistant/suggested-prompts.tsx`, `src/components/assistant/assistant-chat.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/assistant/assistant-chat.test.tsx`\n\n**Interfaces:**\n- Consumes: `useAssistantChat` (Task 8); `Markdown` (`@/components/markdown`); `ProductCard` (`@/components/catalog/product-card`); `AddToCartButton` (`@/components/catalog/add-to-cart-button`); `Button`, `Textarea` (`@/components/ui/*`); `useTranslations` (next-intl).\n- Produces: `AssistantMessage({ message: ChatBubble })`, `SuggestedPrompts({ onPick, productMode })`, `AssistantChat({ productSlug?, autoFocus?, className? })`.",
+      "steps": [
+        "Step 1: Add the strings first (i18n parity is checked in Step 6). Add to `messages/en.json`:",
+        "Step 2: Write the failing component test.",
+        "Step 3: Implement the three components.",
+        "Step 4: Run `pnpm vitest run tests/unit/components/assistant --project unit`. Expected: 7 new tests pass.",
+        "Step 5: Run `pnpm i18n:check`. Expected: no missing keys.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Assistant page and entry points (header, product page)",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(shop)/assistant/page.tsx`, `src/app/[locale]/(shop)/assistant/loading.tsx`, `src/components/layout/assistant-link.tsx`, `src/components/assistant/ask-ai-button.tsx`\n- Modify: `src/components/layout/header.tsx`, `src/app/[locale]/(shop)/p/[slug]/page.tsx`, `messages/en.json`, `messages/so.json` (namespace `nav` key `assistant`)\n- Test: `tests/unit/components/assistant/ask-ai-button.test.tsx`\n\n**Interfaces:**\n- Consumes: `AssistantChat` (Task 9); `Link` from `@/lib/i18n/navigation`; `Sparkles` from `lucide-react`.\n- Produces: route `/[locale]/assistant` (`02-architecture.md \u00a73`); `AssistantLink()`; `AskAiButton({ productSlug })` which links to `/assistant?product=<slug>`.\n\nDecision recorded here so the implementer does not choose: the product-page entry is a **link to the assistant page with `?product=<slug>`**, not a modal. It keeps the product page free of the chat bundle (180 kB budget, Task 20) and gives the conversation a shareable URL.",
+      "steps": [
+        "Step 1: Add the nav string. `messages/en.json` \u2192 `\"nav\": { \u2026, \"assistant\": \"AI assistant\" }`; `messages/so.json` \u2192 `\"nav\": { \u2026, \"assistant\": \"Kaaliyaha AI\" }`.",
+        "Step 2: Write the failing test.",
+        "Step 3: Implement.",
+        "Step 4: Wire the entry points.",
+        "Step 5: Run `pnpm vitest run tests/unit/components/assistant --project unit && pnpm i18n:check && pnpm typecheck && pnpm build`. Expected: pass; `/[locale]/assistant` appears in the build route list.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "E2E journey 10 \u2014 AI assistant",
+      "scope": "**Files:**\n- Create: `tests/e2e/assistant.spec.ts`\n\n**Interfaces:**\n- Consumes: seeded product `tecno-spark-30-5g` (Task 1); `PROVIDER_MODE=fake` so `FakeLlmClient` answers; `tests/e2e/helpers.ts`.\n- Produces: journey 10 from `12-testing.md \u00a74`.",
+      "steps": [
+        "Step 1: Write the failing spec.",
+        "Step 2: Run `pnpm test:e2e tests/e2e/assistant.spec.ts`. Expected: failures until the app is built with the Task 9-10 code; if it already is, they pass. If the `data-testid=\"cart-count\"` handle does not exist in the header from Phase 2, use the header cart button's accessible name instead and update",
+        "Step 3: Fix any wiring the spec exposes (missing `aria-label`, missing suggested-prompt button, product not seeded). No new features.",
+        "Step 4: Run `pnpm test:e2e tests/e2e/assistant.spec.ts` on both projects (`--project desktop --project mobile`). Expected: 8 passing tests.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "PWA manifest and icons",
+      "scope": "**Files:**\n- Create: `src/app/manifest.ts`, `scripts/gen-icons.ts`, `public/icons/icon-192.png`, `public/icons/icon-512.png`, `public/icons/icon-maskable-512.png`\n- Modify: `package.json` (script `gen:icons`), `messages/en.json`, `messages/so.json` (namespace `pwa`)\n- Test: `tests/unit/app/manifest.test.ts`\n\n**Interfaces:**\n- Consumes: `env.NEXT_PUBLIC_APP_URL`; tokens `#0B3D91` (brand) and `#FAFAF7` (background) from `10-design-system.md \u00a71`.\n- Produces: `GET /manifest.webmanifest` via the Next 15 `MetadataRoute.Manifest` convention (`10-design-system.md \u00a78`).",
+      "steps": [
+        "Step 1: Add the `pwa` strings. `messages/en.json`:",
+        "Step 2: Write the failing test.",
+        "Step 3: Run `pnpm vitest run tests/unit/app --project unit`. Expected: unresolved import `@/app/manifest` and three missing icons.",
+        "Step 4: Implement the icon generator and run it.",
+        "Step 5: Run `pnpm vitest run tests/unit/app --project unit && pnpm i18n:check`. Expected: pass.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Serwist service worker and the offline page",
+      "scope": "**Files:**\n- Create: `src/app/sw.ts`, `src/app/[locale]/(shop)/offline/page.tsx`\n- Modify: `next.config.ts`, `tsconfig.json`, `.gitignore`\n- Test: `tests/unit/app/sw-config.test.ts`\n\n**Interfaces:**\n- Consumes: `@serwist/next` `withSerwist`, `serwist` (`defaultCache`, `Serwist`); `NEXT_PUBLIC_MEDIA_HOST`.\n- Produces: `public/sw.js` at build time; runtime caching per `10-design-system.md \u00a78` \u2014 precache the app shell, `CacheFirst` 30 days for `<ref>.supabase.co`, `NetworkFirst` for pages, offline fallback `/[locale]/offline`.",
+      "steps": [
+        "Step 1: Write the failing test (the service worker itself is exercised in e2e; this asserts the wiring that is easy to break silently).",
+        "Step 2: Run `pnpm vitest run tests/unit/app/sw-config.test.ts --project unit`. Expected: 4 failures.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/app/sw-config.test.ts --project unit && pnpm typecheck && pnpm build`. Expected: tests pass and the build writes `public/sw.js` (check with `node -e \"console.log(require('fs').statSync('public/sw.js').size)\"`).",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "InstallPrompt and PWA e2e (journey 12)",
+      "scope": "**Files:**\n- Create: `src/components/install-prompt.tsx`, `tests/e2e/pwa.spec.ts`\n- Modify: `src/app/[locale]/layout.tsx`\n- Test: `tests/unit/components/install-prompt.test.tsx`\n\n**Interfaces:**\n- Consumes: `pwa` messages (Task 12); `localStorage` keys `hh_pwa_views` and `hh_pwa_dismissed`.\n- Produces: `InstallPrompt()` \u2014 shows after **2 page views** on browsers that fire `beforeinstallprompt` (`10-design-system.md \u00a78`); journey 12 from `12-testing.md \u00a74`.",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/components/install-prompt.test.tsx --project unit`. Expected: `Failed to resolve import \"@/components/install-prompt\"`.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/components/install-prompt.test.tsx --project unit`. Expected: 5 tests pass. Then `pnpm build && pnpm test:e2e tests/e2e/pwa.spec.ts`. Expected: 5 e2e tests pass (they need a production build because Serwist is disabled in development).",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "BotID on every abuse-prone action",
+      "scope": "**Files:**\n- Modify: `src/features/auth/actions.ts` (`requestOtp`), `src/features/reviews/actions.ts` (`submitReview`), `src/features/orders/actions.ts` (`trackOrderPublic`), `src/features/stock-alerts/actions.ts` (`subscribeStockAlert`)\n- Test: `tests/integration/security/turnstile-wiring.test.ts`\n\n**Interfaces:**\n- Consumes: `verifyHuman(ctx)` (Task 1); `ActionContext.ip` (`04-api-contracts.md \u00a71`).\n- Produces: every one of the four actions rejects with `BOT_CHECK_FAILED` before any side effect when the token is bad.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/integration/security/turnstile-wiring.test.ts --project integration`. Expected: the contact row fails (Task 16) plus any action that is not yet verifying.",
+        "Step 3: For each of the four existing actions, add the verification as the **first statement** of the handler, before any rate limiting side effect or DB write:",
+        "Step 4: Run `pnpm vitest run tests/integration/security --project integration`. Expected: everything except the contact row passes.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Contact feature \u2014 submitContact and sendPlainEmail",
+      "scope": "**Files:**\n- Create: `src/features/contact/schemas.ts`, `src/features/contact/service.ts`, `src/features/contact/actions.ts`, `src/features/contact/index.ts`\n- Modify: `src/features/notifications/channels/email.ts`\n- Test: `tests/integration/contact/submit-contact.test.ts`, `tests/unit/features/contact/schemas.test.ts`\n\n**Interfaces:**\n- Consumes: `createAction` (`@/lib/action.ts`); `rateLimit('contact:ip', ctx.ip)` (Task 1); `verifyHuman`; `env.SUPPORT_EMAIL`, `env.EMAIL_FROM`; `logger`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/features/contact --project unit` and `pnpm vitest run tests/integration/contact --project integration`. Expected: unresolved imports.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/features/contact --project unit && pnpm vitest run tests/integration/contact tests/integration/security --project integration`. Expected: 5 + 5 + 8 tests pass \u2014 the Task 15 contact row is now green too.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Contact page, form and e2e",
+      "scope": "**Files:**\n- Create: `src/components/contact/contact-form.tsx`, `src/app/[locale]/(shop)/contact/page.tsx`, `src/app/[locale]/(shop)/contact/loading.tsx`, `tests/e2e/contact.spec.ts`\n- Modify: `messages/en.json`, `messages/so.json` (namespace `contact`), `src/components/layout/footer.tsx` (Help column link)\n- Test: `tests/unit/components/contact/contact-form.test.tsx`\n\n**Interfaces:**\n- Consumes: `submitContact` (Task 16); `BotIdClient`; `PhoneInput`; shadcn `Form`, `Input`, `Textarea`, `Button`; `toast` (sonner).\n- Produces: route `/[locale]/contact`; `ContactForm()`.",
+      "steps": [
+        "Step 1: Add the strings. `messages/en.json`:",
+        "Step 2: Write the failing tests.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/components/contact --project unit && pnpm i18n:check && pnpm build && pnpm test:e2e tests/e2e/contact.spec.ts`. Expected: 4 unit tests and 3 e2e tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "JSON-LD validation (M8)",
+      "scope": "**Files:**\n- Create: `src/lib/seo/jsonld-validate.ts`, `scripts/validate-jsonld.ts`, `tests/e2e/jsonld.spec.ts`\n- Modify: `package.json` (script `validate:jsonld`)\n- Test: `tests/unit/lib/seo/jsonld-validate.test.ts`\n\n**Interfaces:**\n- Consumes: `schema-dts` types (`Product`, `Offer`, `BreadcrumbList`, `Organization`); the JSON-LD blocks Phase 1 emits on the product page.\n- Produces:\n\n\n\n`schema-dts` gives compile-time types only, so the runtime checker below asserts the fields Google's Rich Results test requires for a product page; the `schema-dts` types are used to type the assertions so a spec drift is a type error too.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/lib/seo/jsonld-validate.test.ts --project unit`. Expected: unresolved import.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/lib/seo --project unit` (7 tests), then `pnpm build && pnpm start &` and `pnpm validate:jsonld`, then `pnpm test:e2e tests/e2e/jsonld.spec.ts`. If `validate:jsonld` reports issues, fix the Phase 1 JSON-LD emitter (do not relax the validator) and note the fix i",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Bundle analyzer and the 180 kB product-page gate",
+      "scope": "**Files:**\n- Create: `scripts/lib/source-scan.ts`, `scripts/check-bundle.ts`\n- Modify: `next.config.ts`, `package.json` (scripts `analyze`, `check:bundle`)\n- Test: `tests/unit/scripts/check-bundle.test.ts`\n\n**Interfaces:**\n- Consumes: `.next/app-build-manifest.json` and the `.next/static/**` chunk files written by `pnpm build`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts/check-bundle.test.ts --project unit`. Expected: unresolved import.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/check-bundle.test.ts --project unit`, then `pnpm build && pnpm check:bundle`. If the product route is over budget, fix it before continuing \u2014 in this order: (1) confirm `AssistantChat` is not imported by the product page (Task 10 uses a link, not a mod",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Image pipeline audit (M6)",
+      "scope": "**Files:**\n- Create: `scripts/check-images.ts`\n- Modify: `package.json` (script `check:images`)\n- Test: `tests/unit/scripts/check-images.test.ts`\n\n**Interfaces:**\n- Consumes: `listFiles`, `readSource`, `repoRoot` (Task 19).\n- Produces:\n\n\n\nRules enforced (`02-architecture.md \u00a78`, `10-design-system.md \u00a77`): every `next/image` that is not `fill`-less-fixed must carry `sizes`; no raw `<img>` in `src/app` or `src/components` outside `components/admin` and `components/emails`; at most one `priority` per file (the LCP image); `alt` always present; `unoptimized` never used.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts/check-images.test.ts --project unit`. Expected: unresolved import.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/check-images.test.ts --project unit` (7 tests), then `pnpm check:images`. Fix every finding in storefront code: add the `sizes` strings from `10-design-system.md \u00a77` (cards `\"(max-width:640px) 50vw, (max-width:1024px) 33vw, 25vw\"`, gallery main `\"(max-",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "loading.tsx coverage and cache-tag audits",
+      "scope": "**Files:**\n- Create: `scripts/check-loading.ts`, `scripts/check-caching.ts`\n- Modify: `package.json` (scripts `check:loading`, `check:caching`)\n- Test: `tests/unit/scripts/check-loading.test.ts`, `tests/unit/scripts/check-caching.test.ts`\n\n**Interfaces:**\n- Produces:\n\n\n\nRules (`10-design-system.md \u00a76`: \"Every route segment has `loading.tsx`\"; `02-architecture.md \u00a78`: `unstable_cache` keyed by locale+currency+params with **tags per entity**, `revalidateTag` on admin mutation).",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts --project unit`. Expected: two unresolved imports.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts --project unit`, then `pnpm check:loading` and `pnpm check:caching`. Fix every finding: add the missing `loading.tsx` skeletons (copy the layout of the page they cover \u2014 see the two written in Tasks 10 and 17), add `tags` to untagged `unstable_cache` c",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Font loading verification",
+      "scope": "**Files:**\n- Create: `scripts/check-fonts.ts`, `tests/e2e/fonts.spec.ts`\n- Modify: `package.json` (script `check:fonts`)\n- Test: `tests/unit/scripts/check-fonts.test.ts`\n\n**Interfaces:**\n- Produces:\n\n\n\nRule (`10-design-system.md \u00a71`): fonts are self-hosted through `@fontsource-variable/inter` and `@fontsource-variable/sora`; **no Google Fonts request at runtime** \u2014 which also matters because the CSP in `11-security.md \u00a77` sets `font-src 'self'`.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts/check-fonts.test.ts --project unit`. Expected: unresolved import.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/check-fonts.test.ts --project unit`, `pnpm check:fonts`, then `pnpm build && pnpm test:e2e tests/e2e/fonts.spec.ts`. Expected: green.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 23,
+      "title": "Accessibility sweep (journey 11)",
+      "scope": "**Files:**\n- Modify or create: `tests/e2e/a11y.spec.ts`\n- Test: itself\n\n**Interfaces:**\n- Consumes: `@axe-core/playwright`; the eight key pages from `ADR-014` plus the two pages this phase adds.\n- Produces: journey 11 from `12-testing.md \u00a74` \u2014 0 serious/critical violations.",
+      "steps": [
+        "Step 1: Write (or extend) the spec. If Phase 1-5 already created `tests/e2e/a11y.spec.ts`, add only the `assistant`, `contact` and `offline` rows to its page table and keep everything else.",
+        "Step 2: Run `pnpm test:e2e tests/e2e/a11y.spec.ts`. Expected: failures list concrete axe rule ids.",
+        "Step 3: Fix every serious/critical violation in the pages this phase added (labels on the chat textarea and the contact inputs are already in Tasks 9 and 17; typical remaining issues are colour contrast on `text-ink-3` and a missing `aria-label` on icon-only buttons such as `AssistantLink`). Do not ",
+        "Step 4: Run `pnpm test:e2e tests/e2e/a11y.spec.ts --project desktop --project mobile`. Expected: all green.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 24,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/phase-06.md`\n- Modify: `.github/workflows/ci.yml` (add the new checks), `package.json` (aggregate script `check:perf`)\n\n**Interfaces:**\n- Consumes: every script and test added in Tasks 1-23.\n- Produces: the phase-6 gate record required by `00-phases.md` (\"A phase is complete only when its gate output is pasted into `docs/plans/progress/phase-NN.md`\").",
+      "steps": [
+        "Step 1: Add the aggregate script to `package.json`:",
+        "Step 2: Add to `.github/workflows/ci.yml`, after the existing `pnpm build` step (so `.next` exists for `check:bundle`):",
+        "Step 3: Run the full gate, in this order, capturing the output of each command:",
+        "Step 4: Write `docs/plans/progress/phase-06.md` with this exact structure:",
+        "Step 5: Commit:"
+      ]
+    }
+  ]
+}

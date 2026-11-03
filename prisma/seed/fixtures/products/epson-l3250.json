@@ -1,0 +1,57 @@
+{
+  "slug": "epson-l3250",
+  "sku": "EPS-L3250",
+  "name": "Epson EcoTank L3250",
+  "brand": "epson",
+  "category": "inkjet-printers",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "epson ecotank l3250 inkjet wifi printer",
+  "publishedDaysAgo": 30,
+  "translations": {
+    "en": {
+      "name": "Epson EcoTank L3250",
+      "shortDescription": "Wi-Fi all-in-one inkjet printer with refillable ink tanks.",
+      "description": "## Epson EcoTank L3250\n\nA print-scan-copy inkjet printer with refillable ink tanks that cut printing costs dramatically.\n\n- Print, scan and copy\n- Wi-Fi and Wi-Fi Direct printing from phones\n- Bundled ink bottles print thousands of pages"
+    },
+    "so": {
+      "name": "Epson EcoTank L3250",
+      "shortDescription": "Daabace Wi-Fi ah oo inkjet ah, leh tenka khadka oo dib loo buuxin karo.",
+      "description": "## Epson EcoTank L3250\n\nDaabace daabaca-iskaanka-nuqulka ah oo leh tenka khadka oo dib loo buuxin karo, taasoo si weyn u yareysa kharashka daabacaadda.\n\n- Daabac, iskaan iyo nuqul\n- Daabac Wi-Fi iyo Wi-Fi Direct ah oo taleefannada laga sameeyo\n- Dhalooyinka khadka la socda waxay daabacaan kumanaan bog"
+    }
+  },
+  "attributes": {
+    "printer_type": "inkjet",
+    "color": true,
+    "functions": ["print", "scan", "copy"],
+    "ppm_mono": 10,
+    "duplex": false,
+    "wifi": true,
+    "paper_size": "a4"
+  },
+  "media": [
+    {
+      "key": "seed/products/epson-l3250/0.webp",
+      "alt": "epson l3250",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "EPS-L3250-STD",
+      "options": [],
+      "priceUsdCents": 17900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 10,
+        "NBO": 7
+      }
+    }
+  ]
+}

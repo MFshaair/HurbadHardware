@@ -1,0 +1,93 @@
+{
+  "slug": "dell-xps-13",
+  "sku": "DEL-XPS13",
+  "name": "Dell XPS 13",
+  "brand": "dell",
+  "category": "ultrabooks",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "dell xps 13 ultrabook thin light",
+  "publishedDaysAgo": 20,
+  "translations": {
+    "en": {
+      "name": "Dell XPS 13",
+      "shortDescription": "13.4\" ultra-thin laptop, Intel Core Ultra 7, 16 GB RAM, InfinityEdge display.",
+      "description": "## Dell XPS 13\n\nA 13.4-inch InfinityEdge display in a CNC-machined aluminium chassis weighing just 1.17 kg.\n\n- Intel Core Ultra 7 155H\n- 16 GB or 32 GB LPDDR5x memory\n- 512 GB or 1 TB NVMe SSD\n- Haptic touchpad, capacitive function row"
+    },
+    "so": {
+      "name": "Dell XPS 13",
+      "shortDescription": "Laptop caaga-dheer 13.4\" ah, Intel Core Ultra 7, 16 GB RAM, shaashad InfinityEdge ah.",
+      "description": "## Dell XPS 13\n\nShaashad InfinityEdge 13.4 inch ah oo ku jirta jidh aluminium ah oo miisaankeedu yahay 1.17 kg kaliya.\n\n- Intel Core Ultra 7 155H\n- Xusuus 16 GB ama 32 GB LPDDR5x\n- Kayd 512 GB ama 1 TB NVMe SSD\n- Touchpad dareen leh, saf shaqo oo taabasho ah"
+    }
+  },
+  "attributes": {
+    "os": "windows",
+    "cpu_brand": "intel",
+    "cpu_model": "Core Ultra 7 155H",
+    "ram": "16gb",
+    "ram_upgradeable": false,
+    "storage": "512gb",
+    "storage_type": "ssd",
+    "gpu": "Intel Arc Graphics",
+    "gpu_type": "integrated",
+    "screen_size": 13.4,
+    "resolution": "qhd",
+    "refresh_rate": "60hz",
+    "touchscreen": false,
+    "weight_kg": 1.17,
+    "battery_wh": 55,
+    "keyboard_backlit": true,
+    "ports": "2× Thunderbolt 4"
+  },
+  "media": [
+    {
+      "key": "seed/products/dell-xps-13/0.webp",
+      "alt": "dell xps 13",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "DEL-XPS13-16-512",
+      "options": [
+        {
+          "key": "ram",
+          "value": "16gb",
+          "labelEn": "16 GB",
+          "labelSo": "16 GB"
+        }
+      ],
+      "priceUsdCents": 159900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 3,
+        "NBO": 2
+      }
+    },
+    {
+      "sku": "DEL-XPS13-32-1TB",
+      "options": [
+        {
+          "key": "ram",
+          "value": "32gb",
+          "labelEn": "32 GB",
+          "labelSo": "32 GB"
+        }
+      ],
+      "priceUsdCents": 199900,
+      "compareAtUsdCents": 209900,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 1,
+        "NBO": 0
+      }
+    }
+  ]
+}

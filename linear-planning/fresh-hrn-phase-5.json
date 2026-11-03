@@ -1,0 +1,832 @@
+{
+  "workspace": "HurbadNexus",
+  "team": "48b76031-9714-4305-8106-2f4861de06c7",
+  "teamKey": "HRN",
+  "project": "P-HRN-2",
+  "projectUrl": "https://linear.app/hurbadnexus/project/hurbadhardware-b3d65d5c5127",
+  "created": [
+    {
+      "phase": 0,
+      "parent": "HRN-1",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-1/phase-0-foundation",
+      "milestone": "ced74def-bd2e-45de-8c30-97325dc77d25",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-2",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-2/001-read-the-rules-provision-accounts-submit-whatsapp-templates"
+        },
+        {
+          "number": 2,
+          "id": "HRN-3",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-3/002-repository-scaffold-and-tooling"
+        },
+        {
+          "number": 3,
+          "id": "HRN-4",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-4/003-test-tooling-vitest-projects-playwright-lhci-config"
+        },
+        {
+          "number": 4,
+          "id": "HRN-5",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-5/004-environment-validation-srclibenvts"
+        },
+        {
+          "number": 5,
+          "id": "HRN-6",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-6/005-error-model-and-logger"
+        },
+        {
+          "number": 6,
+          "id": "HRN-7",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-7/006-money-library"
+        },
+        {
+          "number": 7,
+          "id": "HRN-8",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-8/007-prisma-client-singleton-srclibdbts"
+        },
+        {
+          "number": 8,
+          "id": "HRN-9",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-9/008-migrations-initial-raw-sql-and-the-integration-test-harness"
+        },
+        {
+          "number": 9,
+          "id": "HRN-10",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-10/009-redis-key-value-store-and-rate-limiters"
+        },
+        {
+          "number": 10,
+          "id": "HRN-11",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-11/010-provider-registry-object-storage-supabase-storage-fake-and-botid"
+        },
+        {
+          "number": 11,
+          "id": "HRN-12",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-12/011-request-context-and-createaction"
+        },
+        {
+          "number": 12,
+          "id": "HRN-13",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-13/012-seed-fixtures-idempotent-runner-production-subset"
+        },
+        {
+          "number": 13,
+          "id": "HRN-14",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-14/013-test-factories-and-reference-data-bootstrap-for-integration-tests"
+        },
+        {
+          "number": 14,
+          "id": "HRN-15",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-15/014-message-channel-port-fake-channel-otp-service"
+        },
+        {
+          "number": 15,
+          "id": "HRN-16",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-16/015-next-intl-routing-messages-glossary-and-i18ncheck"
+        },
+        {
+          "number": 16,
+          "id": "HRN-17",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-17/016-authjs-v5-configuration"
+        },
+        {
+          "number": 17,
+          "id": "HRN-18",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-18/017-design-tokens-theme-provider-and-shadcn-primitives"
+        },
+        {
+          "number": 18,
+          "id": "HRN-19",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-19/018-layout-shell-header-footer-switchers-store-context-home"
+        },
+        {
+          "number": 19,
+          "id": "HRN-20",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-20/019-sign-in-page-phoneinput-otpinput-botidclient"
+        },
+        {
+          "number": 20,
+          "id": "HRN-21",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-21/020-middleware-nextconfigts-headers-health-endpoint-sentry-fake-routes"
+        },
+        {
+          "number": 21,
+          "id": "HRN-22",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-22/021-ci-pipeline-vercel-and-vercel-configuration"
+        },
+        {
+          "number": 22,
+          "id": "HRN-23",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-23/022-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 1,
+      "parent": "HRN-24",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-24/phase-1-catalog-and-search",
+      "milestone": "bd538fde-d05d-4e77-9eb6-f2f95aff0e9c",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-25",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-25/101-phase-1-kickoff-re-read-the-rules-verify-prerequisites-open-the"
+        },
+        {
+          "number": 2,
+          "id": "HRN-26",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-26/102-geteffectiveprice-promotion-window-resolution"
+        },
+        {
+          "number": 3,
+          "id": "HRN-27",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-27/103-catalog-dtos-and-mappers"
+        },
+        {
+          "number": 4,
+          "id": "HRN-28",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-28/104-exchange-rate-read-service-and-catalog-cache-tags"
+        },
+        {
+          "number": 5,
+          "id": "HRN-29",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-29/105-availability-reads-getcategorybypath-getbrand-getproductcards"
+        },
+        {
+          "number": 6,
+          "id": "HRN-30",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-30/106-listproducts-the-listing-sql"
+        },
+        {
+          "number": 7,
+          "id": "HRN-31",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-31/107-facets"
+        },
+        {
+          "number": 8,
+          "id": "HRN-32",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-32/108-searchsuggest-did-you-mean-and-get-apisearchsuggest"
+        },
+        {
+          "number": 9,
+          "id": "HRN-33",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-33/109-related-products-frequently-bought-together-recently-viewed-and"
+        },
+        {
+          "number": 10,
+          "id": "HRN-34",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-34/110-getcomparedata"
+        },
+        {
+          "number": 11,
+          "id": "HRN-35",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-35/111-gethomedata"
+        },
+        {
+          "number": 12,
+          "id": "HRN-36",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-36/112-catalog-ui-primitives-price-ratingstars-availabilitybadge"
+        },
+        {
+          "number": 13,
+          "id": "HRN-37",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-37/113-productcard-productgrid-productrail"
+        },
+        {
+          "number": 14,
+          "id": "HRN-38",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-38/114-listing-controls-sort-pagination-filters-chips-and-listingview"
+        },
+        {
+          "number": 15,
+          "id": "HRN-39",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-39/115-seo-helpers-and-the-category-page-localecslug"
+        },
+        {
+          "number": 16,
+          "id": "HRN-40",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-40/116-brand-page-localebslug"
+        },
+        {
+          "number": 17,
+          "id": "HRN-41",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-41/117-search-page-localesearch"
+        },
+        {
+          "number": 18,
+          "id": "HRN-42",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-42/118-searchbox-autocomplete-with-keyboard-navigation"
+        },
+        {
+          "number": 19,
+          "id": "HRN-43",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-43/119-product-page-components-gallery-variant-picker-quantity-purchase"
+        },
+        {
+          "number": 20,
+          "id": "HRN-44",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-44/120-product-page-localepslug"
+        },
+        {
+          "number": 21,
+          "id": "HRN-45",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-45/121-compare-store-button-drawer-page"
+        },
+        {
+          "number": 22,
+          "id": "HRN-46",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-46/122-recently-viewed"
+        },
+        {
+          "number": 23,
+          "id": "HRN-47",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-47/123-home-page"
+        },
+        {
+          "number": 24,
+          "id": "HRN-48",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-48/124-sitemapts-robotsts-and-hreflang-coverage"
+        },
+        {
+          "number": 25,
+          "id": "HRN-49",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-49/125-dark-mode-toggle-wiring-m10"
+        },
+        {
+          "number": 26,
+          "id": "HRN-50",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-50/126-e2e-smoke-for-home-category-and-product-with-axe"
+        },
+        {
+          "number": 27,
+          "id": "HRN-51",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-51/127-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 2,
+      "parent": "HRN-52",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-52/phase-2-cart-pricing-coupons-currency-wishlist",
+      "milestone": "a07fb244-c75f-45e5-9b6e-ea4580c791b6",
+      "tasks": [
+        {
+          "number": 0,
+          "id": "HRN-53",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-53/200-re-read-the-rules"
+        },
+        {
+          "number": 1,
+          "id": "HRN-54",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-54/201-pricing-engine-types-line-pricing-with-promotions-coupon-discount"
+        },
+        {
+          "number": 2,
+          "id": "HRN-55",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-55/202-pricing-engine-loyalty-cap-shipping-vat-currency-conversion"
+        },
+        {
+          "number": 3,
+          "id": "HRN-56",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-56/203-currency-service-ratesource-port-oxr-provider-fake-cached-getrates"
+        },
+        {
+          "number": 4,
+          "id": "HRN-57",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-57/204-inventory-service-getavailable-getavailableforcountry"
+        },
+        {
+          "number": 5,
+          "id": "HRN-58",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-58/205-coupon-rules-pure-and-coupon-service-with-atomic-redemption"
+        },
+        {
+          "number": 6,
+          "id": "HRN-59",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-59/206-cart-service-getorcreatecart-addline-updateline-removeline"
+        },
+        {
+          "number": 7,
+          "id": "HRN-60",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-60/207-cart-dto-builder-loadcartaggregate-topricinglines-buildcartdto"
+        },
+        {
+          "number": 8,
+          "id": "HRN-61",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-61/208-cart-coupon-currency-contact-capture-and-guestuser-merge"
+        },
+        {
+          "number": 9,
+          "id": "HRN-62",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-62/209-cart-schemas-server-actions-and-read-model"
+        },
+        {
+          "number": 10,
+          "id": "HRN-63",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-63/210-cart-store-header-badge-and-the-cart-message-namespace"
+        },
+        {
+          "number": 11,
+          "id": "HRN-64",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-64/211-quantitystepper-addtocartbutton-and-the-real-purchaseactions"
+        },
+        {
+          "number": 12,
+          "id": "HRN-65",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-65/212-cartline-couponform-cartsummary-and-cartsheet"
+        },
+        {
+          "number": 13,
+          "id": "HRN-66",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-66/213-cart-page-localecart"
+        },
+        {
+          "number": 14,
+          "id": "HRN-67",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-67/214-currency-switcher-wiring-and-user-currency-preference-m4"
+        },
+        {
+          "number": 15,
+          "id": "HRN-68",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-68/215-wishlist-feature-and-wishlistbutton-a7"
+        },
+        {
+          "number": 16,
+          "id": "HRN-69",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-69/216-account-wishlist-page"
+        },
+        {
+          "number": 17,
+          "id": "HRN-70",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-70/217-back-in-stock-subscription-subscribestockalert-and"
+        },
+        {
+          "number": 18,
+          "id": "HRN-71",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-71/218-end-to-end-cart-journey-with-coupon-and-currency-switch"
+        },
+        {
+          "number": 19,
+          "id": "HRN-72",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-72/219-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 3,
+      "parent": "HRN-73",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-73/phase-3-checkout-inventory-reservations-orders-payments",
+      "milestone": "0e734a4b-233a-471e-b2ff-a3f7766376ec",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-74",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-74/301-re-read-rules-notification-queue-stub-loyalty-balance"
+        },
+        {
+          "number": 2,
+          "id": "HRN-75",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-75/302-inventory-reservations-reserve-extend-commit-release-expire"
+        },
+        {
+          "number": 3,
+          "id": "HRN-76",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-76/303-order-number-generator"
+        },
+        {
+          "number": 4,
+          "id": "HRN-77",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-77/304-order-state-machine-order-transitions-cantransition"
+        },
+        {
+          "number": 5,
+          "id": "HRN-78",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-78/305-orderguesttoken-migration-createorder-transaction-order-factory"
+        },
+        {
+          "number": 6,
+          "id": "HRN-79",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-79/306-transition-with-all-side-effects-assertorderaccess-domain-events"
+        },
+        {
+          "number": 7,
+          "id": "HRN-80",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-80/307-payment-port-payment-state-machine-method-phone-rules"
+        },
+        {
+          "number": 8,
+          "id": "HRN-81",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-81/308-method-availability-charge-currency-provider-registry-http-helper"
+        },
+        {
+          "number": 9,
+          "id": "HRN-82",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-82/309-startpayment-and-applyproviderresult"
+        },
+        {
+          "number": 10,
+          "id": "HRN-83",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-83/310-pollpaymentstatus-reconcilepending-capturecodpayment"
+        },
+        {
+          "number": 11,
+          "id": "HRN-84",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-84/311-waafipay-and-cod-adapters"
+        },
+        {
+          "number": 12,
+          "id": "HRN-85",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-85/312-safaricom-daraja-adapter-and-webhook-fixtures"
+        },
+        {
+          "number": 13,
+          "id": "HRN-86",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-86/313-telebirr-adapter-rsa-pss-signing-and-notify-verification-and"
+        },
+        {
+          "number": 14,
+          "id": "HRN-87",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-87/314-stripe-adapter-and-fixtures"
+        },
+        {
+          "number": 15,
+          "id": "HRN-88",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-88/315-handlewebhook-and-the-four-webhook-route-handlers"
+        },
+        {
+          "number": 16,
+          "id": "HRN-89",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-89/316-refunds-requestrefund-executerefund-markrefundmanual"
+        },
+        {
+          "number": 17,
+          "id": "HRN-90",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-90/317-checkout-dtos-schemas-and-getcheckoutstate"
+        },
+        {
+          "number": 18,
+          "id": "HRN-91",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-91/318-savecheckoutcontact-savecheckoutdelivery-savecheckoutpayment"
+        },
+        {
+          "number": 19,
+          "id": "HRN-92",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-92/319-placeorder"
+        },
+        {
+          "number": 20,
+          "id": "HRN-93",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-93/320-order-dto-and-the-customer-facing-order-and-payment-actions"
+        },
+        {
+          "number": 21,
+          "id": "HRN-94",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-94/321-fake-route-guard-and-the-fake-hosted-checkout-page"
+        },
+        {
+          "number": 22,
+          "id": "HRN-95",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-95/322-messages-for-checkout-payment-and-order-en-so-and-the-payment"
+        },
+        {
+          "number": 23,
+          "id": "HRN-96",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-96/323-checkout-shell-layout-page-checkoutstepper-ordersummary"
+        },
+        {
+          "number": 24,
+          "id": "HRN-97",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-97/324-deliverystep-addressform-pickuppicker"
+        },
+        {
+          "number": 25,
+          "id": "HRN-98",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-98/325-paymentstep-paymentmethodpicker-loyaltyslider-reviewstep"
+        },
+        {
+          "number": 26,
+          "id": "HRN-99",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-99/326-pay-page-payclient-paymentpushwaiting-polling-and-retry"
+        },
+        {
+          "number": 27,
+          "id": "HRN-100",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-100/327-confirmation-page-and-confirmationactions-customer-cancellation"
+        },
+        {
+          "number": 28,
+          "id": "HRN-101",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-101/328-invoice-pdf-invoicetsx-and-get-apiinvoicesorderid"
+        },
+        {
+          "number": 29,
+          "id": "HRN-102",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-102/329-e2e-journeys-1-4"
+        },
+        {
+          "number": 30,
+          "id": "HRN-103",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-103/330-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 4,
+      "parent": "HRN-104",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-104/phase-4-notifications-jobs-and-account",
+      "milestone": "98b4775e-27a0-4fee-a4e4-b2cf06041214",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-105",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-105/401-inngest-client-typed-events-serve-route-fake-step-and"
+        },
+        {
+          "number": 2,
+          "id": "HRN-106",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-106/402-template-registry-templates-sms-copy-from-messages-and-smsemail"
+        },
+        {
+          "number": 3,
+          "id": "HRN-107",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-107/403-react-email-layout-and-all-templates"
+        },
+        {
+          "number": 4,
+          "id": "HRN-108",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-108/404-channel-adapters-twilio-whatsapp-twilio-sms-resend-email-and-live"
+        },
+        {
+          "number": 5,
+          "id": "HRN-109",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-109/405-dispatch-recipient-resolution-channel-chain-logging-and-the"
+        },
+        {
+          "number": 6,
+          "id": "HRN-110",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-110/406-twilio-and-resend-delivery-status-webhooks-with-whatsapp-sms"
+        },
+        {
+          "number": 7,
+          "id": "HRN-111",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-111/407-buildwhatsapplink-and-the-floating-whatsapp-button"
+        },
+        {
+          "number": 8,
+          "id": "HRN-112",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-112/408-loyalty-completion-earn-reversal-expiry-ledger-summary"
+        },
+        {
+          "number": 9,
+          "id": "HRN-113",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-113/409-orderspost-payment-and-ordersdelivered-inngest-functions"
+        },
+        {
+          "number": 10,
+          "id": "HRN-114",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-114/410-cron-functions-reconcile-expire-reservations-refresh-rates-expire"
+        },
+        {
+          "number": 11,
+          "id": "HRN-115",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-115/411-cart-abandonment-findabandonedcarts-sendabandonmentreminder"
+        },
+        {
+          "number": 12,
+          "id": "HRN-116",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-116/412-back-in-stock-notifications-stockback-in-stock"
+        },
+        {
+          "number": 13,
+          "id": "HRN-117",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-117/413-account-deletion-request-sign-in-cancellation-and-the-usersscrub"
+        },
+        {
+          "number": 14,
+          "id": "HRN-118",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-118/414-order-dtos-and-read-models-listmyorders-getorderdetail"
+        },
+        {
+          "number": 15,
+          "id": "HRN-119",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-119/415-order-actions-listmyorders-getorder-trackorderpublic-cancelmyorder"
+        },
+        {
+          "number": 16,
+          "id": "HRN-120",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-120/416-ordertimeline-component"
+        },
+        {
+          "number": 17,
+          "id": "HRN-121",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-121/417-public-tracking-page-localetrack"
+        },
+        {
+          "number": 18,
+          "id": "HRN-122",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-122/418-account-layout-navigation-and-overview-page"
+        },
+        {
+          "number": 19,
+          "id": "HRN-123",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-123/419-account-orders-list-page-detail-page-cancel-button"
+        },
+        {
+          "number": 20,
+          "id": "HRN-124",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-124/420-address-book-service-actions-page-and-form-a5"
+        },
+        {
+          "number": 21,
+          "id": "HRN-125",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-125/421-profile-settings-phone-change-with-otp-re-verification"
+        },
+        {
+          "number": 22,
+          "id": "HRN-126",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-126/422-loyalty-page-and-getloyaltysummary-action-a8"
+        },
+        {
+          "number": 23,
+          "id": "HRN-127",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-127/423-delete-account-flow-in-settings-a9-f11"
+        },
+        {
+          "number": 24,
+          "id": "HRN-128",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-128/424-review-upload-purpose-on-apiuploadssign"
+        },
+        {
+          "number": 25,
+          "id": "HRN-129",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-129/425-reviews-backend-eligibility-submission-rating-recompute-helpful"
+        },
+        {
+          "number": 26,
+          "id": "HRN-130",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-130/426-reviews-ui-summary-bars-list-write-review-form-with-image-upload"
+        },
+        {
+          "number": 27,
+          "id": "HRN-131",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-131/427-product-qanda-feature-and-tab-c10"
+        },
+        {
+          "number": 28,
+          "id": "HRN-132",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-132/428-e2e-journeys-6-8-account-orders-and-review-submission"
+        },
+        {
+          "number": 29,
+          "id": "HRN-133",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-133/429-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 5,
+      "parent": "HRN-134",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-134/phase-5-admin-dashboard",
+      "milestone": "6bd87bea-7b3c-4f68-8cc2-2d670334f4a4",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-135",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-135/501-rbac-helpers-admin-layout-gate-integration-test-harness"
+        },
+        {
+          "number": 2,
+          "id": "HRN-136",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-136/502-admin-shell-sidebar-topbar-user-menu-keyboard-shortcuts"
+        },
+        {
+          "number": 3,
+          "id": "HRN-137",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-137/503-global-search-action-and-command-palette"
+        },
+        {
+          "number": 4,
+          "id": "HRN-138",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-138/504-table-params-and-reusable-admindatatable"
+        },
+        {
+          "number": 5,
+          "id": "HRN-139",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-139/505-audit-serialisation-audit-log-query-json-diff-viewer-d11"
+        },
+        {
+          "number": 6,
+          "id": "HRN-140",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-140/506-storage-presigndownload-apiuploadssign-completeupload-with-blur"
+        },
+        {
+          "number": 7,
+          "id": "HRN-141",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-141/507-catalog-admin-schemas-and-adminupsertproduct-nested-transaction-d2"
+        },
+        {
+          "number": 8,
+          "id": "HRN-142",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-142/508-products-list-query-adminproducts-table-bulk-status-d2"
+        },
+        {
+          "number": 9,
+          "id": "HRN-143",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-143/509-product-editor-six-tabs-at-adminproductsid-and-adminproductsnew-d2"
+        },
+        {
+          "number": 10,
+          "id": "HRN-144",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-144/510-categories-upsertcategory-movecategory-with-path-rewrite-tree-ui"
+        },
+        {
+          "number": 11,
+          "id": "HRN-145",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-145/511-brands-attributes-and-attribute-sets-d3"
+        },
+        {
+          "number": 12,
+          "id": "HRN-146",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-146/512-inventory-adjuststock-transferstock-setlowstockthreshold-ledger"
+        },
+        {
+          "number": 13,
+          "id": "HRN-147",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-147/513-orders-admin-queries-and-adminorders-list-with-saved-views-d5"
+        },
+        {
+          "number": 14,
+          "id": "HRN-148",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-148/514-order-service-additions-shipments-shipment-events-serials-internal"
+        },
+        {
+          "number": 15,
+          "id": "HRN-149",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-149/515-order-detail-screen-adminordersid-d5-o3-o5"
+        },
+        {
+          "number": 16,
+          "id": "HRN-150",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-150/516-packing-slip-print-view-d5"
+        },
+        {
+          "number": 17,
+          "id": "HRN-151",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-151/517-customers-list-detail-notes-block-export-json-scrub-d6"
+        },
+        {
+          "number": 18,
+          "id": "HRN-152",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-152/518-coupons-admin-d7-k4"
+        },
+        {
+          "number": 19,
+          "id": "HRN-153",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-153/519-promotions-admin-d7-c13"
+        },
+        {
+          "number": 20,
+          "id": "HRN-154",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-154/520-reviews-and-qanda-moderation-queues-d8-c9-c10"
+        },
+        {
+          "number": 21,
+          "id": "HRN-155",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-155/521-content-banners-collections-pages-d9"
+        },
+        {
+          "number": 22,
+          "id": "HRN-156",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-156/522-settings-store-currencies-with-override-and-refresh-now-zones"
+        },
+        {
+          "number": 23,
+          "id": "HRN-157",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-157/523-reports-csv-to-supabase-storage-with-a-signed-url-plus-table"
+        },
+        {
+          "number": 24,
+          "id": "HRN-158",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-158/524-dashboard-kpi-tiles-charts-and-action-lists-d1"
+        },
+        {
+          "number": 25,
+          "id": "HRN-159",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-159/525-catalogfbt-refresh-inngest-job-c11"
+        },
+        {
+          "number": 26,
+          "id": "HRN-160",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-160/526-rbac-matrix-integration-test-and-e2e-journey-9"
+        },
+        {
+          "number": 27,
+          "id": "HRN-161",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-161/527-phase-gate-and-progress-note"
+        }
+      ]
+    }
+  ]
+}

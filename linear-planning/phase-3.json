@@ -1,0 +1,407 @@
+{
+  "phase": 3,
+  "name": "Phase 3 \u2014 Checkout, Inventory Reservations, Orders, Payments",
+  "source": "docs/plans/phase-03-checkout-payments.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "Re-read rules, notification queue stub, loyalty balance",
+      "scope": "**Files:**\n- Create: `src/features/notifications/service.ts`, `src/features/notifications/index.ts`, `src/features/loyalty/service.ts`, `src/features/loyalty/index.ts`\n- Test: `tests/integration/notifications/request-notification.test.ts`, `tests/integration/loyalty/balance.test.ts`\n\n**Interfaces:**\n- Consumes: `db`, `NotificationTemplateKey`, `NotificationChannel`, `Locale` (Prisma), `Setting` rows `loyalty.redeemPointsPerUsd`, `loyalty.maxRedeemBps`.\n- Produces:\n  - `requestNotification(input: RequestNotificationInput): Promise<void>` \u2014 exact signature from 06 \u00a71.\n  - `getBalance(userId: string, now?: Date): Promise<number>`\n  - `maxRedeemablePoints(input: { balance: number; subtotalAfterCouponUsdCents: number; maxRedeemBps: number }): number`\n  - `getLoyaltySettings(): Promise<{ redeemPointsPerUsd: number; maxRedeemBps: number }>`",
+      "steps": [
+        "Step 0: Re-read `docs/README.md` \"Rules for the implementing model\" and `docs/plans/AGENT-BRIEF.md`. Confirm `pnpm typecheck && pnpm test:unit` are green on the Phase 2 tip before starting.",
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:int tests/integration/notifications tests/integration/loyalty` \u2014 expect `Cannot find module '@/features/notifications'`.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/notifications tests/integration/loyalty` \u2014 expect 5 passed. `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Inventory reservations (reserve, extend, commit, release, expire)",
+      "scope": "**Files:**\n- Create: `src/features/inventory/reservations.ts`, modify `src/features/inventory/index.ts`\n- Test: `tests/integration/inventory/reservations.test.ts`\n\n**Interfaces:**\n- Consumes: `Tx`, `db`, `getAvailable` (existing), `Setting cart.reservationMinutes`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/inventory/reservations.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/inventory/reservations.test.ts` \u2014 expect failure: `reserveForOrder is not exported`.",
+        "Step 3: Implement `src/features/inventory/reservations.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/inventory/reservations.test.ts` \u2014 expect 5 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Order number generator",
+      "scope": "**Files:**\n- Create: `src/features/orders/order-number.ts`\n- Test: `tests/unit/features/orders/order-number.test.ts`\n\n**Interfaces:**\n- Produces: `generateOrderNumber(now?: Date, rng?: () => number): string` (`HH-YYMMDD-XXXXX`, alphabet `ABCDEFGHIJKLMNOPQRSTUVWXYZ234567`); `ORDER_NUMBER_RE`; `withUniqueOrderNumber<T>(fn: (orderNumber: string) => Promise<T>, attempts = 5): Promise<T>` (retries on Prisma `P2002` targeting `orderNumber`).",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/features/orders/order-number.test.ts`",
+        "Step 2: Run `pnpm test:unit tests/unit/features/orders/order-number.test.ts` \u2014 expect module-not-found failure.",
+        "Step 3: Implement `src/features/orders/order-number.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/orders/order-number.test.ts` \u2014 expect 6 passed.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Order state machine (ORDER_TRANSITIONS, canTransition)",
+      "scope": "**Files:**\n- Create: `src/features/orders/state-machine.ts`\n- Test: `tests/unit/features/orders/state-machine.test.ts`\n\n**Interfaces:**\n- Consumes: `OrderStatus`, `FulfilmentType`, `Role` (Prisma enums).\n- Produces:\n\n\nThis module is the single authority for 05 \u00a71. `transition()` (Task 6) never re-implements any of it.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/features/orders/state-machine.test.ts`",
+        "Step 2: Run `pnpm test:unit tests/unit/features/orders/state-machine.test.ts` \u2014 expect `Failed to resolve import \"@/features/orders/state-machine\"`.",
+        "Step 3: Implement `src/features/orders/state-machine.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/orders/state-machine.test.ts` \u2014 expect 9 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Order.guestToken migration, createOrder transaction, order factory",
+      "scope": "**Files:**\n- Modify: `prisma/schema.prisma`, `docs/specs/03-data-model.md`, `tests/fixtures/factories.ts`\n- Create: `prisma/migrations/<ts>_order_guest_token/migration.sql`, `src/features/orders/service.ts`, `src/features/orders/index.ts`\n- Test: `tests/integration/orders/create-order.test.ts`\n\n**Interfaces:**\n- Consumes: `withUniqueOrderNumber` (Task 3), `reserveForOrder` / `getReservationMinutes` (Task 2), `warehouseForCountry` (Phase 2), `computeCartTotals`, `loadActiveCart`, `toPricingLines` (Phase 2), `validateCoupon` / `reserveRedemption` (Phase 2), `getRates`, `convertUsdCents`, `getBalance` / `getLoyaltySettings` / `maxRedeemablePoints` (Task 1).\n- Produces:\n\n\n**Schema change (additive only):** `Order.guestToken String?` plus `@@index([guestToken])`. It stores the `hh_cart` cookie value of the cart the order came from, which is the guest's capability to reach the pay page, the confirmation page, the invoice and `cancelMyOrder` (05 \u00a77, 11 \u00a72).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/orders/create-order.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/orders/create-order.test.ts` \u2014 expect `Failed to resolve import \"@/features/orders\"`.",
+        "Step 3a: Schema and migration",
+        "Step 3b: Implement `src/features/orders/service.ts`",
+        "Step 3c: Extend `tests/fixtures/factories.ts` with a persisted-order helper (used by Tasks 6\u201329)",
+        "Step 4: Run `pnpm test:int tests/integration/orders/create-order.test.ts` \u2014 expect 9 passed. Run `pnpm prisma validate && pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "transition() with all side effects, assertOrderAccess, domain events",
+      "scope": "**Files:**\n- Modify: `src/features/orders/service.ts`, `src/features/orders/index.ts`\n- Create: `src/features/orders/events.ts`\n- Test: `tests/integration/orders/transition.test.ts`, `tests/integration/orders/access.test.ts`\n\n**Interfaces:**\n- Consumes: `canTransition`, `Actor` (Task 4); `commitReservations`, `releaseReservations` (Task 2); `requestNotification` (Task 1); `formatMoney`, `env.NEXT_PUBLIC_APP_URL`.\n- Produces:\n\n\n`emitDomainEvent` logs in Phase 3; Phase 4 replaces its body with `inngest.send(...)` without changing the signature (same contract as `requestNotification`).\n\n**Side-effect table implemented (05 \u00a71), all inside the transaction, notifications and events emitted after commit:**\n\n| To | Implemented effects |\n|---|---|\n| CONFIRMED | `commitReservations` (SALE movements); `paidAt` for non-COD; `Product.salesCount += qty`; emit `order/paid` (non-COD) or `order/confirmed`; notify `ORDER_CONFIRMED`, plus `PAYMENT_RECEIVED` for non-COD |\n| PAYMENT_FAILED | reservations untouched; notify `PAYMENT_FAILED` with the retry URL |\n| CANCELLED | `releaseReservations(restockCommitted: true)`; `cancelledAt` + `cancelReason`; delete `CouponRedemption` and decrement `Coupon.redemptionCount`; write `LoyaltyTransaction(REVERSAL, +points)`; create a full `Refund(REQUESTED)` when the order was paid; emit `order/cancelled`; notify `ORDER_CANCELLED` |\n| SHIPPED | requires \u2265 1 `Shi",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:int tests/integration/orders` \u2014 expect failures: `transition is not exported from '@/features/orders'`.",
+        "Step 3a: Create `src/features/orders/events.ts`",
+        "Step 3b: Append to `src/features/orders/service.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/orders` \u2014 expect 20 passed (9 from Task 5, 8 transition, 3 access). Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Payment port, payment state machine, method phone rules",
+      "scope": "**Files:**\n- Create: `src/features/payments/ports.ts`, `src/features/payments/state-machine.ts`, `src/features/payments/phone-rules.ts`\n- Test: `tests/unit/features/payments/state-machine.test.ts`, `tests/unit/features/payments/phone-rules.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments` \u2014 expect module-not-found for all three modules.",
+        "Step 3a: Implement `src/features/payments/ports.ts` \u2014 copy 05 \u00a74 verbatim, no additions",
+        "Step 3b: Implement `src/features/payments/state-machine.ts`",
+        "Step 3c: Implement `src/features/payments/phone-rules.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments` \u2014 expect 9 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Method availability, charge currency, provider registry, HTTP helper, fake provider",
+      "scope": "**Files:**\n- Create: `src/features/payments/availability.ts`, `src/features/payments/registry.ts`, `src/features/payments/providers/http.ts`, `tests/fakes/fake-payment-provider.ts`\n- Test: `tests/unit/features/payments/availability.test.ts`, `tests/integration/payments/registry.test.ts`\n\n**Interfaces:**\n- Consumes: `PaymentMethodConfig` rows, `isFakeMode()` (`src/lib/providers.ts`), the port from Task 7.\n- Produces:\n\n\nThe fake follows 05 \u00a75.6 exactly: payer phone ending `0000` \u2192 immediate success; `1111` \u2192 push then SUCCEEDED on the next `queryStatus`; `2222` \u2192 push then FAILED; `3333` \u2192 push that never resolves (stays PENDING so the reconciliation/EXPIRED path can be tested); `customer.name` containing `REDIRECT` \u2192 redirect to `/__fake/checkout?paymentId=\u2026`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments/availability.test.ts && pnpm test:int tests/integration/payments/registry.test.ts` \u2014 expect module-not-found.",
+        "Step 3a: Implement `src/features/payments/availability.ts`",
+        "Step 3b: Implement `src/features/payments/providers/http.ts`",
+        "Step 3c: Implement `tests/fakes/fake-payment-provider.ts` (05 \u00a75.6)",
+        "Step 3d: Implement `src/features/payments/registry.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments/availability.test.ts && pnpm test:int tests/integration/payments/registry.test.ts` \u2014 expect 3 + 5 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "startPayment and applyProviderResult",
+      "scope": "**Files:**\n- Create: `src/features/payments/service.ts`; modify `src/features/payments/index.ts`\n- Test: `tests/integration/payments/start-payment.test.ts`, `tests/integration/payments/apply-result.test.ts`\n\n**Interfaces:**\n- Consumes: `getProviderForMethod`, `assertMethodAvailable`, `assertPayerPhoneForMethod`, `extendReservations`/`reReserveExpired`/`getReservationMinutes`, `transition`, `assertOrderAccess`, `isTerminalPaymentStatus`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:int tests/integration/payments` \u2014 expect `startPayment is not exported`.",
+        "Step 3: Implement `src/features/payments/service.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/payments` \u2014 expect 9 + 7 + earlier 5 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "pollPaymentStatus, reconcilePending, captureCodPayment",
+      "scope": "**Files:**\n- Modify: `src/features/payments/service.ts`, `src/features/payments/index.ts`\n- Test: `tests/integration/payments/poll-reconcile.test.ts`\n\n**Interfaces:**\n- Produces:\n\n\n`pollPaymentStatus` short-circuits with a Redis flag `hh:<env>:paypoll:<paymentId>` (`SET \u2026 NX EX 3`) so a 3 s client poll never hammers the provider (05 \u00a76, ADR-007).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/payments/poll-reconcile.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/payments/poll-reconcile.test.ts` \u2014 expect `pollPaymentStatus is not exported`.",
+        "Step 3: Append to `src/features/payments/service.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/payments/poll-reconcile.test.ts` \u2014 expect 10 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "WaafiPay and COD adapters",
+      "scope": "**Files:**\n- Replace the placeholders: `src/features/payments/providers/waafipay.ts`, `src/features/payments/providers/cod.ts`\n- Test: `tests/unit/features/payments/providers/waafipay.test.ts`, `tests/unit/features/payments/providers/cod.test.ts`\n\n**Interfaces:** both implement `PaymentProvider` (Task 7). Exports `waafipayProvider`, `codProvider`, plus the pure mappers `mapWaafipayInitiate(body, requestId)` and `mapWaafipayState(state)` so they can be unit-tested without HTTP.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments/providers` \u2014 expect the placeholder proxies to throw `waafipay provider is implemented in Phase 3 Task 11`.",
+        "Step 3a: Implement `src/features/payments/providers/waafipay.ts`",
+        "Step 3b: Implement `src/features/payments/providers/cod.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments/providers` \u2014 expect 12 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Safaricom Daraja adapter and webhook fixtures",
+      "scope": "**Files:**\n- Replace the placeholder: `src/features/payments/providers/daraja.ts`\n- Create: `tests/fixtures/webhooks/daraja-success.json`, `daraja-cancelled.json`, `daraja-tampered.json`, `daraja-duplicate.json`\n- Test: `tests/unit/features/payments/providers/daraja.test.ts`\n\n**Interfaces:** exports `darajaProvider`, plus pure helpers `buildStkPassword(shortcode, passkey, timestamp)`, `darajaTimestamp(now)`, `parseDarajaCallback(body)`, `isAllowedDarajaIp(forwardedFor)`.\n\n`MPESA_ALLOWED_IPS` is a comma list; the first hop of `x-forwarded-for` must be in it (05 \u00a75.2). An empty list means \"allow all\", used only when `PROVIDER_MODE=fake`.",
+      "steps": [
+        "Step 1: Write the fixtures and the failing test",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments/providers/daraja.test.ts` \u2014 expect the placeholder proxy to throw.",
+        "Step 3: Implement `src/features/payments/providers/daraja.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments/providers/daraja.test.ts` \u2014 expect 9 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Telebirr adapter (RSA-PSS signing and notify verification) and fixtures",
+      "scope": "**Files:**\n- Replace the placeholder: `src/features/payments/providers/telebirr.ts`\n- Create: `tests/fixtures/webhooks/telebirr-notify.json`, `telebirr-tampered.json`, `telebirr-duplicate.json`, `tests/fixtures/keys/telebirr-test.md`\n- Test: `tests/unit/features/payments/providers/telebirr.test.ts`\n\n**Interfaces:** exports `telebirrProvider`, plus pure helpers `buildSignContent(fields)`, `signRsaPss(content, privateKeyPem)`, `verifyRsaPss(content, signature, publicKeyPem)`, `parseTelebirrNotify(body, publicKeyPem)`.\n\nSigning rule (05 \u00a75.3): concatenate all top-level fields **except `sign` and `sign_type`**, sorted by key ascending, as `key=value` joined by `&`; `biz_content` is flattened into the same list with its own keys. Sign with `RSA-PSS`, SHA-256 digest, MGF1-SHA-256, salt length equal to the digest length, base64 output \u2014 implemented with `node:crypto` `createSign`/`createVerify` plus `padding: constants.RSA_PKCS1_PSS_PADDING`.",
+      "steps": [
+        "Step 1: Write the fixtures and the failing test",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments/providers/telebirr.test.ts` \u2014 expect the placeholder proxy to throw.",
+        "Step 3: Implement `src/features/payments/providers/telebirr.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments/providers/telebirr.test.ts` \u2014 expect 9 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Stripe adapter and fixtures",
+      "scope": "**Files:**\n- Replace the placeholder: `src/features/payments/providers/stripe.ts`\n- Create: `tests/fixtures/webhooks/stripe-charge-completed.json`, `stripe-wrong-hash.json`, `stripe-duplicate.json`, `stripe-tampered.json`\n- Test: `tests/unit/features/payments/providers/stripe.test.ts`\n\n**Interfaces:** exports `stripeProvider`, plus `flwMajorAmount(amountMinor, currency)` and `mapFlwStatus(status)`.\n\nThe critical rule from 05 \u00a75.4: the webhook body is **never** trusted for the amount. After the `verif-hash` header matches, the adapter always calls `GET /transactions/:id/verify` and reports the verified `status`, `amount`, `currency` and `tx_ref`.",
+      "steps": [
+        "Step 1: Write the fixtures and the failing test",
+        "Step 2: Run `pnpm test:unit tests/unit/features/payments/providers/stripe.test.ts` \u2014 expect the placeholder proxy to throw.",
+        "Step 3: Implement `src/features/payments/providers/stripe.ts`",
+        "Step 4: Run `pnpm test:unit tests/unit/features/payments/providers/stripe.test.ts` \u2014 expect 7 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "handleWebhook and the four webhook route handlers",
+      "scope": "**Files:**\n- Modify: `src/features/payments/service.ts`, `src/features/payments/index.ts`\n- Create: `src/app/api/webhooks/waafipay/route.ts`, `src/app/api/webhooks/mpesa/route.ts`, `src/app/api/webhooks/telebirr/route.ts`, `src/app/api/webhooks/stripe/route.ts`\n- Test: `tests/integration/payments/webhooks.test.ts`\n\n**Interfaces:**\n\n\nBehaviour, verbatim from 05 \u00a76 and 11 \u00a75: verify \u2192 on `!ok` return 400 and log; insert `PaymentEvent` (unique on `(provider, providerEventId)`) \u2192 on conflict return 200 as a duplicate no-op; find the `Payment` by `paymentId` then by `providerRef`; call `applyProviderResult`; stamp `processedAt`; **always** return 200 once the event row is persisted, storing any domain error on the event so the provider does not retry a permanently bad payload for ever.\n\nEvery route file is three lines plus the runtime exports required by 11 \u00a75.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/payments/webhooks.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/payments/webhooks.test.ts` \u2014 expect `handleWebhook is not exported`.",
+        "Step 3a: Append to `src/features/payments/service.ts`",
+        "Step 3b: Create the four route handlers. Each is identical except for the provider name.",
+        "Step 4: Run `pnpm test:int tests/integration/payments/webhooks.test.ts` \u2014 expect 8 passed. Run `pnpm typecheck && pnpm build` (the build proves the four route segments compile).",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Refunds \u2014 requestRefund, executeRefund, markRefundManual",
+      "scope": "**Files:**\n- Modify: `src/features/payments/service.ts`, `src/features/payments/index.ts`\n- Test: `tests/integration/payments/refunds.test.ts`\n\n**Interfaces:**\n\n\nRules from 05 \u00a76: MANAGER+ is enforced by the calling action (Phase 5 `adminRequestRefund`); the service enforces the money rules. Convert `amountUsdCents` with **the order's stored `exchangeRate`**, never a live rate (07 \u00a73). `REFUND_EXCEEDS_PAID` when the requested amount plus everything already refunded exceeds the payment. `provider.refund` missing or returning `UNSUPPORTED` \u2192 status `MANUAL`. On success the payment becomes `PARTIALLY_REFUNDED` or `REFUNDED`, and a full refund moves the order to `REFUNDED` (which itself restocks unshipped orders \u2014 Task 6).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/payments/refunds.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/payments/refunds.test.ts` \u2014 expect `requestRefund is not exported`.",
+        "Step 3: Append to `src/features/payments/service.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/payments/refunds.test.ts` \u2014 expect 9 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Checkout DTOs, schemas and getCheckoutState",
+      "scope": "**Files:**\n- Create: `src/features/checkout/dto.ts`, `src/features/checkout/schemas.ts`, `src/features/checkout/service.ts`, `src/features/checkout/index.ts`, `prisma/migrations/<ts>_checkout_session_whatsapp_optin/migration.sql`\n- Modify: `prisma/schema.prisma`, `docs/specs/03-data-model.md`\n- Test: `tests/integration/checkout/state.test.ts`\n\n**Schema change (additive only):** `CheckoutSession.whatsappOptIn Boolean @default(true)`. 06 \u00a76 requires the checkbox to default to checked and to be snapshotted onto `Order.whatsappOptIn`; `CheckoutSession` has nowhere to hold it between steps. Add to `model CheckoutSession` under `contactEmail`:\n\nRun `pnpm prisma migrate dev --name checkout_session_whatsapp_optin`; the SQL must be only\n`ALTER TABLE \"CheckoutSession\" ADD COLUMN \"whatsappOptIn\" BOOLEAN NOT NULL DEFAULT true;`.\nAppend the same sentence to `docs/specs/03-data-model.md` \u00a74.\n\n**Interfaces:**\n- Consumes: `loadActiveCart`, `buildCartDTO` (Phase 2); `listAvailablePaymentMethods`, `resolveChargeCurrency`; `getBalance`, `getLoyaltySettings`, `maxRedeemablePoints`; `listAddresses` (Phase 0/4 users query).\n- Produces (names exactly as 04 \u00a76):\n\nZod schemas (`schemas.ts`) named exactly after 04 \u00a76:\n\n\n`Order.whatsappOptIn` defaults to **true** on the contact step (06 \u00a76 \"default checked\").",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/checkout/state.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/checkout/state.test.ts` \u2014 expect `Cannot find module '@/features/checkout'`.",
+        "Step 3a: Implement `src/features/checkout/dto.ts`",
+        "Step 3b: Implement `src/features/checkout/schemas.ts`",
+        "Step 3c: Implement `src/features/checkout/service.ts` (state read only; the mutators land in Task 18)",
+        "Step 4: Run `pnpm test:int tests/integration/checkout/state.test.ts` \u2014 expect 7 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "saveCheckoutContact, saveCheckoutDelivery, saveCheckoutPayment (service + actions)",
+      "scope": "**Files:**\n- Modify: `src/features/checkout/service.ts`, `src/features/checkout/index.ts`\n- Create: `src/features/checkout/actions.ts`\n- Test: `tests/integration/checkout/steps.test.ts`\n\n**Interfaces:**\n\n\nRules:\n- **Contact** also calls `captureCartContact` behaviour by writing `Cart.contactPhone`/`contactEmail` (K5 abandonment), updates `User.whatsappOptIn` when signed in (06 \u00a76), and advances `step` to at least 2.\n- **Delivery** with `addressId` loads the address and verifies it belongs to the caller (IDOR); with `address` it validates it. Either way it resolves `DeliveryZone` by `(country, city)` and throws `DELIVERY_ZONE_UNAVAILABLE` when there is no active zone. The address is stored as a JSON snapshot on the session \u2014 the source of the later `Order.shippingAddress`. `saveToAddressBook` writes an `Address` row for signed-in users. Pickup validates the warehouse is active, is a pickup location and is in the checkout country, else `PICKUP_UNAVAILABLE`. Advances `step` to at least 3 and clears a `paymentMethod` that the new fulfilment makes unavailable.\n- **Payment** re-derives availability, caps `loyaltyPointsToRedeem` server-side (`LOYALTY_EXCEEDS_CAP` when the client asks for more than the cap, `LOYALTY_INSUFFICIENT` when it exceeds the balance) and advances `step` to 4.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/checkout/steps.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/checkout/steps.test.ts` \u2014 expect `saveContact is not exported`.",
+        "Step 3a: Append to `src/features/checkout/service.ts`",
+        "Step 3b: Implement `src/features/checkout/actions.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/checkout` \u2014 expect 7 + 14 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "placeOrder",
+      "scope": "**Files:**\n- Modify: `src/features/checkout/service.ts`, `src/features/checkout/actions.ts`, `src/features/checkout/index.ts`\n- Test: `tests/integration/checkout/place-order.test.ts`\n\n**Interfaces:**\n\n\nOrder of operations: BotID \u2192 session completeness \u2192 resolve method + charge currency \u2192 `createOrder` \u2192 `startPayment`. When `startPayment` throws after the order exists, the order is left `PENDING_PAYMENT`/`PAYMENT_FAILED` and the error is rethrown; the customer lands on the pay page and retries. The order is never rolled back once created, because its stock reservation is what protects the customer.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/checkout/place-order.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/checkout/place-order.test.ts` \u2014 expect `placeOrder is not exported`.",
+        "Step 3a: Append to `src/features/checkout/service.ts`",
+        "Step 3b: Add the action to `src/features/checkout/actions.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/checkout/place-order.test.ts` \u2014 expect 7 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Order DTO and the customer-facing order and payment actions",
+      "scope": "**Files:**\n- Create: `src/features/orders/dto.ts`, `src/features/orders/schemas.ts`, `src/features/orders/actions.ts`, `src/features/payments/schemas.ts`, `src/features/payments/actions.ts`\n- Modify: `src/features/orders/index.ts`, `src/features/payments/index.ts`\n- Test: `tests/integration/orders/actions.test.ts`\n\n**Interfaces:**\n\n\n`retryPayment` first transitions a `PAYMENT_FAILED` order back to `PENDING_PAYMENT` (the customer-allowed transition from Task 4), then calls `startPayment`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/orders/actions.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/orders/actions.test.ts` \u2014 expect `Cannot find module '@/features/orders/dto'`.",
+        "Step 3a: Implement `src/features/orders/dto.ts`",
+        "Step 3b: Implement `src/features/orders/schemas.ts` and `actions.ts`",
+        "Step 3c: Implement `src/features/payments/schemas.ts` and `actions.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/orders/actions.test.ts` \u2014 expect 7 passed. Run `pnpm typecheck`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "__fake route guard and the fake hosted-checkout page",
+      "scope": "**Files:**\n- Create: `src/app/__fake/guard.ts`, `src/app/__fake/checkout/page.tsx`, `src/app/__fake/checkout/actions.ts`, `src/app/__fake/order-admin/route.ts`\n- Test: `tests/integration/fake/guard.test.ts`\n\n**Interfaces:**\n\n\n12 \u00a73: \"Test-only routes under `src/app/__fake/*` are guarded: they return 404 unless `PROVIDER_MODE=fake`.\" `/__fake/order-admin` lets the Playwright journeys drive staff-side transitions (journey 2's PROCESSING move and journey 3's capture) without signing in to the admin app, which Phase 5 builds.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/fake/guard.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/fake/guard.test.ts` \u2014 expect module-not-found.",
+        "Step 3a: Implement `src/app/__fake/guard.ts`",
+        "Step 3b: Implement `src/app/__fake/checkout/actions.ts`",
+        "Step 3c: Implement `src/app/__fake/checkout/page.tsx` \u2014 the stand-in for the Stripe / Telebirr hosted page (05 \u00a75.6). It is test-only, so its strings are deliberately not translated (the i18n ESLint rule only covers `src/app/[locale]` and `src/components`).",
+        "Step 3d: Implement `src/app/__fake/order-admin/route.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/fake/guard.test.ts` \u2014 expect 4 passed. Run `pnpm typecheck && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Messages for checkout, payment and order (en + so) and the payment logos",
+      "scope": "**Files:**\n- Modify: `messages/en.json`, `messages/so.json`, `messages/GLOSSARY.md`\n- Create: `public/payment-logos/{evc-plus,edahab,mpesa,telebirr,visa,mastercard,cod}.svg`\n- Test: `tests/unit/i18n/checkout-messages.test.ts`\n\nThis task exists on its own so every later UI task can use `useTranslations` without touching the message files again, and so `pnpm i18n:check` is green before any component is written.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/i18n/checkout-messages.test.ts`",
+        "Step 2: Run `pnpm test:unit tests/unit/i18n/checkout-messages.test.ts` \u2014 expect \"expected undefined to be defined\" for `en.checkout`.",
+        "Step 3a: Add to `messages/en.json`",
+        "Step 3b: Add the matching `messages/so.json` block (natural Somali, glossary terms from 07 \u00a71)",
+        "Step 3c: Append to `messages/GLOSSARY.md`",
+        "Step 3d: Create the seven method logos as small inline SVGs under `public/payment-logos/`. Each is a 64\u00d740 rounded rectangle with the brand wordmark; they are decorative (`alt=\"\"` with the method name as visible text next to them), so a simple wordmark is sufficient and no third-party brand asset is",
+        "Step 4: Run `pnpm test:unit tests/unit/i18n/checkout-messages.test.ts && pnpm i18n:check` \u2014 expect 3 passed and a green i18n check.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 23,
+      "title": "Checkout shell \u2014 layout, page, CheckoutStepper, OrderSummary, ContactStep",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(checkout)/layout.tsx`, `src/app/[locale]/(checkout)/checkout/page.tsx`, `src/app/[locale]/(checkout)/checkout/loading.tsx`, `src/components/checkout/CheckoutView.tsx`, `src/components/checkout/CheckoutStepper.tsx`, `src/components/checkout/OrderSummary.tsx`, `src/components/checkout/ContactStep.tsx`\n- Test: `tests/unit/components/checkout/checkout-stepper.test.tsx`, `tests/unit/components/checkout/contact-step.test.tsx`\n\n**Interfaces:**\n- Consumes: `getCheckoutState` (server), the actions from Task 18, `PhoneInput`, shadcn `Button`/`Input`/`Checkbox`/`Accordion`, `Price`, `useStore()`.\n- Produces:\n\n\n10 \u00a72: \"Left: stepper (Contact \u2192 Delivery \u2192 Payment \u2192 Review) as accordion; Right: order summary (collapsible on mobile).\" The page is `force-dynamic` with `maxDuration = 90` (05 \u00a75.1 \u2014 `placeOrder` can block on the WaafiPay call).",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/components/checkout` \u2014 expect module-not-found.",
+        "Step 3a: `src/app/[locale]/(checkout)/layout.tsx` \u2014 minimal header per 10 \u00a72",
+        "Step 3b: `src/app/[locale]/(checkout)/checkout/page.tsx`",
+        "Step 3c: `src/components/checkout/CheckoutStepper.tsx`",
+        "Step 3d: `src/components/checkout/OrderSummary.tsx`",
+        "Step 3e: `src/components/checkout/ContactStep.tsx`",
+        "Step 3f: `src/components/checkout/CheckoutView.tsx` \u2014 the client shell that owns the state and swaps steps. The delivery, payment and review panels are added by Tasks 24 and 25; until then they render `null`.",
+        "Step 4: Run `pnpm test:unit tests/unit/components/checkout` \u2014 expect 6 passed. Run `pnpm typecheck && pnpm i18n:check && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 24,
+      "title": "DeliveryStep, AddressForm, PickupPicker",
+      "scope": "**Files:**\n- Create: `src/components/checkout/DeliveryStep.tsx`, `src/components/checkout/AddressForm.tsx`, `src/components/checkout/PickupPicker.tsx`\n- Modify: `src/components/checkout/CheckoutView.tsx`\n- Test: `tests/unit/components/checkout/delivery-step.test.tsx`\n\n**Interfaces:**\n\n\n07 \u00a75: shown fields are fullName, phone, country (locked to the checkout country), city (a select over the zones), district, street, landmark, directions. No postal code.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/checkout/delivery-step.test.tsx`",
+        "Step 2: Run `pnpm test:unit tests/unit/components/checkout/delivery-step.test.tsx` \u2014 expect module-not-found.",
+        "Step 3a: `src/components/checkout/AddressForm.tsx`",
+        "Step 3b: `src/components/checkout/PickupPicker.tsx`",
+        "Step 3c: `src/components/checkout/DeliveryStep.tsx`",
+        "Step 3d: wire it into `CheckoutView` \u2014 replace the second `null` with",
+        "Step 4: Run `pnpm test:unit tests/unit/components/checkout` \u2014 expect 12 passed. Run `pnpm typecheck && pnpm i18n:check`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 25,
+      "title": "PaymentStep, PaymentMethodPicker, LoyaltySlider, ReviewStep",
+      "scope": "**Files:**\n- Create: `src/components/checkout/PaymentMethodPicker.tsx`, `src/components/checkout/LoyaltySlider.tsx`, `src/components/checkout/PaymentStep.tsx`, `src/components/checkout/ReviewStep.tsx`\n- Modify: `src/components/checkout/CheckoutView.tsx`\n- Test: `tests/unit/components/checkout/payment-step.test.tsx`, `tests/unit/components/checkout/review-step.test.tsx`\n\n**Interfaces:**\n\n\n`ReviewStep` shows \"Total charged: \u2026\" prominently (07 \u00a73) and on success routes to `/checkout/pay/[orderId]` \u2014 except for `kind:'immediate' SUCCEEDED` and COD, which go straight to the confirmation page (05 \u00a77).",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/components/checkout` \u2014 expect module-not-found for the four new components.",
+        "Step 3a: `src/components/checkout/PaymentMethodPicker.tsx`",
+        "Step 3b: `src/components/checkout/LoyaltySlider.tsx`",
+        "Step 3c: `src/components/checkout/PaymentStep.tsx`",
+        "Step 3d: `src/components/checkout/ReviewStep.tsx`",
+        "Step 3e: finish `CheckoutView` \u2014 it now owns `payerPhone` and the BotID token",
+        "Step 4: Run `pnpm test:unit tests/unit/components/checkout` \u2014 expect 23 passed. Run `pnpm typecheck && pnpm i18n:check && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 26,
+      "title": "Pay page \u2014 PayClient, PaymentPushWaiting, polling and retry",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(checkout)/checkout/pay/[orderId]/page.tsx`, `src/components/checkout/PayClient.tsx`, `src/components/checkout/PaymentPushWaiting.tsx`\n- Test: `tests/unit/components/checkout/pay-client.test.tsx`\n\n**Interfaces:**\n\n\n05 \u00a77 in full: `push` shows the logo, masked phone, the \"confirm on your phone\" copy, a 120 s countdown and a spinner while polling every 3 s; `redirect` assigns `window.location` immediately unless the page was reached with `?ret=1`; `immediate` never renders (the review step already routed away), but the page handles a refresh onto it by redirecting to the confirmation. On `SUCCEEDED` the client does `router.replace('/order/<number>/confirmation')`; on `FAILED`/`EXPIRED`/`CANCELLED` it shows the error with \"Try again\" and \"Choose another method\".",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/checkout/pay-client.test.tsx`",
+        "Step 2: Run `pnpm test:unit tests/unit/components/checkout/pay-client.test.tsx` \u2014 expect module-not-found.",
+        "Step 3a: `src/components/checkout/PaymentPushWaiting.tsx`",
+        "Step 3b: `src/components/checkout/PayClient.tsx`",
+        "Step 3c: `src/app/[locale]/(checkout)/checkout/pay/[orderId]/page.tsx`",
+        "Step 4: Run `pnpm test:unit tests/unit/components/checkout/pay-client.test.tsx` \u2014 expect 6 passed. Run `pnpm typecheck && pnpm i18n:check && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 27,
+      "title": "Confirmation page and ConfirmationActions (customer cancellation)",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(checkout)/order/[orderNumber]/confirmation/page.tsx`, `src/components/checkout/ConfirmationActions.tsx`, `src/components/checkout/OrderNumberCopy.tsx`\n- Test: `tests/unit/components/checkout/confirmation-actions.test.tsx`\n\n**Interfaces:**\n\n\n10 \u00a72 Confirmation: big check, copyable order number, \"We sent details to WhatsApp/SMS\", items, delivery/pickup details, payment status, Track order and Continue shopping CTAs, invoice link when paid. O6 puts \"Cancel this order\" here while `canCancel` is true.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/checkout/confirmation-actions.test.tsx`",
+        "Step 2: Run `pnpm test:unit tests/unit/components/checkout/confirmation-actions.test.tsx` \u2014 expect module-not-found.",
+        "Step 3a: `src/components/checkout/OrderNumberCopy.tsx`",
+        "Step 3b: `src/components/checkout/ConfirmationActions.tsx`",
+        "Step 3c: `src/app/[locale]/(checkout)/order/[orderNumber]/confirmation/page.tsx`",
+        "Step 4: Run `pnpm test:unit tests/unit/components/checkout/confirmation-actions.test.tsx` \u2014 expect 5 passed. Run `pnpm typecheck && pnpm i18n:check && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 28,
+      "title": "Invoice PDF \u2014 invoice.tsx and GET /api/invoices/[orderId]",
+      "scope": "**Files:**\n- Create: `src/features/orders/invoice.tsx`, `src/app/api/invoices/[orderId]/route.ts`\n- Test: `tests/integration/orders/invoice.test.ts`\n\n**Interfaces:**\n\n\n05 \u00a79: if `Order.invoiceKey` exists **and the order is terminal-paid**, stream from Supabase Storage; otherwise render, upload to `invoices/<orderNumber>.pdf`, set the key and stream. Contents: store details from `Setting`, order number, dates, customer, address, items (name, variant, SKU, serials, quantity, unit, total) in order currency **and** USD, discount lines, shipping, the VAT line from `taxUsdCents`, total, payment method and provider reference, warranty note. Auth: owner, matching guest token, or STAFF+.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/orders/invoice.test.ts`",
+        "Step 2: Run `pnpm test:int tests/integration/orders/invoice.test.ts` \u2014 expect module-not-found.",
+        "Step 3a: Implement `src/features/orders/invoice.tsx`",
+        "Step 3b: Implement `src/app/api/invoices/[orderId]/route.ts`",
+        "Step 4: Run `pnpm test:int tests/integration/orders/invoice.test.ts` \u2014 expect 6 passed. Run `pnpm typecheck && pnpm build`.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 29,
+      "title": "E2E journeys 1\u20134",
+      "scope": "**Files:**\n- Create: `tests/e2e/helpers/checkout.ts`, `tests/e2e/helpers/fake.ts`, `tests/e2e/journeys/01-guest-evc.spec.ts`, `02-registered-mpesa-card.spec.ts`, `03-cod-pickup.spec.ts`, `04-coupon-loyalty.spec.ts`\n- Test: the specs themselves\n\n**Interfaces (helpers):**\n\n\nPhone-suffix conventions come from 05 \u00a75.6: `\u20260000` immediate success, `\u20261111` push then success, `\u20262222` push then failure, `\u20263333` push that never resolves. The card journey uses the fake hosted checkout at `/__fake/checkout`.",
+      "steps": [
+        "Step 1: Write the specs (these are the tests for this task)",
+        "Step 2: Run `pnpm test:e2e tests/e2e/journeys` \u2014 expect failures until the seeded UG/KE pickup data and the cart test ids exist. If `tests/e2e/helpers/checkout.ts` selectors do not match the Phase 1/2 markup, fix the **selector**, never the component, unless a required `data-testid` (`cart-badge`, `",
+        "Step 3: Make the journeys pass. Expected adjustments, all small:",
+        "Step 4: Run `pnpm test:e2e` \u2014 expect journeys 1\u20134 green on both the Chromium desktop and the Pixel 7 mobile project, and the axe assertion in journey 1 with zero serious/critical violations.",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 30,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/phase-03.md`",
+      "steps": [
+        "Step 1: Run the full gate from 12 \u00a76 and capture the real output. Do not paste anything you did not run.",
+        "Step 2: Confirm the coverage floors of 12 \u00a75 for this phase's scope:",
+        "Step 3: Manual verification in a browser (`pnpm dev` with `PROVIDER_MODE=fake`), because these are the paths e2e cannot fully judge:",
+        "Step 4: Write `docs/plans/progress/phase-03.md` with this structure and the **pasted real output** of every command in Steps 1\u20132:",
+        "Step 5: Commit"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,292 @@
+{
+  "phase": 0,
+  "name": "Phase 0 \u2014 Foundation",
+  "source": "docs/plans/phase-00-foundation.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "Read the rules, provision accounts, submit WhatsApp templates",
+      "scope": "This task is manual. It has no code, but it produces `docs/plans/progress/phase-00.md` (section \"Provisioning record\") and populates `.env.local` on the developer machine and the Vercel project environments. Nothing here is committed except the progress note (with **no secret values**).\n\n**Files:** Create `docs/plans/progress/phase-00.md`\n**Interfaces:** Produces the environment variables consumed by `src/lib/env.ts` (Task 4).",
+      "steps": [
+        "Step 1: Re-read `docs/README.md` \"Rules for the implementing model\" and `docs/plans/00-phases.md` \"Cross-phase rules\". Confirm in the progress note: \"Rules re-read on <date>\".",
+        "Step 2: Create `docs/plans/progress/phase-00.md` with this skeleton (fill the table as you go; the value column holds **where** a value lives, never the value itself):",
+        "Step 3: Provision each service in `13-deployment.md \u00a72`. Checklist (tick each and fill the table):",
+        "Step 4: Submit WhatsApp Content Templates (ADR-009 requires this early). Using Twilio Console \u2192 Content Template Builder (or the Content API), create one template per row of `docs/flows/whatsapp-templates.md`, with these exact settings:",
+        "Step 5: Record everything in `docs/plans/progress/phase-00.md`. Verify no secret value appears in the file: `grep -E \"HX[0-9a-f]{32}|sk_|SG\\.|-----BEGIN|postgres(ql)?://\" docs/plans/progress/phase-00.md` must print nothing except Content SIDs (Content SIDs are not secrets and may be recorded).",
+        "Step 6: Commit: `git add docs/plans/progress/phase-00.md && git commit -m \"docs: phase 0 provisioning record and WhatsApp template submissions\"`"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Repository scaffold and tooling",
+      "scope": "**Files:** Create `package.json`, `.npmrc`, `tsconfig.json`, `.prettierrc`, `.prettierignore`, `eslint.config.mjs`, `lefthook.yml`, `docker-compose.yml`, `.env.example`, `.env.test`, `.gitignore`, `postcss.config.mjs`, `src/app/layout.tsx`, `src/app/page.tsx` (temporary, deleted in Task 15), `src/app/globals.css` (temporary minimal; replaced in Task 17), `src/lib/utils.ts`, `tests/unit/lib/utils.test.ts`\n**Interfaces:** Produces `cn`, `slugify`, `randomToken` from `@/lib/utils`; the `pnpm` scripts every later task runs.",
+      "steps": [
+        "Step 1: Scaffold with create-next-app (from the repo root; the current directory already contains `docs/` and `prisma/`, so scaffold into a temp dir and move):",
+        "Step 2: Write the failing test `tests/unit/lib/utils.test.ts`:",
+        "Step 3: Replace `package.json` with (keep the generated versions for `next`, `react`, `react-dom` if they are newer patches within the same major):",
+        "Step 4: `tsconfig.json`:",
+        "Step 5: `.prettierrc` and `.prettierignore`:",
+        "Step 6: `eslint.config.mjs` (flat config; includes the JSX literal restriction from 07 \u00a71):",
+        "Step 7: `lefthook.yml`:",
+        "Step 8: `docker-compose.yml`:",
+        "Step 9: `.env.example` \u2014 every variable from `13-deployment.md \u00a73`, values empty except documented defaults:",
+        "Step 10: `postcss.config.mjs`:",
+        "Step 11: `src/lib/utils.ts`:",
+        "Step 12: Add a minimal `vitest.config.ts` now so the test runs (Task 3 replaces it with the full two-project config):"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Test tooling \u2014 Vitest projects, Playwright, LHCI config",
+      "scope": "**Files:** Create `vitest.config.ts` (replace), `tests/setup/jsdom.ts`, `tests/integration/env.ts`, `playwright.config.ts`, `tests/e2e/smoke.spec.ts`, `.lighthouserc.json`\n**Interfaces:** Produces the `unit` and `integration` Vitest projects; `tests/integration/setup.ts` is created in Task 8 (referenced here by path).",
+      "steps": [
+        "Step 1: Write the failing component test `tests/unit/components/smoke.test.tsx` to prove the jsdom project works:",
+        "Step 2: Run `pnpm test:unit` \u2192 expect failure `ReferenceError: document is not defined` (node environment).",
+        "Step 3: Full `vitest.config.ts`:",
+        "Step 4: `playwright.config.ts`:",
+        "Step 5: `pnpm exec playwright install --with-deps chromium` then `pnpm test:unit` \u2192 expect `smoke.test.tsx` + `utils.test.ts` passing (4 tests).",
+        "Step 6: Commit: `git add -A && git commit -m \"chore: vitest unit/integration projects, playwright desktop+mobile config, lhci config\"`"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Environment validation (src/lib/env.ts)",
+      "scope": "**Files:** Create `src/lib/env.ts`, `scripts/check-env.ts`; Test `tests/unit/lib/env.test.ts`\n**Interfaces:** Produces `env` (server), `publicEnv`, `type ServerEnv`, `isFakeMode()`, `appUrl()`. Every later task reads configuration only through this module (except `src/middleware.ts`, which is edge and reads `process.env.APP_ENV` directly).",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/lib/env.test.ts`:",
+        "Step 2: `pnpm test:unit tests/unit/lib/env.test.ts` \u2192 fails: `Cannot find module '@/lib/env'`.",
+        "Step 3: Implement `src/lib/env.ts`:",
+        "Step 4: `pnpm test:unit tests/unit/lib/env.test.ts` \u2192 5 passed. `pnpm typecheck` clean.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(env): zod-validated server and public env with fake/live mode rules\"`"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Error model and logger",
+      "scope": "**Files:** Create `src/lib/errors.ts`, `src/lib/logger.ts`; Test `tests/unit/lib/errors.test.ts`, `tests/unit/lib/logger.test.ts`\n**Interfaces:** Produces `ERROR_CODES`, `ErrorCode`, `AppError`, `ActionResult<T>`, `ActionError`, `isAppError`, `errorStatus`; `logger`, `maskPhone`, `maskEmail`, `redact`.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 both fail with module-not-found.",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit` \u2192 all pass (`ERROR_CODES.length` is 56 \u2014 count the list; if your count differs, you have mistyped a code; re-check against 04 \u00a713).",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(lib): AppError with error codes from 04 \u00a713, ActionResult, JSON logger with PII masking\"`"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Money library",
+      "scope": "**Files:** Create `src/lib/money.ts`; Test `tests/unit/lib/money.test.ts`\n**Interfaces:** Produces `CurrencyCode` (re-exported type), `CURRENCY_META`, `MINOR_EXPONENT`, `Money`, `money()`, `add`, `sub`, `mul`, `percentBps`, `convertUsdCents`, `convert`, `formatMoney`, `format`, `usd()`, `toMajorString`. This module has **no runtime imports** so it is safe in client components.",
+      "steps": [
+        "Step 1: Failing test `tests/unit/lib/money.test.ts`:",
+        "Step 2: Run \u2192 fails (module missing).",
+        "Step 3: Implement `src/lib/money.ts` (BigInt integer arithmetic; rate parsed as a decimal string with up to 8 fractional digits \u2014 the `ExchangeRate.rate` column is `Decimal(18,8)`, pass `rate.toString()`):",
+        "Step 4: `pnpm test:unit tests/unit/lib/money.test.ts` \u2192 all pass.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(money): integer-minor Money helpers, ceil conversion per currency step, formatting\"`"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Prisma client singleton (src/lib/db.ts)",
+      "scope": "**Files:** Create `src/lib/db.ts`; Test `tests/unit/lib/db.test.ts`\n**Interfaces:** Consumes `env` (Task 4). Produces `export const db: PrismaClient` and `export function isSupabaseUrl(url: string): boolean`. Every server module imports the client as `import { db } from '@/lib/db'` (the ESLint rule from Task 2 forbids `new PrismaClient()` anywhere else).\n\nADR-002: Supabase driver adapter in the cloud, Prisma's native engine against Docker Postgres locally and in tests. `prisma/schema.prisma` is used **as committed** \u2014 do not edit it.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/lib/db.test.ts`:",
+        "Step 2: `pnpm test:unit tests/unit/lib/db.test.ts` \u2192 fails, `Cannot find module '@/lib/db'`.",
+        "Step 3: Generate the client and implement.",
+        "Step 4: `pnpm test:unit tests/unit/lib/db.test.ts` \u2192 3 passed. `pnpm typecheck` clean.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(db): prisma 6 client singleton with neon driver adapter selection\"`"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Migrations (initial + raw SQL) and the integration test harness",
+      "scope": "**Files:** Create `prisma/migrations/<ts>_init/migration.sql` (generated), `prisma/migrations/<ts>_raw_search_and_constraints/migration.sql` (hand-written), `prisma/migrations/migration_lock.toml`, `tests/integration/setup.ts`, `tests/integration/truncate.ts`; Test `tests/integration/db/schema.test.ts`\n**Interfaces:** Consumes `db` (Task 7). Produces `truncateAll(): Promise<void>` from `@tests/integration/truncate`, and makes the Vitest `integration` project (Task 3) runnable \u2014 `tests/integration/setup.ts` is the `globalSetup` it referenced.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/db/schema.test.ts`. It asserts everything `03-data-model.md \u00a72` requires:",
+        "Step 2: `docker compose up -d && pnpm test:int` \u2192 fails: the `integration` project cannot start because `tests/integration/setup.ts` does not exist.",
+        "Step 3: Create the migrations and the harness.",
+        "Step 4: `pnpm test:int` \u2192 5 passed. Then prove a clean apply works end to end: `pnpm prisma migrate reset --force --skip-seed` on the dev DB and `DATABASE_URL=$DATABASE_URL_TEST pnpm prisma migrate deploy`.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(db): initial migration plus raw search vector, trigram indexes, partial uniques and check constraints\"`"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Redis key-value store and rate limiters",
+      "scope": "**Files:** Create `src/lib/redis.ts`, `src/lib/ratelimit.ts`; Test `tests/unit/lib/redis.test.ts`, `tests/unit/lib/ratelimit.test.ts`\n**Interfaces:** Consumes `env` (Task 4). Produces `KeyValueStore`, `kv`, `redis`, `createMemoryKv()`, `redisKey(purpose, id)`, `RATE_LIMITS`, `RateLimitName`, `RateLimitResult`, `limiters`, `rateLimit(name, identifier)`.\n\n`kv` is a small port over Upstash so OTP state and polling flags work in tests without a network: with `PROVIDER_MODE=fake` (or when the Upstash vars are absent) it is an in-memory map with real TTL semantics. ADR-007 namespace: `hh:<env>:<purpose>:<id>`.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run both \u2192 module-not-found failures.",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit` \u2192 redis 5 + ratelimit 3 green.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(lib): redis key-value port with in-memory fake and the 11 \u00a74 rate-limiter table\"`"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Provider registry, object storage (Supabase Storage + fake) and BotID",
+      "scope": "**Files:** Create `src/lib/storage/ports.ts`, `src/lib/storage/r2.ts`, `src/lib/providers.ts`, `src/lib/turnstile.ts`, `tests/fakes/fake-storage.ts`, `tests/fakes/fake-turnstile.ts`; Test `tests/unit/lib/storage.test.ts`, `tests/unit/lib/turnstile.test.ts`\n**Interfaces:** Produces `ObjectStorage`, `UPLOAD_MAX_BYTES`, `UPLOAD_CONTENT_TYPES`, `R2Storage`, `FakeStorage`, `getStorage(): ObjectStorage`, `storage`, `getMessageChannel(channel)`, `verifyHuman(ctx): Promise<void>`, `fakeVerifyBotID(token)`.\n\n`providers.ts` is the only module that branches on `PROVIDER_MODE`; every later phase adds its adapters here rather than inventing a new seam.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures (modules missing).",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit` \u2192 storage 4 + turnstile 1 green; `pnpm typecheck` clean.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(lib): ObjectStorage port with Supabase Storage and fake, provider registry, server-side BotID verification\"`"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Request context and createAction",
+      "scope": "**Files:** Create `src/lib/cookies.ts`, `src/lib/geo.ts`, `src/lib/action-context.ts`, `src/lib/action.ts`, `src/features/admin/audit.ts`; Test `tests/unit/lib/geo.test.ts`, `tests/unit/lib/action.test.ts`\n**Interfaces:** Consumes `AppError`/`ActionResult` (Task 5), `rateLimit` (Task 9), `auth` (Task 16 \u2014 reached only through `action-context.ts`, which the unit test mocks, so this task can land first). Produces `COOKIES`, `CART_COOKIE_OPTIONS`, `PREFERENCE_COOKIE_OPTIONS`, `normaliseCountry`, `defaultCurrencyForCountry`, `defaultLocaleForCountry`, `isLocale`, `isCurrencyCode`, `resolveRequestContext`, `createAction`, `ActionContext`, `AuthLevel`, `ROLE_RANK`, `hasStrongAmr`, `writeAuditLog`.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 fails (`@/lib/action` missing).",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit` \u2192 geo 3 + action 11 green. `pnpm typecheck` will report `@/lib/auth` missing \u2014 create the placeholder `src/lib/auth.ts` now containing only `export const auth = async (): Promise<null> => null;` with a `// replaced in Task 16` comment, so the tree typechecks; Task 16 replace",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(lib): createAction gate with auth, amr, rate limiting, audit and error mapping\"`"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Seed \u2014 fixtures, idempotent runner, production subset",
+      "scope": "**Files:** Create `prisma/seed/index.ts`, `prisma/seed/lib.ts`, `prisma/seed/fixtures/countries.json`, `rates.json`, `warehouses.json`, `zones.json`, `payment-methods.json`, `attributes.json`, `categories.json`, `brands.json`, `content-pages.json`, `settings.json`, `prisma/seed/fixtures/products/*.json`, `prisma/seed/fixtures/users.json`; Test `tests/integration/seed/seed.test.ts`\n**Interfaces:** Consumes `db` (Task 7), `truncateAll` (Task 8). Produces `pnpm db:seed` and `pnpm db:seed:prod`, plus the exported helpers `seedReference()`, `seedDemo()`, `main()` used by `tests/integration/setup.ts` (Task 13) and by the E2E job.\n\nEverything is upsert-by-natural-key (slug / code / key / composite id), so running the seed twice changes nothing. `--prod` runs `seedReference()` only: countries, rates, warehouses, zones, payment method configs, attributes + sets, categories, content pages, settings \u2014 **no demo products and no demo users** (13 \u00a77).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/seed/seed.test.ts`:",
+        "Step 2: `pnpm test:int` \u2192 fails, `Cannot find module '../../../prisma/seed/index'`.",
+        "Step 3: Write the fixtures. **Formats are fixed** \u2014 Phase 5's importer and the E2E seed rely on them.",
+        "Step 4: Implement the seeder.",
+        "Step 5: `pnpm db:seed` against the dev DB (twice, to prove idempotency), then `pnpm test:int` \u2192 all 7 seed tests pass. Verify `pnpm db:seed:prod` on a freshly reset DB leaves `Product` and `User` empty.",
+        "Step 6: Commit: `git add -A && git commit -m \"feat(seed): idempotent reference and demo seed with JSON fixtures and a --prod subset\"`"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Test factories and reference-data bootstrap for integration tests",
+      "scope": "**Files:** Create `tests/fixtures/factories.ts`; Modify `tests/integration/setup.ts`; Test `tests/integration/fixtures/factories.test.ts`\n**Interfaces:** Produces `createUser`, `createProduct`, `createCoupon`, `createZone`, `createOrder` (signature only \u2014 Phase 3 implements the body), `resetSequences()`. Consumed by every integration test from Phase 1 onward.",
+      "steps": [
+        "Step 1: Failing test `tests/integration/fixtures/factories.test.ts`:",
+        "Step 2: `pnpm test:int` \u2192 fails (`@tests/fixtures/factories` missing).",
+        "Step 3: Implement `tests/fixtures/factories.ts`:",
+        "Step 4: `pnpm test:int` \u2192 factories 5 + seed 7 + schema 5 green.",
+        "Step 5: Commit: `git add -A && git commit -m \"test: integration factories and reference-data bootstrap\"`"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Message channel port, fake channel, OTP service",
+      "scope": "**Files:** Create `src/features/notifications/ports.ts`, `src/features/notifications/index.ts`, `tests/fakes/fake-channel.ts`, `src/features/auth/otp.ts`, `src/features/auth/schemas.ts`, `src/features/auth/index.ts`, `src/features/users/normalise.ts`; Modify `src/lib/providers.ts`; Test `tests/unit/features/auth/otp.test.ts`\n**Interfaces:** Consumes `kv`/`redisKey` (Task 9), `rateLimit` (Task 9), `env` (Task 4), `AppError` (Task 5). Produces:\n\n- `MessageChannel`, `OutboundMessage`, `SendResult` (`src/features/notifications/ports.ts`, 02 \u00a75)\n- `FakeChannel`, `getFakeChannel(channel)`, `fakeMessages()`, `resetFakeMessages()` (`tests/fakes/fake-channel.ts`)\n- `requestOtp(input)`, `verifyOtp(input)`, `OTP_TTL_SECONDS`, `OTP_MAX_ATTEMPTS`, `OTP_RESEND_COOLDOWN_SECONDS` (`src/features/auth/otp.ts`)\n- `normalisePhone(raw, country)`, `normaliseEmail(raw)` (`src/features/users/normalise.ts`, 03 \u00a71)\n\nPhase 4 replaces nothing here: it only adds the real WhatsApp/SMS/Email channels behind `getMessageChannel`.",
+      "steps": [
+        "Step 1: Failing test `tests/unit/features/auth/otp.test.ts`:",
+        "Step 2: Run \u2192 module-not-found.",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit tests/unit/features/auth/otp.test.ts` \u2192 9 passed. Confirm no test output contains a code: `pnpm test:unit 2>&1 | grep -E \"code.:.[0-9]{6}\"` prints nothing.",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(auth): OTP service on redis with hashed codes, attempts, cooldown and WhatsApp\u2192SMS fallback\"`"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "next-intl routing, messages, glossary and i18n:check",
+      "scope": "**Files:** Create `src/lib/i18n/routing.ts`, `src/lib/i18n/request.ts`, `src/lib/i18n/navigation.ts`, `src/lib/i18n/pick-translation.ts`, `messages/en.json`, `messages/so.json`, `messages/GLOSSARY.md`; Modify `scripts/i18n-check.ts` (created in Task 2), `next.config.ts`; Delete `src/app/page.tsx`; Test `tests/unit/lib/i18n.test.ts`, `tests/unit/scripts/i18n-check.test.ts`\n**Interfaces:** Produces `routing`, `Link`, `redirect`, `usePathname`, `useRouter`, `getPathname` (from `src/lib/i18n/navigation.ts`), `pickTranslation(rows, locale)`, and the `common`, `nav`, `auth`, `errors` message namespaces every later phase extends.\n\nADR-005: `locales = ['en','so']`, `defaultLocale = 'en'`, `localePrefix = 'always'`.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures.",
+        "Step 3: Implement the routing modules.",
+        "Step 4: Write `messages/en.json`. Namespaces `common`, `nav`, `auth`, `errors` are populated in full now; later phases add `catalog`, `cart`, `checkout`, `account`, `sms`.",
+        "Step 5: Complete `scripts/i18n-check.ts` (Task 2 created it; make it export the tested helpers):",
+        "Step 6: Delete the temporary `src/app/page.tsx` from Task 2 (the `[locale]` tree in Task 18 owns the root route; the middleware in Task 20 redirects `/` to `/{locale}`).",
+        "Step 7: `pnpm test:unit && pnpm i18n:check` \u2192 tests green, `i18n:check ok`.",
+        "Step 8: Commit: `git add -A && git commit -m \"feat(i18n): next-intl routing, en/so messages for common, nav, auth and every error code, glossary and key-parity check\"`"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Auth.js v5 configuration",
+      "scope": "**Files:** Create `src/lib/auth.ts` (replaces the Task 11 placeholder), `src/lib/auth.config.ts`, `src/types/next-auth.d.ts`, `src/app/api/auth/[...nextauth]/route.ts`, `src/features/cart/merge.ts`, `src/features/cart/index.ts`, `src/features/auth/actions.ts`; Test `tests/unit/lib/auth.test.ts`, `tests/integration/auth/sign-in.test.ts`\n**Interfaces:** Consumes `verifyOtp` (Task 14), `db` (Task 7), `verifyHuman` (Task 10), `createAction` (Task 11). Produces:\n\n- `export const { auth, signIn, signOut, handlers }` from `src/lib/auth.ts`\n- `roleRank`, `hasStrongAmr` re-exported for `admin/layout.tsx` (Phase 5)\n- `mergeGuestCartIntoUser(guestToken: string, userId: string): Promise<void>` in `src/features/cart/merge.ts` \u2014 a no-op stub; **Phase 2 Task 8 replaces the body** (K1)\n- `requestOtpAction` in `src/features/auth/actions.ts`\n\nADR-003: JWT sessions; `phone-otp` Credentials provider, Resend magic link, Google. Claims `uid`, `role`, `amr`, `locale`, `sv`. STAFF+ sessions expire after 12 h. `sv` (`User.sessionVersion`) is re-read every 5 minutes so blocking a user kills every session.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures.",
+        "Step 3: Implement.",
+        "Step 4: `pnpm test:unit && pnpm test:int` \u2192 auth unit 3 + integration 2 green. `pnpm typecheck` clean (the Task 11 placeholder is now the real module).",
+        "Step 5: Commit: `git add -A && git commit -m \"feat(auth): Auth.js v5 with phone-otp, magic link and Google, role/amr/sv JWT claims and guest-cart merge hook\"`"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Design tokens, theme provider and shadcn primitives",
+      "scope": "**Files:** Replace `src/app/globals.css`; Create `components.json`, `src/components/providers/theme-provider.tsx`, `src/components/ui/*`; Test `tests/unit/components/ui/button.test.tsx`\n**Interfaces:** Produces the Tailwind v4 `@theme` tokens of `10 \u00a71`, the `.dark` overrides, `ThemeProvider`, and the shadcn primitives listed in `10 \u00a71` under `src/components/ui/`.",
+      "steps": [
+        "Step 1: Failing test `tests/unit/components/ui/button.test.tsx`:",
+        "Step 2: `pnpm test:unit` \u2192 fails (no `@/components/ui/button`).",
+        "Step 3: Write `src/app/globals.css` \u2014 tokens verbatim from `10 \u00a71`, plus the shadcn variable bridge so the copied primitives use our palette:",
+        "Step 4: Initialise shadcn and add the `10 \u00a71` inventory:",
+        "Step 5: `pnpm test:unit tests/unit/components/ui/button.test.tsx` \u2192 3 passed. `pnpm lint` \u2014 the shadcn files live under `src/components/ui/**`, which the JSX-literal rule covers; they contain no literal text, so lint stays green.",
+        "Step 6: Commit: `git add -A && git commit -m \"feat(ui): tailwind v4 design tokens from 10 \u00a71, dark theme, next-themes provider and shadcn primitives\"`"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Layout shell \u2014 header, footer, switchers, store context, home placeholder",
+      "scope": "**Files:** Create `src/app/layout.tsx` (replace), `src/app/[locale]/layout.tsx`, `src/app/[locale]/not-found.tsx`, `src/app/[locale]/(shop)/layout.tsx`, `page.tsx`, `loading.tsx`, `error.tsx`, `src/components/layout/store-context.tsx`, `Header.tsx`, `MobileNav.tsx`, `MegaMenu.tsx`, `SearchBox.tsx`, `CartButton.tsx`, `AccountMenu.tsx`, `Footer.tsx`, `AnnouncementBar.tsx`, `LocaleSwitcher.tsx`, `CurrencySwitcher.tsx`, `CountrySwitcher.tsx`, `ThemeToggle.tsx`, `WhatsAppFab.tsx`, `Logo.tsx`, `src/features/catalog/dto.ts`, `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`, `src/features/currency/actions.ts`, `src/features/currency/index.ts`, `src/features/users/actions.ts`, `src/features/users/index.ts`; Test `tests/unit/components/layout/locale-switcher.test.tsx`, `tests/unit/components/layout/currency-switcher.test.tsx`, `tests/integration/catalog/category-tree.test.ts`\n**Interfaces:** Consumes `routing`/`Link` (Task 15), `formatMoney`/`CURRENCY_CODES` (Task 6), `createAction` (Task 11), `db` (Task 7). Produces:\n\n- `getCategoryTree(locale: Locale): Promise<CategoryNodeDTO[]>` and `CategoryNodeDTO` (`src/features/catalog`) \u2014 Phase 1 extends `queries.ts`, this signature is final\n- `StoreProvider`, `useStore(): { locale; currency; country; userId }` (`src/components/layout/store-context.tsx`)\n- `setDisplayCurrency({ currency })`, `setCountryPreference({ country })` a",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures.",
+        "Step 3: Catalog query and DTO.",
+        "Step 4: Store context and the layout tree.",
+        "Step 5: The layout components. **Header skeleton in full** (10 \u00a72: mobile row 1 hamburger/logo/cart, row 2 search; desktop row 1 logo/search/cluster, row 2 mega-menu):",
+        "Step 6: Route files.",
+        "Step 7: `pnpm test:unit && pnpm test:int` \u2192 the two switcher tests (5 assertions) and the three category-tree tests pass. `pnpm dev` \u2192 `/en` and `/so` render the shell; `pnpm lint` catches any literal JSX text you left behind.",
+        "Step 8: Commit: `git add -A && git commit -m \"feat(layout): storefront shell with header, mega-menu, footer, locale/currency/country switchers and category tree query\"`"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Sign-in page \u2014 PhoneInput, OtpInput, BotIdClient",
+      "scope": "**Files:** Create `src/components/forms/PhoneInput.tsx`, `OtpInput.tsx`, `BotIdClient.tsx`, `src/components/auth/SignInTabs.tsx`, `PhoneOtpForm.tsx`, `EmailForm.tsx`, `GoogleButton.tsx`, `src/app/[locale]/(auth)/layout.tsx`, `src/app/[locale]/(auth)/sign-in/page.tsx`; Test `tests/unit/components/forms/phone-input.test.tsx`, `tests/unit/components/forms/otp-input.test.tsx`, `tests/unit/components/auth/phone-otp-form.test.tsx`\n**Interfaces:** Consumes `requestOtpAction` (Task 16), `signIn` from `next-auth/react`, `normalisePhone` (Task 14), `publicEnv.turnstileSiteKey` (Task 4). Produces `PhoneInput`, `OtpInput`, `BotIdClient` \u2014 reused by checkout (Phase 3), reviews (Phase 4) and tracking (Phase 4).\n\nA1/A2/A3, 10 \u00a72 \"Sign in\": tabs Phone / Email / Google; the phone tab is a two-screen flow (number + channel \u2192 6-box code with a resend countdown).",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures.",
+        "Step 3: `src/components/forms/PhoneInput.tsx` (full):",
+        "Step 4: The sign-in screens.",
+        "Step 5: `pnpm test:unit` \u2192 phone-input 4 + otp-input 5 + phone-otp-form 3 green. Manual check: `pnpm dev`, open `/so/sign-in`, request a code (fake mode), read it from `GET /__fake/messages` (Task 20), sign in.",
+        "Step 6: Commit: `git add -A && git commit -m \"feat(auth): sign-in page with phone/OTP, magic link and Google tabs plus PhoneInput, OtpInput and BotIdClient\"`"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Middleware, next.config.ts headers, health endpoint, Sentry, fake routes",
+      "scope": "**Files:** Create `src/middleware.ts`, `src/lib/sentry.ts`, `src/instrumentation.ts`, `instrumentation-client.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/app/api/health/route.ts`, `src/app/__fake/messages/route.ts`, `src/app/__fake/upload/[...key]/route.ts`; Modify `next.config.ts`; Test `tests/unit/middleware.test.ts`, `tests/unit/lib/sentry.test.ts`, `tests/integration/api/health.test.ts`\n**Interfaces:** Consumes `routing` (Task 15), `COOKIES`/`geo` (Task 11), `db`/`kv`. Produces the request pipeline of `02 \u00a710` plus the CSP nonce of `11 \u00a77`, `/api/health`, and the `PROVIDER_MODE=fake`-only routes the E2E suite reads.",
+      "steps": [
+        "Step 1: Failing tests.",
+        "Step 2: Run \u2192 failures.",
+        "Step 3: `src/middleware.ts` (edge; `02 \u00a710` steps 1\u20135 plus the `11 \u00a77` nonce):",
+        "Step 4: `next.config.ts` (final Phase 0 shape \u2014 static headers from `11 \u00a77`; the CSP itself is per-request from middleware):",
+        "Step 5: Sentry (ADR-013: errors + traces at 10%).",
+        "Step 6: Routes.",
+        "Step 7: `pnpm test:unit && pnpm test:int && pnpm build` \u2192 middleware 8, sentry 1, health 1 green; the build succeeds and prints the `[locale]` routes. Verify the headers manually: `curl -sI http://localhost:3000/en | grep -i -E \"content-security-policy|strict-transport\"`.",
+        "Step 8: Commit: `git add -A && git commit -m \"feat(platform): edge middleware with locale, geo, cart cookie and CSP nonce, security headers, health endpoint, Sentry and fake routes\"`"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "CI pipeline, Vercel and Vercel configuration",
+      "scope": "**Files:** Create `.github/workflows/ci.yml`, `.github/workflows/seed-prod.yml`, `docs/plans/progress/phase-00.md` (append \"Platform configuration\"); Modify `package.json` (add `test:int:ci`)\n**Interfaces:** Consumes every `pnpm` script from Task 2. Produces the green CI required by the phase gate and the recorded platform settings.\n\n`deploy-prod` runs only on `main` **and** only when the repository variable `ENABLE_PROD_DEPLOY` is `true`, so the pipeline is safe before the domain exists (13 \u00a74.6).",
+      "steps": [
+        "Step 1: Write `.github/workflows/ci.yml`:",
+        "Step 2: Vercel project settings (record each in the progress note):",
+        "Step 3: Vercel settings (13 \u00a76), recorded the same way:",
+        "Step 4: Push the branch and confirm the CI run is green for `static`, `unit`, `integration`; `e2e` runs the Task 3 smoke spec. `deploy-prod` must be **skipped** (the variable is unset).",
+        "Step 5: Commit: `git add -A && git commit -m \"ci: github actions pipeline with static, unit, integration, e2e and gated production deploy\"`"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:** Modify `docs/plans/progress/phase-00.md`\n**Interfaces:** None. This task proves the phase, it does not add code.\n\nGates are **measured, not assumed** (`docs/README.md`): paste the real terminal output. If any command fails, fix it in a follow-up commit within this phase and re-run \u2014 never edit the pasted output.",
+      "steps": [
+        "Step 1: From a clean tree with Docker running:",
+        "Step 2: Paste each command and its full output under `## Gate output` in `docs/plans/progress/phase-00.md`, with the date and the commit SHA (`git rev-parse HEAD`). Include the Vitest summary lines showing 0 failures and the coverage table.",
+        "Step 3: Add a `## Deviations` section listing anything that differs from the specs. It must be empty, or every entry must be one the user explicitly approved. Copy the entries from \"## Spec issues found\" at the end of this plan that you actually acted on.",
+        "Step 4: Verify the Phase 0 checklist by hand and tick it in the note:",
+        "Step 5: Commit: `git add docs/plans/progress/phase-00.md && git commit -m \"docs: phase 0 gate output and completion note\"`"
+      ]
+    }
+  ]
+}

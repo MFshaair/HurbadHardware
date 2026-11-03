@@ -1,0 +1,98 @@
+{
+  "slug": "ipad-10th-gen-64gb",
+  "sku": "APL-IPAD10",
+  "name": "Apple iPad (10th generation) 64GB",
+  "brand": "apple",
+  "category": "tablets",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "ipad apple tablet ios",
+  "publishedDaysAgo": 60,
+  "translations": {
+    "en": {
+      "name": "Apple iPad (10th generation) 64GB",
+      "shortDescription": "10.9\" iPad with A14 Bionic chip, great for reading, browsing and light work.",
+      "description": "## Apple iPad (10th generation)\n\nA 10.9-inch Liquid Retina display powered by the A14 Bionic chip.\n\n- 4 GB RAM, 64 GB or 256 GB storage\n- 12 MP front and back cameras\n- Works with Apple Pencil (1st generation, with adapter)\n- All-day battery life"
+    },
+    "so": {
+      "name": "Apple iPad (10th generation) 64GB",
+      "shortDescription": "iPad 10.9\" oo leh chip A14 Bionic, ku habboon akhriska, sahanka iyo shaqada fudud.",
+      "description": "## Apple iPad (10th generation)\n\nShaashad Liquid Retina oo 10.9 inch ah oo uu shaqaysiiyo chip-ka A14 Bionic.\n\n- 4 GB RAM, kayd 64 GB ama 256 GB\n- Kaamiro hore iyo dambe oo 12 MP ah\n- Waxay la shaqaysaa Apple Pencil (jiilka 1-aad, oo leh adapter)\n- Baytari maalin dhan socota"
+    }
+  },
+  "attributes": {
+    "os": "ios",
+    "chipset": "Apple A14 Bionic",
+    "ram": "4gb",
+    "storage": "64gb",
+    "screen_size": 10.9,
+    "display_type": "lcd",
+    "refresh_rate": "60hz",
+    "cellular": false,
+    "stylus_support": true,
+    "battery_mah": 7606
+  },
+  "media": [
+    {
+      "key": "seed/products/ipad-10th-gen-64gb/0.webp",
+      "alt": "ipad 10th gen 64gb",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "APL-IPAD10-64-SLV",
+      "options": [
+        {
+          "key": "color",
+          "value": "silver",
+          "labelEn": "Silver",
+          "labelSo": "Qalinjire"
+        },
+        {
+          "key": "storage",
+          "value": "64gb",
+          "labelEn": "64 GB",
+          "labelSo": "64 GB"
+        }
+      ],
+      "priceUsdCents": 34900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 8,
+        "NBO": 5
+      }
+    },
+    {
+      "sku": "APL-IPAD10-256-SLV",
+      "options": [
+        {
+          "key": "color",
+          "value": "silver",
+          "labelEn": "Silver",
+          "labelSo": "Qalinjire"
+        },
+        {
+          "key": "storage",
+          "value": "256gb",
+          "labelEn": "256 GB",
+          "labelSo": "256 GB"
+        }
+      ],
+      "priceUsdCents": 44900,
+      "compareAtUsdCents": 47900,
+      "isDefault": false,
+      "position": 1,
+      "stock": {
+        "MGQ": 2,
+        "NBO": 1
+      }
+    }
+  ]
+}

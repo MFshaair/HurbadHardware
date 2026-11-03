@@ -1,0 +1,96 @@
+{
+  "slug": "samsung-galaxy-s25-256gb",
+  "sku": "SAM-S25",
+  "name": "Samsung Galaxy S25 256GB",
+  "brand": "samsung",
+  "category": "smartphones",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "galaxy s25 samsung android 5g flagship",
+  "publishedDaysAgo": 12,
+  "translations": {
+    "en": {
+      "name": "Samsung Galaxy S25 256GB",
+      "shortDescription": "Flagship 6.2\" AMOLED phone with a 50 MP camera and official 24-month warranty.",
+      "description": "## Samsung Galaxy S25\n\nA compact flagship with a 6.2-inch LTPO AMOLED display at 120 Hz, the Snapdragon 8 Elite chipset and a 50 MP main camera.\n\n- 8 GB RAM, 256 GB or 512 GB storage\n- 4000 mAh battery with 45 W charging\n- IP68 water and dust resistance\n- Dual SIM, 5G, NFC\n\nSold with the official Samsung East Africa warranty."
+    },
+    "so": {
+      "name": "Samsung Galaxy S25 256GB",
+      "shortDescription": "Taleefan sare oo leh shaashad AMOLED 6.2\", kaamiro 50 MP iyo dammaanad rasmi ah oo 24 bilood ah.",
+      "description": "## Samsung Galaxy S25\n\nTaleefan heer sare ah oo leh shaashad LTPO AMOLED 6.2 inch oo 120 Hz ah, chipset Snapdragon 8 Elite iyo kaamiro weyn oo 50 MP ah.\n\n- 8 GB RAM, kayd 256 GB ama 512 GB\n- Baytari 4000 mAh oo leh chaajin 45 W\n- IP68 biyo iyo boodh ka celin\n- Laba SIM, 5G, NFC\n\nWaxaa lagu iibiyaa dammaanad rasmi ah oo Samsung Bariga Afrika."
+    }
+  },
+  "attributes": {
+    "brand_series": "Galaxy S",
+    "os": "android",
+    "chipset": "Snapdragon 8 Elite",
+    "ram": "8gb",
+    "storage": "256gb",
+    "screen_size": 6.2,
+    "display_type": "ltpo-amoled",
+    "refresh_rate": "120hz",
+    "main_camera_mp": 50,
+    "battery_mah": 4000,
+    "charging_w": 45,
+    "network": ["4g", "5g"],
+    "dual_sim": true,
+    "nfc": true,
+    "water_resistance": "ip68"
+  },
+  "media": [
+    {
+      "key": "seed/products/samsung-galaxy-s25/front.webp",
+      "alt": "Samsung Galaxy S25 front",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    },
+    {
+      "key": "seed/products/samsung-galaxy-s25/back.webp",
+      "alt": "Samsung Galaxy S25 back",
+      "width": 1200,
+      "height": 1200,
+      "position": 1
+    }
+  ],
+  "variants": [
+    {
+      "sku": "SAM-S25-256-MID",
+      "options": [
+        { "key": "color", "value": "midnight", "labelEn": "Midnight", "labelSo": "Madow" },
+        { "key": "storage", "value": "256gb", "labelEn": "256 GB", "labelSo": "256 GB" }
+      ],
+      "priceUsdCents": 129900,
+      "compareAtUsdCents": 139900,
+      "isDefault": true,
+      "position": 0,
+      "stock": { "MGQ": 12, "NBO": 8 }
+    },
+    {
+      "sku": "SAM-S25-256-SIL",
+      "options": [
+        { "key": "color", "value": "silver", "labelEn": "Silver", "labelSo": "Qalinjire" },
+        { "key": "storage", "value": "256gb", "labelEn": "256 GB", "labelSo": "256 GB" }
+      ],
+      "priceUsdCents": 129900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 1,
+      "stock": { "MGQ": 5, "NBO": 3 }
+    },
+    {
+      "sku": "SAM-S25-512-MID",
+      "options": [
+        { "key": "color", "value": "midnight", "labelEn": "Midnight", "labelSo": "Madow" },
+        { "key": "storage", "value": "512gb", "labelEn": "512 GB", "labelSo": "512 GB" }
+      ],
+      "priceUsdCents": 149900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 2,
+      "stock": { "MGQ": 4, "NBO": 0 }
+    }
+  ]
+}

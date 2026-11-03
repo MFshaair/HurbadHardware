@@ -1,0 +1,74 @@
+{
+  "slug": "lenovo-legion-5",
+  "sku": "LEN-LEG5",
+  "name": "Lenovo Legion 5",
+  "brand": "lenovo",
+  "category": "gaming-laptops",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "lenovo legion 5 gaming laptop amd ryzen",
+  "publishedDaysAgo": 42,
+  "translations": {
+    "en": {
+      "name": "Lenovo Legion 5",
+      "shortDescription": "15.6\" gaming laptop with AMD Ryzen 7 and RTX 4050 graphics.",
+      "description": "## Lenovo Legion 5\n\nA 15.6-inch 165 Hz display with an AMD Ryzen 7 processor and NVIDIA GeForce RTX 4050 graphics for smooth 1080p gaming.\n\n- 16 GB DDR5 RAM\n- 512 GB NVMe SSD\n- Legion Coldfront cooling with dual fans"
+    },
+    "so": {
+      "name": "Lenovo Legion 5",
+      "shortDescription": "Laptop ciyaaro 15.6\" ah oo leh AMD Ryzen 7 iyo kaadhka sawirka RTX 4050.",
+      "description": "## Lenovo Legion 5\n\nShaashad 165 Hz ah oo 15.6 inch ah, leh processor AMD Ryzen 7 iyo kaadhka sawirka NVIDIA GeForce RTX 4050 si loo ciyaaro 1080p si fiican.\n\n- 16 GB DDR5 RAM\n- 512 GB NVMe SSD\n- Qaboojin Legion Coldfront ah oo leh laba fan"
+    }
+  },
+  "attributes": {
+    "os": "windows",
+    "cpu_brand": "amd",
+    "cpu_model": "Ryzen 7 8745HS",
+    "ram": "16gb",
+    "ram_upgradeable": true,
+    "storage": "512gb",
+    "storage_type": "ssd",
+    "gpu": "NVIDIA GeForce RTX 4050",
+    "gpu_type": "dedicated",
+    "screen_size": 15.6,
+    "resolution": "fhd",
+    "refresh_rate": "144hz",
+    "touchscreen": false,
+    "weight_kg": 2.4,
+    "battery_wh": 80,
+    "keyboard_backlit": true,
+    "ports": "1× USB-C, 3× USB-A, HDMI 2.1, Ethernet"
+  },
+  "media": [
+    {
+      "key": "seed/products/lenovo-legion-5/0.webp",
+      "alt": "lenovo legion 5",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "LEN-LEG5-16-512",
+      "options": [
+        {
+          "key": "ram",
+          "value": "16gb",
+          "labelEn": "16 GB",
+          "labelSo": "16 GB"
+        }
+      ],
+      "priceUsdCents": 129900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 3,
+        "NBO": 2
+      }
+    }
+  ]
+}

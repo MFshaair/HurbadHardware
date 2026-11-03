@@ -1,0 +1,331 @@
+{
+  "phase": 5,
+  "name": "Phase 5 \u2014 Admin Dashboard",
+  "source": "docs/plans/phase-05-admin.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "RBAC helpers, admin layout gate, integration test harness",
+      "scope": "**Files:**\n- Create: `src/lib/auth-rbac.ts`, `src/app/admin/layout.tsx`, `src/app/admin/loading.tsx`, `src/app/admin/error.tsx`, `tests/integration/admin-ctx.ts`\n- Test: `tests/unit/lib/auth-rbac.test.ts`, `tests/integration/admin/layout-gate.test.ts`\n\n**Interfaces:**\n- Consumes: `auth()` from `src/lib/auth.ts`; `Role` from `@prisma/client`; `redirect` from `next/navigation`.\n- Produces:\n  \n  `tests/integration/admin-ctx.ts`: `callAs<I, O>(role: Role | null, action: (raw: unknown) => Promise<ActionResult<O>>, input: I, opts?: { amr?: string[] }): Promise<ActionResult<O>>` and `seedStaff(): Promise<{ staff: User; manager: User; admin: User; customer: User }>`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/lib/auth-rbac.test.ts` and `pnpm test:int tests/integration/admin/layout-gate.test.ts` \u2014 expect `Cannot find module '@/lib/auth-rbac'`.",
+        "Step 3: Implement",
+        "Step 4: Run both test files \u2014 expect pass. Run `pnpm typecheck`.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): RBAC helpers, admin layout gate and integration harness\"`"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Admin shell \u2014 sidebar, topbar, user menu, keyboard shortcuts",
+      "scope": "**Files:**\n- Create: `src/components/admin/shell/AdminSidebar.tsx`, `AdminTopbar.tsx`, `AdminUserMenu.tsx`, `AdminShortcuts.tsx`, `src/components/admin/shell/nav.ts`\n- Test: `tests/unit/components/admin/AdminShortcuts.test.tsx`, `tests/unit/components/admin/nav.test.ts`\n\n**Interfaces:**\n- Produces: `ADMIN_NAV: { href: string; label: string; icon: LucideIcon; minRole: Role; shortcut?: string }[]`, `navForRole(role): typeof ADMIN_NAV`; `AdminShortcuts` (client) \u2014 `/` focuses `#admin-global-search`, `g o` \u2192 `/admin/orders`, `g p` \u2192 `/admin/products`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/components/admin` \u2014 expect module-not-found failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/components/admin` \u2014 expect pass; `pnpm dev` and open `/admin` as `admin@hurbad.local` (magic link via fake) to see the shell.",
+        "Step 5: `git commit -am \"feat(admin): sidebar, topbar, user menu and keyboard shortcuts\"`"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Global search action and command palette",
+      "scope": "**Files:**\n- Create: `src/features/admin/search.ts`, `src/features/admin/admin-actions.ts`, `src/features/admin/schemas.ts`, `src/components/admin/shell/AdminCommandPalette.tsx`\n- Test: `tests/integration/admin/global-search.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/global-search.test.ts` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/global-search.test.ts` \u2014 expect pass.",
+        "Step 5: `git commit -am \"feat(admin): global search action and command palette\"`"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Table params and reusable AdminDataTable",
+      "scope": "**Files:**\n- Create: `src/features/admin/table-params.ts`, `src/components/admin/data-table/AdminDataTable.tsx`, `src/components/admin/data-table/useTableParams.ts`, `src/components/admin/data-table/AdminTableToolbar.tsx`\n- Test: `tests/unit/features/admin/table-params.test.ts`, `tests/unit/components/admin/AdminDataTable.test.tsx`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/features/admin tests/unit/components/admin/AdminDataTable.test.tsx` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run the two test files \u2014 expect pass. `pnpm typecheck`.",
+        "Step 5: `git commit -am \"feat(admin): URL-persisted table params and AdminDataTable\"`"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Audit serialisation, audit log query, JSON diff viewer (D11)",
+      "scope": "**Files:**\n- Create: `src/features/admin/audit.ts`, `src/features/admin/audit-queries.ts`, `src/lib/json-diff.ts`, `src/components/admin/audit/JsonDiff.tsx`, `src/components/admin/audit/AuditTable.tsx`, `src/app/admin/audit/page.tsx`\n- Modify: `src/features/admin/schemas.ts`, `src/features/admin/admin-actions.ts`\n- Test: `tests/unit/lib/json-diff.test.ts`, `tests/unit/features/admin/audit.test.ts`, `tests/integration/admin/audit-log.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run the three tests \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run the three test files \u2014 expect pass.",
+        "Step 5: `git commit -am \"feat(admin): audit serialisation, audit log viewer with JSON diff\"`"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Storage presignDownload, /api/uploads/sign, completeUpload with blur placeholder",
+      "scope": "**Files:**\n- Create: `src/features/media/schemas.ts`, `src/features/media/service.ts`, `src/features/media/admin-actions.ts`, `src/app/api/uploads/sign/route.ts`, `src/components/admin/media/MediaUploader.tsx`\n- Modify: `src/lib/storage/ports.ts`, `src/lib/storage/r2.ts`, `tests/fakes/fake-storage.ts`\n- Test: `tests/unit/features/media/schemas.test.ts`, `tests/integration/media/upload-sign.test.ts`\n\n**Interfaces:**\n- Consumes: `getStorage()` from `@/lib/providers`; error codes `UPLOAD_TYPE_INVALID`, `UPLOAD_TOO_LARGE`, `FORBIDDEN`, `UNAUTHENTICATED`, `RATE_LIMITED`; `auth()`; `ROLE_RANK`/`roleRank`/`hasStrongAmr` from `@/lib/auth-rbac`; `getPlaiceholder` from `plaiceholder`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/features/media` and `pnpm test:int tests/integration/media/upload-sign.test.ts` \u2014 expect `Cannot find module '@/features/media/schemas'`.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/features/media` and `pnpm test:int tests/integration/media/upload-sign.test.ts` \u2014 expect pass. `pnpm typecheck`.",
+        "Step 5: `git add -A && git commit -m \"feat(media): presigned uploads, blur placeholders and media admin actions\"`"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Catalog admin schemas and adminUpsertProduct nested transaction (D2)",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/schemas.ts`, `src/features/catalog/service.ts`\n- Create: `src/features/catalog/admin-actions.ts`\n- Test: `tests/integration/admin/product-upsert.test.ts`\n\n**Interfaces:**\n- Consumes: `buildOptionsKey` from `@/features/catalog/mappers`; `serializeForAudit` from `@/features/admin/audit`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/product-upsert.test.ts` \u2014 expect `Cannot find module '@/features/catalog/admin-actions'`.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/product-upsert.test.ts` \u2014 expect pass. `pnpm typecheck`.",
+        "Step 5: `git add -A && git commit -m \"feat(catalog): admin product input schema and nested upsert transaction\"`"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Products list query, /admin/products table, bulk status (D2)",
+      "scope": "**Files:**\n- Create: `src/features/catalog/admin-queries.ts`, `src/app/admin/products/page.tsx`, `src/components/admin/products/ProductsTable.tsx`\n- Test: `tests/integration/admin/product-list.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/product-list.test.ts` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/product-list.test.ts` \u2014 expect pass; open `/admin/products` in `pnpm dev`.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): products list with filters, sorting and bulk status\"`"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Product editor (six tabs) at /admin/products/[id] and /admin/products/new (D2)",
+      "scope": "**Files:**\n- Create: `src/app/admin/products/[id]/page.tsx`, `src/app/admin/products/new/page.tsx`, `src/components/admin/products/ProductEditor.tsx`, `src/components/admin/products/VariantMatrix.tsx`, `src/components/admin/products/SpecificationsForm.tsx`, `src/components/admin/products/MarkdownField.tsx`, `src/components/admin/products/ProductPromotionsTab.tsx`, `src/components/admin/forms/UnsavedChangesGuard.tsx`\n- Test: `tests/unit/components/admin/VariantMatrix.test.tsx`, `tests/unit/components/admin/MarkdownField.test.tsx`\n\n**Interfaces:**\n- Consumes: `adminUpsertProduct`, `adminArchiveProduct`, `getAdminProduct`, `getProductEditorRefs`, `MediaUploader`, `Markdown`, `slugify`.\n- Produces: `buildVariantMatrix(axes)`, `VariantMatrix`, `SpecificationsForm`, `MarkdownField`, `UnsavedChangesGuard({ dirty })`, `ProductEditor`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:unit tests/unit/components/admin/VariantMatrix.test.tsx tests/unit/components/admin/MarkdownField.test.tsx` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/components/admin` \u2014 expect pass. In `pnpm dev`, create a draft product with two variants and one uploaded image.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): six-tab product editor with variant matrix, markdown preview and specs\"`"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Categories \u2014 upsertCategory, moveCategory with path rewrite, tree UI (D3)",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/schemas.ts`, `src/features/catalog/service.ts`, `src/features/catalog/admin-actions.ts`, `src/features/catalog/admin-queries.ts`\n- Create: `src/app/admin/categories/page.tsx`, `src/components/admin/categories/CategoryTree.tsx`, `src/components/admin/categories/CategoryEditor.tsx`\n- Test: `tests/integration/admin/category-move.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/category-move.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/category-move.test.ts` \u2014 expect pass. Run `pnpm lint` (layering rule must stay green: no `db` import in `app/`).",
+        "Step 5: `git add -A && git commit -m \"feat(admin): category tree with reparenting and path rewrite\"`"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Brands, attributes and attribute sets (D3)",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/schemas.ts`, `src/features/catalog/service.ts`, `src/features/catalog/admin-actions.ts`, `src/features/catalog/admin-queries.ts`\n- Create: `src/app/admin/brands/page.tsx`, `src/app/admin/brands/[id]/page.tsx`, `src/components/admin/brands/BrandEditor.tsx`, `src/app/admin/attributes/page.tsx`, `src/components/admin/attributes/AttributeEditor.tsx`, `src/components/admin/attributes/AttributeSetEditor.tsx`\n- Test: `tests/integration/admin/brands-attributes.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/brands-attributes.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/brands-attributes.test.ts` \u2014 expect pass. `pnpm typecheck && pnpm lint`.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): brand editor, attribute and attribute-set editors\"`"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Inventory \u2014 adjustStock, transferStock, setLowStockThreshold, ledger and CSV (D4, O2)",
+      "scope": "**Files:**\n- Create: `src/features/inventory/schemas.ts`, `src/features/inventory/admin-queries.ts`, `src/features/inventory/admin-actions.ts`, `src/lib/csv.ts`, `src/app/admin/inventory/page.tsx`, `src/app/admin/inventory/movements/page.tsx`, `src/components/admin/inventory/InventoryTable.tsx`, `src/components/admin/inventory/AdjustStockDialog.tsx`, `src/components/admin/inventory/TransferStockDialog.tsx`, `src/components/admin/inventory/MovementsTable.tsx`\n- Modify: `src/features/inventory/service.ts`\n- Test: `tests/unit/lib/csv.test.ts`, `tests/integration/admin/inventory-adjust.test.ts`\n\n**Interfaces:**\n- Consumes: `getAvailable(variantId, warehouseId, tx?)`; `inngest.send('inventory/restocked', { data: { variantId } })`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run both test files \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/lib/csv.test.ts` and `pnpm test:int tests/integration/admin/inventory-adjust.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): inventory adjustments, transfers, thresholds and movement ledger with CSV\"`"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Orders admin queries and /admin/orders list with saved views (D5)",
+      "scope": "**Files:**\n- Create: `src/features/orders/admin-queries.ts`, `src/features/orders/schemas.ts` (append if it exists), `src/app/admin/orders/page.tsx`, `src/components/admin/orders/OrdersTable.tsx`, `src/components/admin/orders/SavedViews.tsx`\n- Test: `tests/integration/admin/order-list.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/order-list.test.ts` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/order-list.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): orders list with saved views and filters\"`"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Order service additions \u2014 shipments, shipment events, serials, internal notes; admin order actions (D5, O3, O5)",
+      "scope": "**Files:**\n- Modify: `src/features/orders/service.ts`, `src/features/orders/schemas.ts`\n- Create: `src/features/orders/admin-actions.ts`\n- Test: `tests/integration/admin/order-actions.test.ts`\n\n**Interfaces:**\n- Consumes: `transition({ orderId, to, actor, note? })`, `canTransition(order, to, actor)` from `src/features/orders/state-machine.ts` / `service.ts`; `captureCodPayment(orderId, actorId)`, `requestRefund(...)`, `markRefundManual(...)` from `src/features/payments/service.ts`.\n- Produces:\n  \n  `SHIPMENT_EVENT_TO_ORDER_STATUS: Record<string, OrderStatus | null> = { PICKED_UP: 'SHIPPED', IN_TRANSIT: null, OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY', DELIVERED: 'DELIVERED', FAILED_ATTEMPT: 'SHIPPED' }`",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/order-actions.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/order-actions.test.ts` \u2014 expect pass. `pnpm typecheck`.",
+        "Step 5: `git add -A && git commit -m \"feat(orders): admin shipments, shipment events, serials, notes, COD capture and refunds\"`"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "Order detail screen /admin/orders/[id] (D5, O3, O5)",
+      "scope": "**Files:**\n- Create: `src/features/orders/admin-detail-query.ts`, `src/app/admin/orders/[id]/page.tsx`, `src/components/admin/orders/OrderStatusActions.tsx`, `src/components/admin/orders/OrderItemsCard.tsx`, `src/components/admin/orders/OrderPaymentCard.tsx`, `src/components/admin/orders/RefundDialog.tsx`, `src/components/admin/orders/ShipmentsCard.tsx`, `src/components/admin/orders/OrderTimelineCard.tsx`, `src/components/admin/orders/InternalNotesCard.tsx`\n- Test: `tests/integration/admin/order-detail.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/order-detail.test.ts` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/order-detail.test.ts` \u2014 expect pass. Walk one order CONFIRMED \u2192 DELIVERED in `pnpm dev`.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): order detail with transitions, shipments, serials, payments and refunds\"`"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Packing slip print view (D5)",
+      "scope": "**Files:**\n- Create: `src/app/admin/orders/[id]/packing-slip/page.tsx`, `src/app/admin/orders/[id]/packing-slip/layout.tsx`, `src/components/admin/orders/PackingSlip.tsx`, `src/components/admin/orders/PrintButton.tsx`, `src/app/admin/orders/[id]/packing-slip/print.css`\n- Test: `tests/unit/components/admin/PackingSlip.test.tsx`\n\n**Interfaces:**\n- Consumes: `getAdminOrder`.\n- Produces: `PackingSlip({ order, storeName })` \u2014 a print-only sheet outside the admin shell.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:unit tests/unit/components/admin/PackingSlip.test.tsx` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/components/admin/PackingSlip.test.tsx` \u2014 expect pass. Print-preview one order in the browser.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): packing slip print view\"`"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Customers \u2014 list, detail, notes, block, export JSON, scrub (D6)",
+      "scope": "**Files:**\n- Create: `src/features/users/schemas.ts` (append), `src/features/users/admin-queries.ts`, `src/features/users/admin-actions.ts`, `src/app/admin/customers/page.tsx`, `src/app/admin/customers/[id]/page.tsx`, `src/components/admin/customers/CustomersTable.tsx`, `src/components/admin/customers/CustomerActions.tsx`, `src/components/admin/customers/CustomerNotes.tsx`\n- Modify: `src/features/users/service.ts`\n- Test: `tests/integration/admin/customers.test.ts`\n\n**Interfaces:**\n- Consumes: `scrubUser(userId)` from `src/features/users/service.ts`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/customers.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/customers.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): customers list, detail, notes, block, export and scrub\"`"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Coupons admin (D7, K4)",
+      "scope": "**Files:**\n- Create: `src/features/coupons/schemas.ts` (append), `src/features/coupons/admin-queries.ts`, `src/features/coupons/admin-actions.ts`, `src/app/admin/coupons/page.tsx`, `src/app/admin/coupons/[id]/page.tsx`, `src/components/admin/coupons/CouponEditor.tsx`\n- Modify: `src/features/coupons/service.ts`\n- Test: `tests/integration/admin/coupons.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/coupons.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/coupons.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): coupon editor with scope pickers and usage stats\"`"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Promotions admin (D7, C13)",
+      "scope": "**Files:**\n- Create: `src/features/pricing/promotions-schemas.ts`, `src/features/pricing/promotions-admin.ts`, `src/features/pricing/promotions-admin-actions.ts`, `src/app/admin/promotions/page.tsx`, `src/app/admin/promotions/[id]/page.tsx`, `src/components/admin/promotions/PromotionEditor.tsx`\n- Test: `tests/unit/features/pricing/promotion-status.test.ts`, `tests/integration/admin/promotions.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run both files \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:unit tests/unit/features/pricing/promotion-status.test.ts` and `pnpm test:int tests/integration/admin/promotions.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): promotion editor with window status and price validation\"`"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Reviews and Q&A moderation queues (D8, C9, C10)",
+      "scope": "**Files:**\n- Create: `src/features/reviews/admin-queries.ts`, `src/features/reviews/admin-actions.ts`, `src/features/reviews/admin-schemas.ts`, `src/features/questions/admin-queries.ts`, `src/features/questions/admin-actions.ts`, `src/features/questions/admin-schemas.ts`, `src/app/admin/reviews/page.tsx`, `src/app/admin/questions/page.tsx`, `src/components/admin/moderation/ReviewQueue.tsx`, `src/components/admin/moderation/QuestionQueue.tsx`\n- Modify: `src/features/reviews/service.ts`, `src/features/questions/service.ts`\n- Test: `tests/integration/admin/moderation.test.ts`\n\n**Interfaces:**\n- Consumes: `recomputeRating(productId, tx)` from `src/features/reviews/service.ts`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/moderation.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/moderation.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): review and question moderation queues\"`"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "Content \u2014 banners, collections, pages (D9)",
+      "scope": "**Files:**\n- Create: `src/features/content/schemas.ts`, `src/features/content/service.ts`, `src/features/content/admin-queries.ts`, `src/features/content/admin-actions.ts`, `src/app/admin/content/page.tsx`, `src/components/admin/content/ContentScreen.tsx`, `src/components/admin/content/BannerEditor.tsx`, `src/components/admin/content/CollectionEditor.tsx`, `src/components/admin/content/ContentPageEditor.tsx`\n- Test: `tests/integration/admin/content.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/content.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/content.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): banners, collections and Markdown content pages\"`"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Settings \u2014 store, currencies with override and refresh-now, zones, warehouses, payment methods, staff, notifications (D10)",
+      "scope": "**Files:**\n- Create: `src/features/admin/settings-schemas.ts`, `src/features/admin/settings-queries.ts`, `src/features/admin/settings-actions.ts`, `src/app/admin/settings/page.tsx`, `src/components/admin/settings/SettingsScreen.tsx` (+ `StoreSettings.tsx`, `CurrenciesPanel.tsx`, `ZonesPanel.tsx`, `WarehousesPanel.tsx`, `PaymentMethodsPanel.tsx`, `StaffPanel.tsx`, `NotificationsPanel.tsx`)\n- Modify: `src/lib/inngest/events.ts`, `src/lib/inngest/functions/currency-refresh-rates.ts`\n- Test: `tests/integration/admin/settings.test.ts`\n\n**Interfaces:**\n- Consumes: `refreshRates()`; `signIn('resend', { email })` from `src/lib/auth.ts` (staff invite magic link); `TEMPLATES` from `src/features/notifications/templates.ts`; `env` from `src/lib/env.ts`.\n- Produces:\n  \n  New Inngest event: `'currency/refresh-requested': { data: { requestedBy: string } }`.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/settings.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/settings.test.ts` \u2014 expect pass. `pnpm typecheck`.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): settings for store, currencies, zones, warehouses, payments, staff and notifications\"`"
+      ]
+    },
+    {
+      "number": 23,
+      "title": "Reports \u2014 CSV to Supabase Storage with a signed URL, plus table previews (D12)",
+      "scope": "**Files:**\n- Create: `src/features/admin/reports.ts`, `src/features/admin/reports-schemas.ts`, `src/features/admin/reports-actions.ts`, `src/app/admin/reports/page.tsx`, `src/components/admin/reports/ReportPanel.tsx`\n- Test: `tests/integration/admin/reports.test.ts`\n\n**Interfaces:**\n- Consumes: `toCsv` from `@/lib/csv`; `getStorage().put` and `presignDownload`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/reports.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/reports.test.ts` \u2014 expect pass.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): four CSV reports exported to Supabase Storage with signed URLs\"`"
+      ]
+    },
+    {
+      "number": 24,
+      "title": "Dashboard \u2014 KPI tiles, charts and action lists (D1)",
+      "scope": "**Files:**\n- Create: `src/features/admin/dashboard-queries.ts`, `src/features/admin/dashboard-actions.ts`, `src/components/admin/charts/palette.ts`, `src/components/admin/dashboard/KpiTiles.tsx`, `RevenueChart.tsx`, `OrdersByStatusChart.tsx`, `RevenueByCountryChart.tsx`, `DashboardLists.tsx`, `src/app/admin/page.tsx`\n- Test: `tests/integration/admin/dashboard.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/admin/dashboard.test.ts` \u2014 expect failures.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/admin/dashboard.test.ts` \u2014 expect pass. Check `/admin` in both light and dark themes.",
+        "Step 5: `git add -A && git commit -m \"feat(admin): dashboard KPIs, charts and action lists\"`"
+      ]
+    },
+    {
+      "number": 25,
+      "title": "catalog/fbt-refresh Inngest job (C11)",
+      "scope": "**Files:**\n- Create: `src/features/catalog/fbt.ts`, `src/lib/inngest/functions/catalog-fbt-refresh.ts`\n- Modify: `src/lib/inngest/functions/index.ts`\n- Test: `tests/integration/jobs/fbt-refresh.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run `pnpm test:int tests/integration/jobs/fbt-refresh.test.ts` \u2014 expect module-not-found.",
+        "Step 3: Implement",
+        "Step 4: Run `pnpm test:int tests/integration/jobs/fbt-refresh.test.ts` \u2014 expect pass. Confirm `catalog/fbt-refresh` appears at `GET /api/inngest`.",
+        "Step 5: `git add -A && git commit -m \"feat(catalog): nightly frequently-bought-together refresh job\"`"
+      ]
+    },
+    {
+      "number": 26,
+      "title": "RBAC matrix integration test and e2e journey 9",
+      "scope": "**Files:**\n- Create: `tests/integration/admin/rbac-matrix.test.ts`, `tests/e2e/admin-journey.spec.ts`\n- Test: the two files above\n\n**Interfaces:**\n- Consumes: every admin action exported so far; `signInAsAdmin(page)` from `tests/e2e/helpers.ts`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run `pnpm test:int tests/integration/admin/rbac-matrix.test.ts` and `pnpm test:e2e tests/e2e/admin-journey.spec.ts` \u2014 expect failures wherever an action's `auth` level does not match `09-admin.md` \u00a71.",
+        "Step 3: Fix the mismatches by correcting the `auth` level on the offending action (not the test \u2014 the spec table is the authority). No new production code is expected beyond those corrections.",
+        "Step 4: Re-run both suites plus the full `pnpm test:int` \u2014 expect all green.",
+        "Step 5: `git add -A && git commit -m \"test(admin): RBAC matrix across roles and e2e journey 9\"`"
+      ]
+    },
+    {
+      "number": 27,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/phase-05.md`",
+      "steps": [
+        "Step 1: Run the full gate from `12-testing.md` \u00a76 and capture the output verbatim:",
+        "Step 2: Verify the coverage floors from `12-testing.md` \u00a75 are still met (`pnpm test:unit --coverage`): 90% lines for `src/features/orders`, `payments`, `inventory`, `coupons`, `pricing`, `loyalty`; 80% for `src/features/**`; 70% project. If a floor slipped because this phase added untested lines, a",
+        "Step 3: Manually walk the acceptance checklist in the browser (`pnpm dev`, signed in as `admin@hurbad.local`) and record pass/fail for each row:",
+        "Step 4: Write `docs/plans/progress/phase-05.md` with: the pasted gate output, the coverage summary table, the 30-row checklist with results, the list of spec deviations (must be exactly the entries in \"Spec issues found\" below, or empty), and any follow-ups deferred to Phase 6/7.",
+        "Step 5: `git add -A && git commit -m \"docs(plans): phase 5 gate output and progress note\"`"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "slug": "hikvision-4ch-kit",
+  "sku": "HIK-KIT4CH",
+  "name": "Hikvision 4-Camera CCTV Kit",
+  "brand": "hikvision",
+  "category": "cctv-kits",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "hikvision cctv kit 4 camera bundle",
+  "publishedDaysAgo": 18,
+  "translations": {
+    "en": {
+      "name": "Hikvision 4-Camera CCTV Kit",
+      "shortDescription": "Complete 4-camera kit: NVR, four 4MP bullet cameras, cables and power supply.",
+      "description": "## Hikvision 4-Camera CCTV Kit\n\nEverything needed for a small shop or home: a 4-channel NVR, four 4MP bullet cameras, pre-made cables and a power supply, ready to install.\n\n- 4× 4MP PoE bullet cameras, 30m night vision\n- 4-channel NVR with 1 TB drive included\n- 60m of Cat5e cable included"
+    },
+    "so": {
+      "name": "Hikvision 4-Camera CCTV Kit",
+      "shortDescription": "Xirmo CCTV ah oo afar kaamirad ah: NVR, afar kaamirad bullet ah oo 4MP ah, fiilooyin iyo koronto.",
+      "description": "## Hikvision 4-Camera CCTV Kit\n\nWax walba oo loo baahan yahay dukaan yar ama guri: NVR 4-kanaal ah, afar kaamirad bullet ah oo 4MP ah, fiilooyin horey loo diyaariyay iyo koronto, diyaar u ah in la rakibo.\n\n- 4× kaamirad bullet PoE ah oo 4MP ah, aragti habeen 30m ah\n- NVR 4-kanaal ah oo leh kayd 1 TB ah\n- 60m oo fiilo Cat5e ah oo ku jira"
+    }
+  },
+  "attributes": {
+    "camera_type": "kit",
+    "resolution_mp": 4,
+    "night_vision_m": 30,
+    "ip_or_analog": "ip",
+    "poe": "poe",
+    "channels": 4,
+    "storage_included_tb": 1,
+    "outdoor": true,
+    "audio": false,
+    "ai_detection": false
+  },
+  "media": [
+    {
+      "key": "seed/products/hikvision-4ch-kit/0.webp",
+      "alt": "hikvision 4ch kit",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    },
+    {
+      "key": "seed/products/hikvision-4ch-kit/1.webp",
+      "alt": "hikvision 4ch kit",
+      "width": 1200,
+      "height": 1200,
+      "position": 1
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HIK-KIT4CH-STD",
+      "options": [],
+      "priceUsdCents": 29900,
+      "compareAtUsdCents": 34900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 5,
+        "NBO": 3
+      }
+    }
+  ]
+}

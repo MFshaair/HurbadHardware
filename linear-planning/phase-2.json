@@ -1,0 +1,246 @@
+{
+  "phase": 2,
+  "name": "Phase 2 \u2014 Cart, pricing, coupons, currency, wishlist",
+  "source": "docs/plans/phase-02-cart-pricing.md",
+  "tasks": [
+    {
+      "number": 0,
+      "title": "Re-read the rules",
+      "scope": "**Files:** none",
+      "steps": [
+        "Step 1: Read `docs/README.md` \"Rules for the implementing model\", `docs/plans/AGENT-BRIEF.md`, and this plan's Global Constraints and Prerequisites in full.",
+        "Step 2: Verify every prerequisite path exists: `ls src/lib/money.ts src/lib/action.ts src/features/pricing/effective-price.ts src/features/catalog/mappers.ts src/components/catalog/purchase-actions.tsx src/features/cart/merge.ts tests/fixtures/factories.ts tests/fakes` and `grep -n \"export function ",
+        "Step 3: Run the Phase 1 gate to confirm a green starting point: `pnpm typecheck && pnpm lint && pnpm i18n:check && pnpm test:unit && pnpm test:int`. Expected: all pass.",
+        "Step 4: No commit (nothing changed)."
+      ]
+    },
+    {
+      "number": 1,
+      "title": "Pricing engine \u2014 types, line pricing with promotions, coupon discount",
+      "scope": "**Files:**\n- Create: `src/features/pricing/types.ts`\n- Create: `src/features/pricing/engine.ts`\n- Test: `tests/unit/features/pricing/engine.test.ts`\n\n**Interfaces:**\n- Consumes: `getEffectivePrice(variant, promotions, now)` from `src/features/pricing/effective-price.ts`.\n- Produces (used by Tasks 2, 7 and Phase 3 `createOrder`):\n\n\n\nand `export function computeCartTotals(input: ComputeCartTotalsInput): CartTotals`.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "Pricing engine \u2014 loyalty cap, shipping, VAT, currency conversion, invariants",
+      "scope": "**Files:**\n- Modify: `src/features/pricing/engine.ts` (already contains the functions; this task adds the exhaustive tests and the public index \u2014 if a test fails, fix the engine, never the expected value)\n- Create: `src/features/pricing/index.ts`\n- Test: `tests/unit/features/pricing/engine.test.ts` (append)\n\n**Interfaces:**\n- Produces: `src/features/pricing/index.ts` exporting `computeCartTotals`, `getEffectivePrice`, and all types from `./types`.",
+      "steps": [
+        "Step 1: Write the failing tests (append to `tests/unit/features/pricing/engine.test.ts`)",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement the index",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Currency service \u2014 RateSource port, OXR provider, fake, cached getRates, refreshRates",
+      "scope": "**Files:**\n- Create: `src/features/currency/ports.ts`\n- Create: `src/features/currency/providers/oxr.ts`\n- Create: `src/features/currency/service.ts`\n- Create: `src/features/currency/index.ts`\n- Create: `tests/fakes/fake-rate-source.ts`\n- Modify: `src/lib/providers.ts` (add `getRateSource()`)\n- Test: `tests/unit/features/currency/oxr.test.ts`, `tests/unit/features/currency/service.test.ts`, `tests/integration/currency/refresh-rates.test.ts`\n\n**Interfaces:**\n- Consumes: `prisma`, `env.OXR_APP_ID`, `isFakeMode()`, `logger`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Inventory service \u2014 getAvailable, getAvailableForCountry, getAvailableMany",
+      "scope": "**Files:**\n- Create: `src/features/inventory/service.ts`\n- Create: `src/features/inventory/index.ts`\n- Test: `tests/integration/inventory/available.test.ts`\n\n**Interfaces:**\n- Consumes: `prisma`.\n- Produces (Phase 3 adds `reserve`, `commit`, `release` to the same file):",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Coupon rules (pure) and coupon service with atomic redemption reservation",
+      "scope": "**Files:**\n- Create: `src/features/coupons/rules.ts`\n- Create: `src/features/coupons/service.ts`\n- Create: `src/features/coupons/index.ts`\n- Modify: `tests/fixtures/factories.ts` (add `createPromotion`)\n- Test: `tests/unit/features/coupons/rules.test.ts`, `tests/integration/coupons/limits.test.ts`\n\n**Interfaces:**\n- Consumes: `prisma`, `AppError`, `PricingCouponInput` from `@/features/pricing`.\n- Produces (Phase 3 `createOrder` calls `validateCoupon` then `reserveRedemption` inside the order transaction):\n\n\n\n**Rule order (fixed; the first failing check wins):** `COUPON_INACTIVE` \u2192 `COUPON_NOT_STARTED` \u2192 `COUPON_EXPIRED` \u2192 `COUPON_LIMIT_REACHED` \u2192 `COUPON_REQUIRES_LOGIN` \u2192 `COUPON_FIRST_ORDER_ONLY` \u2192 `COUPON_USER_LIMIT` \u2192 `COUPON_NOT_APPLICABLE` \u2192 `COUPON_MIN_SUBTOTAL`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "Cart service \u2014 getOrCreateCart, addLine, updateLine, removeLine",
+      "scope": "**Files:**\n- Create: `src/features/cart/service.ts`\n- Modify: `tests/fixtures/factories.ts` (add `createCartWith`)\n- Test: `tests/integration/cart/service.test.ts`\n\n**Interfaces:**\n- Consumes: `prisma`; `getAvailableForCountry` from `@/features/inventory`; `getEffectivePrice` from `@/features/pricing`; `AppError`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Cart DTO builder \u2014 loadCartAggregate, toPricingLines, buildCartDTO",
+      "scope": "**Files:**\n- Create: `src/features/cart/dto.ts`\n- Test: `tests/unit/features/cart/dto.test.ts`, `tests/integration/cart/dto.test.ts`\n\n**Interfaces:**\n- Consumes: `computeCartTotals`, `PricingLineInput` from `@/features/pricing`; `getAvailableMany`, `warehouseForCountry` from `@/features/inventory`; `getRate` from `@/features/currency`; `toImageDTO`, `variantLabel`, `pickTranslation` from `@/features/catalog`; `convertUsdCents`, `usd` from `@/lib/money`; `getSetting`; `prisma`.\n- Produces (Phase 3 `getCheckoutState` calls `buildCartDTO` with a real zone and fulfilment type):\n\n\n\n`CartDTO`, `CartLineDTO`, `CartTotalsDTO` are exactly the types in `04 \u00a72`; add them to `src/features/cart/dto.ts` as exported types (they are cart-owned, unlike the catalog DTOs).\n\n**Warning keys** put in `CartDTO.warnings` (message keys under the `cart` namespace, rendered by the client): `'priceChanged'`, `'stockReduced'`, `'stockOut'`, `'couponDropped'`.",
+      "steps": [
+        "Step 1: Write the failing tests",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Cart coupon, currency, contact capture and guest\u2192user merge",
+      "scope": "**Files:**\n- Modify: `src/features/cart/service.ts` (add `applyCouponToCart`, `removeCouponFromCart`, `setCurrency`, `captureContact`)\n- Modify: `src/features/cart/merge.ts` (replace the Phase 0 stub)\n- Test: `tests/integration/cart/coupon-merge.test.ts`\n\n**Interfaces:**\n- Consumes: `findCouponByCode`, `validateCoupon` from `@/features/coupons`; `loadCartAggregate`, `toCouponLines`, `toPricingLines` from `./dto`; `computeCartTotals`.\n- Produces:\n\n\n\n**Merge rules (K1):** guest cart lines are summed into the user's ACTIVE cart, each merged line capped at the live availability for the user's country (`User.country`); the guest cart is marked `MERGED`; the user's coupon is kept, otherwise the guest's coupon is carried over; `lastActivityAt` bumped; contact fields filled only where the user cart has none. The merge never throws for stock \u2014 it caps silently (the customer sees the capped quantity and a `stockReduced` warning on the cart page).",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Cart schemas, server actions and read model",
+      "scope": "**Files:**\n- Create: `src/features/cart/schemas.ts`\n- Create: `src/features/cart/actions.ts`\n- Create: `src/features/cart/queries.ts`\n- Create: `src/features/cart/index.ts`\n- Test: `tests/integration/cart/actions.test.ts`\n\n**Interfaces:**\n- Consumes: `createAction`, `ActionContext`, `ActionResult` from `@/lib/action`; cart service + dto; `revalidatePath` is **not** used (cart pages are `force-dynamic`).\n- Produces exactly the `04 \u00a74` surface:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "Cart store, header badge and the cart message namespace",
+      "scope": "**Files:**\n- Create: `src/components/cart/cart-store.ts`\n- Create: `src/components/cart/cart-provider.tsx`\n- Create: `src/components/cart/cart-badge.tsx`\n- Modify: `src/components/layout/header.tsx` (render `CartBadge` in the cart slot)\n- Modify: `src/app/[locale]/(shop)/layout.tsx` (wrap children in `CartProvider` hydrated from `getCart()`)\n- Modify: `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/cart/cart-store.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "QuantityStepper, AddToCartButton and the real PurchaseActions",
+      "scope": "**Files:**\n- Create: `src/components/catalog/quantity-stepper.tsx`\n- Create: `src/components/cart/add-to-cart-button.tsx`\n- Modify: `src/components/catalog/purchase-actions.tsx` (replace the Phase 1 disabled slot)\n- Test: `tests/unit/components/cart/add-to-cart-button.test.tsx`\n\n**Interfaces:**\n- Consumes: `addToCart` action; `useCartSummary`, `setCartSummary`, `bumpOptimistic` from the cart store; `VariantDTO` from `@/features/catalog`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "CartLine, CouponForm, CartSummary and CartSheet",
+      "scope": "**Files:**\n- Create: `src/components/cart/cart-line.tsx`\n- Create: `src/components/cart/coupon-form.tsx`\n- Create: `src/components/cart/cart-summary.tsx`\n- Create: `src/components/cart/cart-sheet.tsx`\n- Modify: `messages/en.json`, `messages/so.json` (namespace `coupon`)\n- Test: `tests/unit/components/cart/coupon-form.test.tsx`\n\n**Interfaces:**\n- Consumes: `updateCartLine`, `removeCartLine`, `applyCoupon`, `removeCoupon` actions; `CartDTO`, `CartLineDTO`, `CartTotalsDTO`; `Price`; `QuantityStepper`; `formatMoney`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Cart page (/[locale]/cart)",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(shop)/cart/page.tsx`\n- Create: `src/app/[locale]/(shop)/cart/loading.tsx`\n- Create: `src/components/cart/cart-page-view.tsx`\n- Test: covered by the e2e spec in Task 18 (this task is a page composition of already-tested components); verified manually in Step 4.\n\n**Interfaces:**\n- Consumes: `getCart()`; `CartLine`, `CartSummary`, `CouponForm`; `EmptyState`; `getTranslations` (server) / `useTranslations` (client).\n- Produces: route `/{locale}/cart` per `02 \u00a73` and the Cart row of `10 \u00a72`.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Currency switcher wiring and user currency preference (M4)",
+      "scope": "**Files:**\n- Modify: `src/components/layout/currency-switcher.tsx` (call `setCartCurrency` instead of writing the cookie directly)\n- Create: `src/features/users/preferences.ts`\n- Modify: `src/features/cart/actions.ts` (persist `User.currency` when signed in)\n- Test: `tests/integration/users/preferences.test.ts`\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "Wishlist feature and WishlistButton (A7)",
+      "scope": "**Files:**\n- Create: `src/features/wishlist/service.ts`, `schemas.ts`, `actions.ts`, `queries.ts`, `index.ts`\n- Create: `src/components/wishlist/wishlist-button.tsx`\n- Modify: `src/components/catalog/purchase-actions.tsx` (re-add the `WishlistButton` line from Task 11)\n- Modify: `messages/en.json`, `messages/so.json` (namespace `wishlist`)\n- Test: `tests/integration/wishlist/toggle.test.ts`\n\n**Interfaces:**\n- Produces (`04 \u00a75`):\n\n\n\n**Guest rule (A7):** the wishlist is never stored for guests. `WishlistButton` renders for everyone but, when `userId` is null, opens a sign-in prompt dialog linking to `/sign-in?next=<current path>` instead of calling the action.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Account wishlist page",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(account)/account/wishlist/page.tsx`\n- Create: `src/app/[locale]/(account)/account/wishlist/loading.tsx`\n\n**Interfaces:**\n- Consumes: `getWishlist()`; `ProductCard`; `EmptyState`; `auth()` for the sign-in redirect.\n- Produces: route `/{locale}/account/wishlist` (02 \u00a73 account area).",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Back-in-stock subscription \u2014 subscribeStockAlert and StockAlertDialog (C12 subscribe side)",
+      "scope": "**Files:**\n- Create: `src/features/stock-alerts/service.ts`, `schemas.ts`, `actions.ts`, `index.ts`\n- Create: `src/components/ui/turnstile-widget.tsx`\n- Create: `src/components/catalog/stock-alert-dialog.tsx`\n- Modify: `src/components/catalog/purchase-actions.tsx` (re-add the `StockAlertDialog` line from Task 11)\n- Modify: `messages/en.json`, `messages/so.json` (namespace `stockAlert`)\n- Test: `tests/integration/stock-alerts/subscribe.test.ts`\n\n**Interfaces:**\n- Produces (`04 \u00a73`; the notify side is the Phase 4 `stock/back-in-stock` job):\n\n\n\n**Dedupe rule:** at most one un-notified (`notifiedAt IS NULL`) alert per `(variantId, identity)` where identity is `userId` when signed in, else the normalised `phone`, else the normalised `email`. A second subscribe is a no-op returning `{ created: false }`.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run test, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "End-to-end \u2014 cart journey with coupon, and currency switch",
+      "scope": "**Files:**\n- Create: `tests/e2e/cart.spec.ts`\n- Create: `tests/e2e/currency.spec.ts`\n\n**Interfaces:**\n- Consumes: the seeded product `samsung-galaxy-s25-256gb` and coupon `WELCOME10` (`12 \u00a72`), `PROVIDER_MODE=fake`.\n- Produces: two Playwright specs run by `pnpm test:e2e`.\n\n`WELCOME10` is `firstOrderOnly` with `perUserLimit: 1`, so a guest applying it gets `COUPON_REQUIRES_LOGIN` (flow F4). The happy path therefore signs in first via the phone-OTP flow with the fake channel (`GET /__fake/messages?to=`), exactly as Phase 0/1 e2e helpers do.",
+      "steps": [
+        "Step 1: Write the failing test",
+        "Step 2: Run tests, expect failure",
+        "Step 3: Implement",
+        "Step 4: Run tests, expect pass",
+        "Step 5: Commit"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/phase-02.md`",
+      "steps": [
+        "Step 1: Run the full gate and capture real output",
+        "Step 2: Verify the coverage floors from `12 \u00a75`",
+        "Step 3: Self-check every MVP item",
+        "Step 4: Write `docs/plans/progress/phase-02.md`",
+        "Step 5: Commit"
+      ]
+    }
+  ]
+}

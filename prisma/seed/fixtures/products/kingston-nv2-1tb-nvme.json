@@ -1,0 +1,55 @@
+{
+  "slug": "kingston-nv2-1tb-nvme",
+  "sku": "KIN-NV2-1TB",
+  "name": "Kingston NV2 1TB NVMe SSD",
+  "brand": "kingston",
+  "category": "internal-storage",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "kingston nv2 1tb nvme ssd m.2",
+  "publishedDaysAgo": 64,
+  "translations": {
+    "en": {
+      "name": "Kingston NV2 1TB NVMe SSD",
+      "shortDescription": "1TB M.2 NVMe SSD with up to 3500 MB/s read speed.",
+      "description": "## Kingston NV2 1TB NVMe SSD\n\nAn affordable M.2 2280 NVMe SSD offering a major speed upgrade over traditional hard drives.\n\n- 1 TB capacity\n- Up to 3500 MB/s read speed\n- PCIe 4.0 x4 interface"
+    },
+    "so": {
+      "name": "Kingston NV2 1TB NVMe SSD",
+      "shortDescription": "SSD NVMe ah oo M.2 ah, 1TB ah, xawaaraha akhrinta ilaa 3500 MB/s.",
+      "description": "## Kingston NV2 1TB NVMe SSD\n\nSSD NVMe M.2 2280 ah oo qiimo jaban leh, bixisa horumar xawaare oo weyn marka loo eego kaydka adag ee caadiga ah.\n\n- Awood 1 TB ah\n- Xawaaraha akhrinta ilaa 3500 MB/s\n- Interface PCIe 4.0 x4 ah"
+    }
+  },
+  "attributes": {
+    "component_type": "ssd",
+    "memory_type": "ddr5",
+    "capacity": "1tb",
+    "form_factor": "m2-2280",
+    "interface": "nvme"
+  },
+  "media": [
+    {
+      "key": "seed/products/kingston-nv2-1tb-nvme/0.webp",
+      "alt": "kingston nv2 1tb nvme",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "KIN-NV2-1TB-STD",
+      "options": [],
+      "priceUsdCents": 5900,
+      "compareAtUsdCents": 6900,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 12,
+        "NBO": 8
+      }
+    }
+  ]
+}

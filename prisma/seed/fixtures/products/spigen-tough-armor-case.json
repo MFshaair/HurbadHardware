@@ -1,0 +1,62 @@
+{
+  "slug": "spigen-tough-armor-case",
+  "sku": "SPG-TA-S25",
+  "name": "Spigen Tough Armor Case for Galaxy S25",
+  "brand": "samsung",
+  "category": "cases-protection",
+  "status": "ACTIVE",
+  "warrantyMonths": 6,
+  "hasOfficialWarranty": false,
+  "isFeatured": false,
+  "keywords": "spigen tough armor case samsung galaxy s25",
+  "publishedDaysAgo": 45,
+  "translations": {
+    "en": {
+      "name": "Spigen Tough Armor Case for Galaxy S25",
+      "shortDescription": "Military-grade drop protection case with kickstand.",
+      "description": "## Spigen Tough Armor Case\n\nA dual-layer case tested to military drop standards, with a built-in kickstand for hands-free viewing.\n\n- Air cushion technology at all four corners\n- Built-in kickstand\n- Raised bezels protect the camera and screen"
+    },
+    "so": {
+      "name": "Spigen Tough Armor Case for Galaxy S25",
+      "shortDescription": "Kiis ilaalin heer militari ah, leh taagane.",
+      "description": "## Spigen Tough Armor Case\n\nKiis laba-lakab ah oo lagu tijaabiyay heerarka dhicista militariga, oo leh taagane gudaha ku jira si daawasho gacmo la'aan ah loo sameeyo.\n\n- Tiknoolajiyada hawada ee afarta gees\n- Taagane gudaha ku jira\n- Qarka kor u qaaday wuxuu ilaaliyaa kaamirada iyo shaashadda"
+    }
+  },
+  "attributes": {
+    "accessory_type": "case",
+    "compatibility": "Samsung Galaxy S25",
+    "wattage_w": 0,
+    "connector": [],
+    "wireless": false
+  },
+  "media": [
+    {
+      "key": "seed/products/spigen-tough-armor-case/0.webp",
+      "alt": "spigen tough armor case",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "SPG-TA-S25-BLK",
+      "options": [
+        {
+          "key": "color",
+          "value": "black",
+          "labelEn": "Black",
+          "labelSo": "Madow"
+        }
+      ],
+      "priceUsdCents": 1900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 25,
+        "NBO": 15
+      }
+    }
+  ]
+}

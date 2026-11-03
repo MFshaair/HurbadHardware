@@ -1,0 +1,270 @@
+{
+  "workspace": "HurbadNexus",
+  "team": "48b76031-9714-4305-8106-2f4861de06c7",
+  "teamKey": "HRN",
+  "project": "P-HRN-2",
+  "projectUrl": "https://linear.app/hurbadnexus/project/hurbadhardware-b3d65d5c5127",
+  "created": [
+    {
+      "phase": 0,
+      "parent": "HRN-1",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-1/phase-0-foundation",
+      "milestone": "ced74def-bd2e-45de-8c30-97325dc77d25",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-2",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-2/001-read-the-rules-provision-accounts-submit-whatsapp-templates"
+        },
+        {
+          "number": 2,
+          "id": "HRN-3",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-3/002-repository-scaffold-and-tooling"
+        },
+        {
+          "number": 3,
+          "id": "HRN-4",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-4/003-test-tooling-vitest-projects-playwright-lhci-config"
+        },
+        {
+          "number": 4,
+          "id": "HRN-5",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-5/004-environment-validation-srclibenvts"
+        },
+        {
+          "number": 5,
+          "id": "HRN-6",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-6/005-error-model-and-logger"
+        },
+        {
+          "number": 6,
+          "id": "HRN-7",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-7/006-money-library"
+        },
+        {
+          "number": 7,
+          "id": "HRN-8",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-8/007-prisma-client-singleton-srclibdbts"
+        },
+        {
+          "number": 8,
+          "id": "HRN-9",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-9/008-migrations-initial-raw-sql-and-the-integration-test-harness"
+        },
+        {
+          "number": 9,
+          "id": "HRN-10",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-10/009-redis-key-value-store-and-rate-limiters"
+        },
+        {
+          "number": 10,
+          "id": "HRN-11",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-11/010-provider-registry-object-storage-supabase-storage-fake-and-botid"
+        },
+        {
+          "number": 11,
+          "id": "HRN-12",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-12/011-request-context-and-createaction"
+        },
+        {
+          "number": 12,
+          "id": "HRN-13",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-13/012-seed-fixtures-idempotent-runner-production-subset"
+        },
+        {
+          "number": 13,
+          "id": "HRN-14",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-14/013-test-factories-and-reference-data-bootstrap-for-integration-tests"
+        },
+        {
+          "number": 14,
+          "id": "HRN-15",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-15/014-message-channel-port-fake-channel-otp-service"
+        },
+        {
+          "number": 15,
+          "id": "HRN-16",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-16/015-next-intl-routing-messages-glossary-and-i18ncheck"
+        },
+        {
+          "number": 16,
+          "id": "HRN-17",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-17/016-authjs-v5-configuration"
+        },
+        {
+          "number": 17,
+          "id": "HRN-18",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-18/017-design-tokens-theme-provider-and-shadcn-primitives"
+        },
+        {
+          "number": 18,
+          "id": "HRN-19",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-19/018-layout-shell-header-footer-switchers-store-context-home"
+        },
+        {
+          "number": 19,
+          "id": "HRN-20",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-20/019-sign-in-page-phoneinput-otpinput-botidclient"
+        },
+        {
+          "number": 20,
+          "id": "HRN-21",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-21/020-middleware-nextconfigts-headers-health-endpoint-sentry-fake-routes"
+        },
+        {
+          "number": 21,
+          "id": "HRN-22",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-22/021-ci-pipeline-vercel-and-vercel-configuration"
+        },
+        {
+          "number": 22,
+          "id": "HRN-23",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-23/022-phase-gate-and-progress-note"
+        }
+      ]
+    },
+    {
+      "phase": 1,
+      "parent": "HRN-24",
+      "parentUrl": "https://linear.app/hurbadnexus/issue/HRN-24/phase-1-catalog-and-search",
+      "milestone": "bd538fde-d05d-4e77-9eb6-f2f95aff0e9c",
+      "tasks": [
+        {
+          "number": 1,
+          "id": "HRN-25",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-25/101-phase-1-kickoff-re-read-the-rules-verify-prerequisites-open-the"
+        },
+        {
+          "number": 2,
+          "id": "HRN-26",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-26/102-geteffectiveprice-promotion-window-resolution"
+        },
+        {
+          "number": 3,
+          "id": "HRN-27",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-27/103-catalog-dtos-and-mappers"
+        },
+        {
+          "number": 4,
+          "id": "HRN-28",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-28/104-exchange-rate-read-service-and-catalog-cache-tags"
+        },
+        {
+          "number": 5,
+          "id": "HRN-29",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-29/105-availability-reads-getcategorybypath-getbrand-getproductcards"
+        },
+        {
+          "number": 6,
+          "id": "HRN-30",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-30/106-listproducts-the-listing-sql"
+        },
+        {
+          "number": 7,
+          "id": "HRN-31",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-31/107-facets"
+        },
+        {
+          "number": 8,
+          "id": "HRN-32",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-32/108-searchsuggest-did-you-mean-and-get-apisearchsuggest"
+        },
+        {
+          "number": 9,
+          "id": "HRN-33",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-33/109-related-products-frequently-bought-together-recently-viewed-and"
+        },
+        {
+          "number": 10,
+          "id": "HRN-34",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-34/110-getcomparedata"
+        },
+        {
+          "number": 11,
+          "id": "HRN-35",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-35/111-gethomedata"
+        },
+        {
+          "number": 12,
+          "id": "HRN-36",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-36/112-catalog-ui-primitives-price-ratingstars-availabilitybadge"
+        },
+        {
+          "number": 13,
+          "id": "HRN-37",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-37/113-productcard-productgrid-productrail"
+        },
+        {
+          "number": 14,
+          "id": "HRN-38",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-38/114-listing-controls-sort-pagination-filters-chips-and-listingview"
+        },
+        {
+          "number": 15,
+          "id": "HRN-39",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-39/115-seo-helpers-and-the-category-page-localecslug"
+        },
+        {
+          "number": 16,
+          "id": "HRN-40",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-40/116-brand-page-localebslug"
+        },
+        {
+          "number": 17,
+          "id": "HRN-41",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-41/117-search-page-localesearch"
+        },
+        {
+          "number": 18,
+          "id": "HRN-42",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-42/118-searchbox-autocomplete-with-keyboard-navigation"
+        },
+        {
+          "number": 19,
+          "id": "HRN-43",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-43/119-product-page-components-gallery-variant-picker-quantity-purchase"
+        },
+        {
+          "number": 20,
+          "id": "HRN-44",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-44/120-product-page-localepslug"
+        },
+        {
+          "number": 21,
+          "id": "HRN-45",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-45/121-compare-store-button-drawer-page"
+        },
+        {
+          "number": 22,
+          "id": "HRN-46",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-46/122-recently-viewed"
+        },
+        {
+          "number": 23,
+          "id": "HRN-47",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-47/123-home-page"
+        },
+        {
+          "number": 24,
+          "id": "HRN-48",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-48/124-sitemapts-robotsts-and-hreflang-coverage"
+        },
+        {
+          "number": 25,
+          "id": "HRN-49",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-49/125-dark-mode-toggle-wiring-m10"
+        },
+        {
+          "number": 26,
+          "id": "HRN-50",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-50/126-e2e-smoke-for-home-category-and-product-with-axe"
+        },
+        {
+          "number": 27,
+          "id": "HRN-51",
+          "url": "https://linear.app/hurbadnexus/issue/HRN-51/127-phase-gate-and-progress-note"
+        }
+      ]
+    }
+  ]
+}

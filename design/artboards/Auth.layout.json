@@ -1,0 +1,9 @@
+[
+  { "file": "Login.dc.html", "w": 1440, "h": 1140 },
+  { "file": "Signup.dc.html", "w": 1440, "h": 1230 },
+  { "file": "OtpVerify.dc.html", "w": 1440, "h": 1480 },
+  { "file": "ResetAccess.dc.html", "w": 1440, "h": 1530 },
+  { "file": "MagicLinkSent.dc.html", "w": 1440, "h": 1010 },
+  { "file": "MobileLogin.dc.html", "w": 390, "h": 1120 },
+  { "file": "MobileOtp.dc.html", "w": 390, "h": 890 }
+]

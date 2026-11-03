@@ -1,0 +1,395 @@
+{
+  "phase": 1,
+  "name": "Phase 1 \u2014 Catalog and Search",
+  "source": "docs/plans/phase-01-catalog.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "Phase 1 kickoff \u2014 re-read the rules, verify prerequisites, open the progress note",
+      "scope": "**Files:** Create `docs/plans/progress/phase-01.md`\n\n**Interfaces:** Consumes everything in Prerequisites. Produces no code.",
+      "steps": [
+        "Step 1: Re-read, fully: `docs/README.md` (Rules for the implementing model), `docs/specs/04-api-contracts.md \u00a72, \u00a73, \u00a713`, `docs/specs/08-search-catalog.md` (all), `docs/specs/10-design-system.md \u00a71\u2013\u00a77`, `docs/specs/07-i18n-currency.md`, and ADR-001, ADR-004, ADR-005, ADR-012, ADR-015 in `docs/adr/R",
+        "Step 2: Verify every prerequisite path and name. Run exactly:",
+        "Step 3: Confirm a green starting point: `pnpm typecheck && pnpm lint && pnpm i18n:check && pnpm test:unit && pnpm test:int`. All must pass; if not, that is a Phase 0 defect \u2014 report it before continuing.",
+        "Step 4: Create `docs/plans/progress/phase-01.md`:",
+        "Step 5: Commit: `git add docs/plans/progress/phase-01.md && git commit -m \"docs(phase-01): open progress note with verified prerequisites\"`"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "getEffectivePrice \u2014 promotion window resolution",
+      "scope": "**Files:**\n- Create: `src/features/pricing/effective-price.ts`, `src/features/pricing/index.ts`\n- Test: `tests/unit/features/pricing/effective-price.test.ts`\n\n**Interfaces:**\n- Consumes: `PromotionStatus` from `@prisma/client`.\n- Produces:\n  - `export type PromotionLike = { productId: string | null; variantId: string | null; promotionPriceUsdCents: number; startsAt: Date; endsAt: Date; status: PromotionStatus; badgeText: string | null }`\n  - `export type EffectivePrice = { unitUsdCents: number; compareAtUsdCents: number | null; promotion: { endsAt: Date; badge: string | null } | null }`\n  - `export function getEffectivePrice(variant: { id: string; productId: string; priceUsdCents: number; compareAtUsdCents: number | null }, promotions: readonly PromotionLike[], now: Date): EffectivePrice`\n  - `src/features/pricing/index.ts` re-exports both types and the function.\n\nRules (`01-product-spec.md \u00a74.4` steps 1\u20132; `12-testing.md \u00a74` \"promotion window edges\"): a promotion applies when `startsAt <= now < endsAt` **and** `status` is `SCHEDULED` or `ACTIVE` (the window decides; `ENDED`/`DISABLED` never apply) **and** it targets the variant (`variantId === variant.id`) or the product (`variantId === null && productId === variant.productId`). Variant-level beats product-level; within a level the lowest price wins. When a promotion applies, `compareAtUsdCents` is the variant list price. Othe",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/features/pricing/effective-price.test.ts`:",
+        "Step 2: Run `pnpm test:unit tests/unit/features/pricing/effective-price.test.ts`. Expected failure: `Error: Failed to resolve import \"@/features/pricing/effective-price\"`.",
+        "Step 3: Implement `src/features/pricing/effective-price.ts`:",
+        "Step 4: Run `pnpm test:unit tests/unit/features/pricing/effective-price.test.ts` \u2192 15 passed.",
+        "Step 5: Commit: `git add src/features/pricing tests/unit/features/pricing && git commit -m \"feat(pricing): getEffectivePrice with promotion window and specificity rules\"`"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "Catalog DTOs and mappers",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/dto.ts`\n- Create: `src/features/catalog/mappers.ts`\n- Test: `tests/unit/features/catalog/mappers.test.ts`\n\n**Interfaces:**\n- Consumes: `EffectivePrice` (Task 2); `convertUsdCents`, `CurrencyCode`, `Locale` from `@/lib/money`; `pickTranslation` from `@/lib/i18n/pick-translation`; `storage.publicUrl` from `@/lib/storage/r2`.\n- Produces in `dto.ts` (exactly `04 \u00a72` plus this phase's additions): `Money`, `PriceDTO`, `ImageDTO`, `Availability`, `ProductCardDTO`, `VariantOption`, `VariantDTO`, `SpecRowDTO`, `SpecGroupDTO`, `OptionAxisDTO`, `ProductDetailDTO`, `FacetType`, `FacetDTO`, `SortKey`, `ListingDTO`, `ListingParams`, `CategoryNodeDTO` (unchanged from Phase 0), `CategoryDTO`, `BrandDTO`, `CompareRowDTO`, `CompareDTO`, `SuggestDTO`, `BannerDTO`, `CollectionDTO`, `HomeDataDTO`.\n- Produces in `mappers.ts`: `RawVariantOption`, `buildOptionsKey`, `parseVariantOptions`, `optionLabel`, `variantLabel`, `toVariantOptions`, `toImageDTO`, `toPriceDTO`, `availabilityOf`, and a re-export of `pickTranslation`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/features/catalog/mappers.test.ts`:",
+        "Step 2: Run `pnpm test:unit tests/unit/features/catalog/mappers.test.ts`. Expected failure: `Failed to resolve import \"@/features/catalog/mappers\"`.",
+        "Step 3a: Replace `src/features/catalog/dto.ts` (keep the Phase 0 `CategoryNodeDTO` shape byte-for-byte):",
+        "Step 3b: Create `src/features/catalog/mappers.ts`:",
+        "Step 4: Run `pnpm test:unit tests/unit/features/catalog/mappers.test.ts` \u2192 all pass, then `pnpm typecheck`.",
+        "Step 5: Commit: `git add src/features/catalog/dto.ts src/features/catalog/mappers.ts tests/unit/features/catalog && git commit -m \"feat(catalog): DTO surface per 04 \u00a72 and catalog mappers\"`"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Exchange-rate read service and catalog cache tags",
+      "scope": "**Files:**\n- Create: `src/features/currency/service.ts`, `src/features/catalog/cache.ts`\n- Modify: `src/features/currency/index.ts`\n- Test: `tests/integration/currency/rates.test.ts`\n\n**Interfaces:**\n- Produces in `src/features/currency/service.ts`: `export const RATES_CACHE_TAG = 'rates'`; `export type RateTable = Record<CurrencyCode, string>`; `export const getRates: () => Promise<RateTable>` (React `cache` over `unstable_cache(['exchange-rates'], { revalidate: 600, tags: [RATES_CACHE_TAG] })`); `export async function getRate(currency: CurrencyCode): Promise<string>`.\n- Produces in `src/features/catalog/cache.ts`: `CATALOG_TAG`, `productTag`, `categoryTag`, `brandTag`, `cachedCatalog`.\n- **Phase 2 Task 3 extends this same file** with `RateSource`, `refreshRates`, `applyBuffer`, `FX_BUFFER_BPS`, `REFRESHABLE`. It must not redefine `getRates`, `getRate` or `RATES_CACHE_TAG`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/currency/rates.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/currency/rates.test.ts`. Expected failure: `Failed to resolve import \"@/features/currency/service\"`.",
+        "Step 3a: Create `src/features/currency/service.ts`:",
+        "Step 3b: Append to `src/features/currency/index.ts`:",
+        "Step 3c: Create `src/features/catalog/cache.ts`:",
+        "Step 4: Run `pnpm test:int tests/integration/currency/rates.test.ts` \u2192 3 passed; `pnpm typecheck`.",
+        "Step 5: Commit: `git add src/features/currency src/features/catalog/cache.ts tests/integration/currency && git commit -m \"feat(currency): cached exchange-rate reads and catalog cache tag helpers\"`"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "Availability reads, getCategoryByPath, getBrand, getProductCards, getProductBySlug",
+      "scope": "**Files:**\n- Create: `src/features/catalog/availability.ts`\n- Modify: `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`\n- Test: `tests/integration/catalog/product-by-slug.test.ts`\n\n**Interfaces:**\n- Consumes: `db`, `getRate`, `getEffectivePrice`, mappers from Task 3, `cachedCatalog`/`productTag`/`categoryTag`/`brandTag` from Task 4.\n- Produces:\n  - `src/features/catalog/availability.ts`: `export async function warehouseIdsForCountry(country: CountryCode): Promise<{ country: string[]; all: string[] }>`; `export async function getAvailableQtyMany(variantIds: readonly string[], country: CountryCode): Promise<Map<string, number>>`.\n  - `src/features/catalog/queries.ts`: `getCategoryByPath(path: string, locale: Locale): Promise<CategoryDTO | null>`; `getBrand(slug: string, locale: Locale): Promise<BrandDTO | null>`; `getProductCards(productIds: readonly string[], locale: Locale, currency: CurrencyCode, country?: CountryCode): Promise<ProductCardDTO[]>` (input order preserved, missing/inactive ids dropped); `getProductBySlug(slug: string, locale: Locale, currency: CurrencyCode, country?: CountryCode): Promise<ProductDetailDTO | null | { redirectTo: string }>`.\n\n`country` defaults to `'SO'` when a caller has no store context (cached queries key on it).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/product-by-slug.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/product-by-slug.test.ts`. Expected failure: `getProductBySlug is not a function` (or an import error for `@/features/catalog/availability`).",
+        "Step 3a: Create `src/features/catalog/availability.ts`:",
+        "Step 3b: Add to `src/features/catalog/queries.ts` (keep the existing `getCategoryTree`):",
+        "Step 3c: Append the product-card loader and `getProductCards` to `src/features/catalog/queries.ts`:",
+        "Step 3d: Append `getProductBySlug` to `src/features/catalog/queries.ts`:",
+        "Step 3e: Export the new names from `src/features/catalog/index.ts`:",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/product-by-slug.test.ts` \u2192 all pass; then `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/features/catalog tests/integration/catalog tests/fixtures && git commit -m \"feat(catalog): category, brand, product-card and product-detail queries with slug-history redirect\"`"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "listProducts \u2014 the listing SQL",
+      "scope": "**Files:**\n- Create: `src/features/catalog/listing-sql.ts`, `src/features/catalog/params.ts`, `tests/fixtures/catalog-fixtures.ts`\n- Modify: `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`\n- Test: `tests/unit/features/catalog/params.test.ts`, `tests/integration/catalog/list-products.test.ts`\n\n**Interfaces:**\n- Produces in `listing-sql.ts`: `export const LISTING_PAGE_SIZE = 24`; `export const SORT_KEYS: readonly SortKey[]`; `export type ListingSqlInput = { params: ListingParams; priceMinUsdCents: number | null; priceMaxUsdCents: number | null; warehouseIds: string[]; now: Date }`; `export function productFrom(now: Date): Prisma.Sql`; `export function listingWhere(input: ListingSqlInput, opts?: { excludeAttrKey?: string; excludeBrand?: boolean; excludePrice?: boolean; excludeInStock?: boolean }): Prisma.Sql`; `export function listingIdsQuery(input: ListingSqlInput): Prisma.Sql`.\n- Produces in `params.ts`: `export function parseListingParams(searchParams: Record<string, string | string[] | undefined>): ListingParams`; `export function serialiseListingParams(params: ListingParams): URLSearchParams`; `export function toggleFilterValue(params: ListingParams, key: string, value: string): ListingParams`; `export function withPage(params, page)`; `export function withSort(params, sort)`; `export function clearFilters(params)`.\n- Produces in `queries.ts`: `export async",
+      "steps": [
+        "Step 1a: Write the failing unit test `tests/unit/features/catalog/params.test.ts`:",
+        "Step 1b: Write the failing integration test `tests/integration/catalog/list-products.test.ts` and the shared fixture `tests/fixtures/catalog-fixtures.ts`.",
+        "Step 2: Run `pnpm test:unit tests/unit/features/catalog/params.test.ts` \u2192 `Failed to resolve import \"@/features/catalog/params\"`. Run `pnpm test:int tests/integration/catalog/list-products.test.ts` \u2192 `listProducts is not a function`.",
+        "Step 3a: Create `src/features/catalog/params.ts`:",
+        "Step 3b: Create `src/features/catalog/listing-sql.ts`:",
+        "Step 3c: Add `listProducts` to `src/features/catalog/queries.ts`:",
+        "Step 3d: Export from `src/features/catalog/index.ts`: `export { listProducts } from './queries';` and `export { parseListingParams, serialiseListingParams, toggleFilterValue, withPage, withSort, withPriceRange, withInStock, clearFilters, SORT_KEYS } from './params';` and `export { LISTING_PAGE_SIZE ",
+        "Step 4: Run `pnpm test:unit tests/unit/features/catalog/params.test.ts` \u2192 all pass. Run `pnpm test:int tests/integration/catalog/list-products.test.ts` \u2192 all pass except nothing (facets are not asserted here). Run `pnpm typecheck`.",
+        "Step 5: Commit: `git add src/features/catalog tests/unit/features/catalog/params.test.ts tests/integration/catalog/list-products.test.ts tests/fixtures/catalog-fixtures.ts && git commit -m \"feat(catalog): listProducts with Prisma.sql filters, typo-tolerant search, sorting and pagination\"`"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "Facets",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/facets.ts` (created empty in Task 6)\n- Test: `tests/integration/catalog/facets.test.ts`\n\n**Interfaces:**\n- Consumes: `ListingSqlInput`, `productFrom`, `listingWhere` (Task 6); `db`; `pickTranslation`; `convertUsdCents`, `CURRENCY_META`.\n- Produces: `export async function buildFacets(input: ListingSqlInput, locale: Locale, currency: CurrencyCode, rate: string): Promise<FacetDTO[]>`; `export function appliedFilterLabels(facets: FacetDTO[], params: ListingParams): { key: string; value: string; label: string }[]`.\n\nRules (`08 \u00a74 step 7`): facets are computed over the base set with **all** filters applied except the facet's own key. A facet with fewer than two options is omitted. Order: `BRAND`, `PRICE`, `AVAILABILITY`, then the category attribute-set attributes in set order.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/facets.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/facets.test.ts`. Expected failure: the first assertion fails with `expect([]).toEqual([...])` because `buildFacets` still returns `[]`.",
+        "Step 3: Implement `src/features/catalog/facets.ts`:",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/facets.test.ts tests/integration/catalog/list-products.test.ts` \u2192 all pass. Run `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/features/catalog/facets.ts tests/integration/catalog/facets.test.ts && git commit -m \"feat(catalog): facet computation excluding each facet's own filter key\"`"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "searchSuggest, \"did you mean\", and GET /api/search/suggest",
+      "scope": "**Files:**\n- Create: `src/features/search/queries.ts`, `src/features/search/index.ts`, `src/app/api/search/suggest/route.ts`\n- Test: `tests/integration/search/suggest.test.ts`\n\n**Interfaces:**\n- Produces:\n  - `export const SUGGEST_MIN_CHARS = 2`\n  - `export async function searchSuggest(q: string, locale: Locale, currency?: CurrencyCode): Promise<SuggestDTO>` \u2014 max 5 products, 3 categories, 3 brands (`04 \u00a73`).\n  - `export async function didYouMean(q: string, locale: Locale): Promise<string | null>` \u2014 best trigram match among brand and category names (`08 \u00a75`).\n- Route: `GET /api/search/suggest?q=&locale=` \u2192 `200 { products, categories, brands }` with `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`; `400` when `q` is missing; empty result below `SUGGEST_MIN_CHARS`; rate-limited `search:ip` 60/min (`11 \u00a74`) returning `429` with `{ error: { code: 'RATE_LIMITED' } }`. Node runtime, `export const dynamic = 'force-dynamic'`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/search/suggest.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/search/suggest.test.ts` \u2192 `Failed to resolve import \"@/features/search/queries\"`.",
+        "Step 3a: Create `src/features/search/queries.ts`:",
+        "Step 3b: Create `src/features/search/index.ts`:",
+        "Step 3c: Create `src/app/api/search/suggest/route.ts`:",
+        "Step 4: Run `pnpm test:int tests/integration/search/suggest.test.ts` \u2192 all pass. Manually verify the route: `pnpm dev` then `curl -s 'http://localhost:3000/api/search/suggest?q=iphone&locale=en' | head -c 400`.",
+        "Step 5: Commit: `git add src/features/search src/app/api/search tests/integration/search && git commit -m \"feat(search): suggestions query, did-you-mean and /api/search/suggest\"`"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Related products, frequently bought together, recently viewed and recordProductView",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`\n- Create: `src/features/catalog/schemas.ts`, `src/features/catalog/actions.ts`\n- Test: `tests/integration/catalog/related.test.ts`\n\n**Interfaces:**\n- Produces:\n  - `getRelatedProducts(productId: string, locale: Locale, currency: CurrencyCode, limit?: number, country?: CountryCode): Promise<ProductCardDTO[]>` \u2014 default `limit = 8`.\n  - `getFrequentlyBoughtTogether(productId: string, locale: Locale, currency: CurrencyCode, limit?: number, country?: CountryCode): Promise<ProductCardDTO[]>` \u2014 default `limit = 3`, **read side only**; the nightly `catalog/fbt-refresh` job that fills `FrequentlyBoughtTogether` is Phase 5.\n  - `getRecentlyViewedForUser(userId: string, limit?: number): Promise<string[]>` \u2014 product ids, newest first, default 12.\n  - `src/features/catalog/schemas.ts`: `export const recordProductViewSchema = z.object({ productId: z.string().min(1).max(40) })`; `export const getProductCardsSchema = z.object({ productIds: z.array(z.string().min(1).max(40)).max(12) })`.\n  - `src/features/catalog/actions.ts`: `export const recordProductView` (createAction, `auth: 'public'`); `export const getProductCardsAction` (createAction, `auth: 'public'`) used by the client rails.\n\n`recordProductView` behaviour (`04 \u00a73`): for a signed-in user upsert `RecentlyViewed(userId, productId)` with `viewedAt = ",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/related.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/related.test.ts` \u2192 `getRelatedProducts is not a function`.",
+        "Step 3a: Append to `src/features/catalog/queries.ts`:",
+        "Step 3b: Create `src/features/catalog/schemas.ts`:",
+        "Step 3c: Create `src/features/catalog/actions.ts`:",
+        "Step 3d: Export from `src/features/catalog/index.ts`:",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/related.test.ts` \u2192 all pass; `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/features/catalog tests/integration/catalog/related.test.ts && git commit -m \"feat(catalog): related products, frequently-bought-together read side and recordProductView\"`"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "getCompareData",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`\n- Test: `tests/integration/catalog/compare.test.ts`\n\n**Interfaces:**\n- Produces: `export async function getCompareData(productIds: string[], locale: Locale, currency: CurrencyCode, country?: CountryCode): Promise<CompareDTO>`.\n- Throws `AppError('COMPARE_LIMIT')` for more than 4 ids and `AppError('COMPARE_MIXED_CATEGORY')` when the ids span more than one category (`04 \u00a73`, `04 \u00a713`).\n\nRow order (`08 \u00a77`): every comparable attribute of the shared attribute set, in set order, then `price`, `rating`, `warranty`, `availability`. Missing values are `null` (rendered as \"\u2014\"). `allEqual` is true when every non-null value is identical **and** no value is missing.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/compare.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/compare.test.ts` \u2192 `getCompareData is not a function`.",
+        "Step 3a: Append to `src/features/catalog/queries.ts`:",
+        "Step 3b: Export `getCompareData` from `src/features/catalog/index.ts`.",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/compare.test.ts` \u2192 all pass; `pnpm typecheck`.",
+        "Step 5: Commit: `git add src/features/catalog tests/integration/catalog/compare.test.ts && git commit -m \"feat(catalog): getCompareData with mixed-category and limit guards\"`"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "getHomeData",
+      "scope": "**Files:**\n- Modify: `src/features/catalog/queries.ts`, `src/features/catalog/index.ts`\n- Test: `tests/integration/catalog/home.test.ts`\n\n**Interfaces:**\n- Produces: `export async function getHomeData(locale: Locale, currency: CurrencyCode, country?: CountryCode): Promise<HomeDataDTO>` \u2014 banners (active, in window, by position), 8 top-level category tiles, flash sales (products with an active promotion, max 8, plus the earliest `endsAt`), collections (active, each with up to 12 cards), featured brands, new arrivals (`publishedAt` within 30 days, max 8).",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/home.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/home.test.ts` \u2192 `getHomeData is not a function`.",
+        "Step 3a: Append to `src/features/catalog/queries.ts`:",
+        "Step 3b: Export `getHomeData` from `src/features/catalog/index.ts`.",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/home.test.ts` \u2192 all pass; `pnpm typecheck && pnpm lint && pnpm test:int`.",
+        "Step 5: Commit: `git add src/features/catalog tests/integration/catalog/home.test.ts && git commit -m \"feat(catalog): getHomeData with banners, tiles, flash sales, collections and new arrivals\"`"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Catalog UI primitives \u2014 Price, RatingStars, AvailabilityBadge, EmptyState, Markdown",
+      "scope": "**Files:**\n- Create: `src/components/ui/price.tsx`, `src/components/ui/rating-stars.tsx`, `src/components/ui/markdown.tsx`, `src/components/catalog/availability-badge.tsx`, `src/components/layout/empty-state.tsx`\n- Modify: `messages/en.json`, `messages/so.json`, `package.json` (add `react-markdown`, `remark-gfm`, `rehype-sanitize`)\n- Test: `tests/unit/components/price.test.tsx`\n\n**Interfaces:**\n- Produces:\n  - `export function Price(props: { money: Money; compareAt?: Money | null; secondaryUsdCents?: number | null; size?: 'sm' | 'md' | 'lg'; className?: string })`\n  - `export function RatingStars(props: { value: number; count?: number; size?: 'sm' | 'md'; href?: string })`\n  - `export function AvailabilityBadge(props: { availability: Availability; availableQty?: number })`\n  - `export function EmptyState(props: { title: string; description?: string; action?: ReactNode; icon?: ReactNode })`\n  - `export function Markdown(props: { children: string; className?: string })`\n\nAll five are Server Components (no `\"use client\"`): they render static markup only.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/price.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/price.test.tsx` \u2192 `Failed to resolve import \"@/components/ui/price\"`.",
+        "Step 3a: `pnpm add react-markdown remark-gfm rehype-sanitize`.",
+        "Step 3b: Create `src/components/ui/price.tsx`:",
+        "Step 3c: Create `src/components/ui/rating-stars.tsx`:",
+        "Step 3d: Create `src/components/catalog/availability-badge.tsx`:",
+        "Step 3e: Create `src/components/layout/empty-state.tsx`:",
+        "Step 3f: Create `src/components/ui/markdown.tsx` \u2014 the only place Markdown is turned into HTML (`11 \u00a73`):",
+        "Step 3g: Add to `messages/en.json` under `catalog` and the mirror keys to `messages/so.json`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/price.test.tsx` \u2192 all pass; `pnpm i18n:check` \u2192 green; `pnpm typecheck`.",
+        "Step 5: Commit: `git add src/components messages package.json pnpm-lock.yaml tests/unit/components && git commit -m \"feat(ui): Price, RatingStars, AvailabilityBadge, EmptyState and sanitised Markdown\"`"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "ProductCard, ProductGrid, ProductRail",
+      "scope": "**Files:**\n- Create: `src/components/catalog/product-card.tsx`, `src/components/catalog/product-grid.tsx`, `src/components/catalog/product-rail.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/product-card.test.tsx`\n\n**Interfaces:**\n- Produces: `export async function ProductCard(props: { product: ProductCardDTO; priority?: boolean })`; `export function ProductGrid(props: { products: ProductCardDTO[]; priorityCount?: number })`; `export function ProductGridSkeleton(props: { count?: number })`; `export function ProductRail(props: { title: string; href?: string; products: ProductCardDTO[] })`.\n- Consumes: `Price`, `RatingStars`, `AvailabilityBadge` (Task 12), `CompareButton` (Task 21 \u2014 until then the card renders without it; Task 21 adds the slot).\n\nGrid columns per `10 \u00a72`: 2 mobile / 3 tablet / 4 desktop. Card image `sizes=\"(max-width:640px) 50vw, (max-width:1024px) 33vw, 25vw\"`, `object-contain` on `surface-2`, 1:1 (`10 \u00a77`). Only the first `priorityCount` images get `priority`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/product-card.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/product-card.test.tsx` \u2192 import error.",
+        "Step 3a: Create `src/components/catalog/product-card.tsx`:",
+        "Step 3b: Create `src/components/catalog/product-grid.tsx`:",
+        "Step 3c: Create `src/components/catalog/product-rail.tsx`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/product-card.test.tsx` \u2192 pass; `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/components/catalog tests/unit/components/product-card.test.tsx && git commit -m \"feat(catalog): ProductCard, ProductGrid and ProductRail\"`"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Listing controls \u2014 sort, pagination, filters, chips and ListingView",
+      "scope": "**Files:**\n- Create: `src/components/catalog/sort-select.tsx`, `pagination.tsx`, `filter-controls.tsx`, `filter-sidebar.tsx`, `filter-sheet.tsx`, `active-filter-chips.tsx`, `listing-view.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/sort-select.test.tsx`\n\n**Interfaces:**\n- Produces:\n  - `export function SortSelect(props: { value: SortKey })` \u2014 `\"use client\"`, pushes `?sort=` and resets `page`.\n  - `export function CatalogPagination(props: { page: number; total: number; pageSize: number })` \u2014 server component rendering `<Link>`s.\n  - `export function FacetControl(props: { facet: FacetDTO; onToggle: (key: string, value: string) => void; onRange: (key: string, min?: number, max?: number) => void })` \u2014 `\"use client\"`.\n  - `export function FilterSidebar(props: { facets: FacetDTO[] })` and `export function FilterSheet(props: { facets: FacetDTO[]; resultCount: number })` \u2014 `\"use client\"`.\n  - `export function ActiveFilterChips(props: { applied: ListingDTO['appliedFilters'] })` \u2014 `\"use client\"`.\n  - `export function ListingView(props: { listing: ListingDTO; heading: ReactNode })` \u2014 server component that composes toolbar + sidebar + grid + pagination.\n\nAll filter state lives in the URL (`C5`, `C6`): the client components read `useSearchParams()`, transform with the pure helpers from `src/features/catalog/params.ts` and navigate with `router.replace",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/sort-select.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/sort-select.test.tsx` \u2192 import error.",
+        "Step 3a: Create a shared client hook inside `src/components/catalog/filter-controls.tsx`:",
+        "Step 3b: Create `src/components/catalog/sort-select.tsx`:",
+        "Step 3c: Create `src/components/catalog/active-filter-chips.tsx`:",
+        "Step 3d: Create `src/components/catalog/filter-sidebar.tsx` and `filter-sheet.tsx`:",
+        "Step 3e: Create `src/components/catalog/pagination.tsx` (server component, real links so pages are crawlable and shareable):",
+        "Step 3f: Create `src/components/catalog/listing-view.tsx`:",
+        "Step 3g: Add to `messages/en.json` / `messages/so.json`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/sort-select.test.tsx` \u2192 pass; `pnpm i18n:check`; `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/components/catalog messages tests/unit/components && git commit -m \"feat(catalog): URL-driven sort, filters, chips, pagination and ListingView\"`"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "SEO helpers and the category page /[locale]/c/[...slug]",
+      "scope": "**Files:**\n- Create: `src/lib/seo.ts`, `src/app/[locale]/(shop)/c/[...slug]/page.tsx`, `loading.tsx`, `error.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n\n**Interfaces:**\n- Produces in `src/lib/seo.ts`:\n  - `export function absoluteUrl(path: string): string` \u2014 `${publicEnv.NEXT_PUBLIC_APP_URL}${path}`\n  - `export function buildAlternates(pathWithoutLocale: string, search?: string): Metadata['alternates']` \u2014 canonical for the current locale plus `languages: { en, so, 'x-default' }` (ADR-005, `08 \u00a79`)\n  - `export function jsonLdScript(data: unknown): { __html: string }` \u2014 `JSON.stringify` with `<` escaped as `<` (`11 \u00a73`)\n  - `export function breadcrumbJsonLd(items: { name: string; href: string }[], locale: Locale): object`\n- Produces the category route: `generateMetadata` (localised title/description, canonical **with** `page` only, hreflang alternates, OG image = category image), the page itself, a matching skeleton `loading.tsx` and an `error.tsx`.\n\nRoute contract (`C1`): `/[locale]/c/[...slug]` matches `Category.path`; unknown path \u2192 `notFound()`; renders breadcrumbs, H1 + description, subcategory chips, and `ListingView`.",
+      "steps": [
+        "Step 1: This task's verification is the e2e smoke in Task 26 plus type/lint gates; the queries it composes are already covered by Tasks 5\u20137. Write the failing check first as a build assertion: add to `tests/e2e/catalog.spec.ts` (created in full in Task 26) the single spec below and run it after Step",
+        "Step 2: Run `pnpm test:e2e tests/e2e/catalog.spec.ts` \u2192 fails with a 404 on `/en/c/smartphones`.",
+        "Step 3a: Create `src/lib/seo.ts`:",
+        "Step 3b: Create `src/app/[locale]/(shop)/c/[...slug]/page.tsx`:",
+        "Step 3c: Create `loading.tsx` (skeleton matching the layout) and `error.tsx` (per `10 \u00a76`):",
+        "Step 3d: Message keys:",
+        "Step 4: `pnpm dev`, open `/en/c/smartphones` and `/so/c/laptops/gaming-laptops`; confirm the H1, chips, facets, sort and pagination work and that `view-source` shows one `BreadcrumbList` JSON-LD block and three `hreflang` links. Run `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add src/lib/seo.ts \"src/app/[locale]/(shop)/c\" messages && git commit -m \"feat(catalog): category page with facets, breadcrumbs, hreflang and JSON-LD\"`"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "Brand page /[locale]/b/[slug]",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(shop)/b/[slug]/page.tsx`, `loading.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n\n**Interfaces:** Consumes `getBrand`, `listProducts`, `ListingView`, `buildAlternates`. Produces the route only.",
+      "steps": [
+        "Step 1: Add to `tests/e2e/catalog.spec.ts`:",
+        "Step 2: Run it \u2192 404.",
+        "Step 3a: Create `src/app/[locale]/(shop)/b/[slug]/page.tsx`:",
+        "Step 3b: `loading.tsx` \u2014 the same skeleton as the category route with a logo block instead of the description line.",
+        "Step 3c: Message keys:",
+        "Step 4: Open `/en/b/samsung`, confirm only Samsung products appear and the brand facet is hidden (`buildFacets` skips it when `brandSlug` is set). `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add \"src/app/[locale]/(shop)/b\" messages && git commit -m \"feat(catalog): brand page reusing the listing view\"`"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Search page /[locale]/search",
+      "scope": "**Files:**\n- Create: `src/app/[locale]/(shop)/search/page.tsx`, `loading.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n\n**Interfaces:** Consumes `listProducts`, `didYouMean`, `getCategoryTree`. Produces the route.\n\nBehaviour (`08 \u00a75`, `10 \u00a72`): dynamic (`export const dynamic = 'force-dynamic'`, no caching); echoes the query; when `total === 0` shows \"Did you mean **X**?\" linking to `?q=X`; shows category chips for the top 3 categories among the results, each narrowing to `/c/<path>?q=`; empty state suggests popular categories and the AI assistant; `robots: { index: false }` (`08 \u00a79` disallows `/search`).",
+      "steps": [
+        "Step 1: Add to `tests/e2e/catalog.spec.ts`:",
+        "Step 2: Run it \u2192 404.",
+        "Step 3a: Create `src/app/[locale]/(shop)/search/page.tsx`:",
+        "Step 3b: `loading.tsx` \u2014 heading skeleton + `ProductGridSkeleton`.",
+        "Step 3c: Message namespace `search`:",
+        "Step 4: Open `/en/search?q=samsng` and `/en/search`; verify the typo path returns results and the empty path shows category chips. `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add \"src/app/[locale]/(shop)/search\" messages && git commit -m \"feat(search): search page with did-you-mean and category chips\"`"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "SearchBox autocomplete with keyboard navigation",
+      "scope": "**Files:**\n- Modify: `src/components/layout/SearchBox.tsx`\n- Test: `tests/unit/components/search-box.test.tsx`\n\n**Interfaces:** Produces `export function SearchBox(props: { className?: string })` \u2014 `\"use client\"`. Fetches `GET /api/search/suggest?q=&locale=` debounced 200 ms (`C7`), minimum 2 characters, aborting the previous request. ARIA per `08 \u00a75`: the input is `role=\"combobox\"` with `aria-expanded`, `aria-controls`, `aria-autocomplete=\"list\"` and `aria-activedescendant`; the popup is `role=\"listbox\"` with `role=\"option\"` children carrying stable ids. Keys: `ArrowDown`/`ArrowUp` move (wrapping), `Enter` opens the active option or submits the query, `Escape` closes and clears the active option, `Tab` closes. Submitting navigates to `/search?q=`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/search-box.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/search-box.test.tsx`. Expected failure: the Phase 0 `SearchBox` has no combobox role, so `screen.getByRole('combobox')` throws.",
+        "Step 3: Replace `src/components/layout/SearchBox.tsx`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/search-box.test.tsx` \u2192 6 passed. Manually tab into the header search, type `iph`, and confirm arrow keys move the highlight and a screen reader announces the option.",
+        "Step 5: Commit: `git add src/components/layout/SearchBox.tsx tests/unit/components/search-box.test.tsx && git commit -m \"feat(search): header autocomplete with debounce and full keyboard navigation\"`"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Product-page components \u2014 gallery, variant picker, quantity, purchase slot, countdown, delivery estimate, spec table",
+      "scope": "**Files:**\n- Create: `src/components/catalog/product-gallery.tsx`, `variant-picker.tsx`, `quantity-stepper.tsx`, `purchase-actions.tsx`, `promo-countdown.tsx`, `delivery-estimate.tsx`, `spec-table.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/variant-picker.test.tsx`\n\n**Interfaces produced (exact):**\n\n\n\n#### The `PurchaseActions` slot contract (read this before implementing)\n\nPhase 1 does **not** implement add-to-cart or wishlist. The product page renders price, availability, `VariantPicker`, `QuantityStepper` and then exactly one slot component:\n\n\n\n- **Phase 1 renders only two controls inside the slot:** `CompareButton` (Task 21) and a \"Chat on WhatsApp\" link (`N4`) whose href is `https://wa.me/<SUPPORT_WHATSAPP_E164 without +>?text=<encoded message>` where the message is `t('whatsappMessage', { name, variant, url })` and `url` is the absolute product URL. No add-to-cart, no wishlist, no cart store import.\n- **`productId`, `variantId`, `quantity` and `availability` are already in the props precisely so Phase 2 does not change the call site.** Phase 2 Task 11 replaces the body of `purchase-actions.tsx` with `<AddToCartButton variantId={variantId} quantity={quantity} disabled={availability === 'OUT_OF_STOCK'} />` + `<WishlistButton productId={productId} />` and keeps `CompareButton` and the WhatsApp link. Phase 2 must **not** change `Purcha",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/variant-picker.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/variant-picker.test.tsx` \u2192 import error.",
+        "Step 3a: Create `src/components/catalog/variant-picker.tsx`:",
+        "Step 3b: Create `src/components/catalog/quantity-stepper.tsx`:",
+        "Step 3c: Create `src/components/catalog/purchase-actions.tsx` \u2014 the Phase 1 slot:",
+        "Step 3d: Create `src/components/catalog/promo-countdown.tsx` (`C13`):",
+        "Step 3e: Create `src/components/catalog/delivery-estimate.tsx` (`08 \u00a76`) \u2014 reads the active `DeliveryZone` rows for the shopper's country:",
+        "Step 3f: Create `src/components/catalog/spec-table.tsx`:",
+        "Step 3g: Create `src/components/catalog/product-gallery.tsx`:",
+        "Step 3h: Message keys:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/variant-picker.test.tsx` \u2192 all pass. `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add src/components/catalog messages tests/unit/components/variant-picker.test.tsx && git commit -m \"feat(catalog): gallery, variant picker, quantity stepper, purchase slot, countdown, delivery estimate and spec table\"`"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "Product page /[locale]/p/[slug]",
+      "scope": "**Files:**\n- Create: `src/components/catalog/product-detail-view.tsx`, `src/app/[locale]/(shop)/p/[slug]/page.tsx`, `loading.tsx`\n- Modify: `messages/en.json`, `messages/so.json`\n\n**Interfaces:**\n- `export function ProductDetailView(props: { product: ProductDetailDTO; specSlot: ReactNode; descriptionSlot: ReactNode; deliverySlot: ReactNode; relatedSlot: ReactNode; fbtSlot: ReactNode; recentSlot: ReactNode })` \u2014 `\"use client\"`, owns `selectedVariantId` and `quantity` state and renders the server-rendered slots inside its tabs/sections.\n- The page is a Server Component: it loads the DTO, handles `{ redirectTo }` with a **permanent** redirect, calls `notFound()` for `null`, emits `Product`/`Offer`/`BreadcrumbList` JSON-LD, and renders `ProductDetailView`.\n\nComposition order (`08 \u00a76`): breadcrumbs; gallery; title + brand link + rating link; price block (display currency, USD secondary, strike-through, `PromoCountdown`); availability badge; `VariantPicker`; quantity + `PurchaseActions`; `DeliveryEstimate`; key specs (top 6 comparable rows); tabs Description / Specifications / Reviews / Q&A; frequently bought together; related products; recently viewed. Reviews and Q&A are Phase 4 \u2014 their tabs render an `EmptyState` with `catalog.reviewsComingSoon` / `catalog.questionsComingSoon` and **no** submit form.",
+      "steps": [
+        "Step 1: Add to `tests/e2e/catalog.spec.ts`:",
+        "Step 2: Run `pnpm test:e2e tests/e2e/catalog.spec.ts` \u2192 404 on the product route.",
+        "Step 3a: Create `src/components/catalog/product-detail-view.tsx`:",
+        "Step 3b: Create `src/app/[locale]/(shop)/p/[slug]/page.tsx`:",
+        "Step 3c: `loading.tsx` \u2014 a two-column skeleton (square gallery + stacked lines).",
+        "Step 3d: Message keys:",
+        "Step 4: Run the three product e2e specs \u2192 pass. Verify in the browser that switching a variant swaps price, images, SKU and the availability badge without a page reload (`C3`) and that the Google Rich Results test accepts the JSON-LD (`M8`). `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add \"src/app/[locale]/(shop)/p\" src/components/catalog/product-detail-view.tsx prisma/seed messages && git commit -m \"feat(catalog): product page with variant-aware price, tabs, rails and Product JSON-LD\"`"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "Compare \u2014 store, button, drawer, page",
+      "scope": "**Files:**\n- Create: `src/components/compare/compare-store.ts`, `compare-button.tsx`, `compare-drawer.tsx`, `compare-table.tsx`, `src/app/[locale]/(shop)/compare/page.tsx`\n- Modify: `src/app/[locale]/(shop)/layout.tsx` (mount `CompareDrawer`), `src/components/catalog/product-card.tsx` (add the compare slot), `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/compare-store.test.ts`\n\n**Interfaces:**\n\n\n\nRules (`08 \u00a77`, `04 \u00a75`): client-only, `localStorage` key `hh_compare`, max 4 ids; adding a product from a different category than the current list raises `category-conflict`, and the UI asks \"Replace comparison list?\" before calling `toggle(entry, { replaceCategory: true })`. The bottom drawer shows thumbnails and a `Compare (n)` CTA to `/compare?ids=a,b,c`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/compare-store.test.ts`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/compare-store.test.ts` \u2192 import error.",
+        "Step 3a: Create `src/components/compare/compare-store.ts`:",
+        "Step 3b: Create `src/components/compare/compare-button.tsx`:",
+        "Step 3c: Create `src/components/compare/compare-drawer.tsx` \u2014 a bottom drawer (framer-motion slide, disabled under `prefers-reduced-motion`, `10 \u00a74`):",
+        "Step 3d: Create `src/components/compare/compare-table.tsx` (client, owns the \"highlight differences\" toggle) and `src/app/[locale]/(shop)/compare/page.tsx`:",
+        "Step 3e: Add the compare slot to `ProductCard`: render `<CompareButton productId={product.id} categoryPath={product.category.path} />` in an absolutely positioned corner (`z-10`, above the stretched link) so cards can be compared from listings (`F5`).",
+        "Step 3f: Message namespace `compare`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components/compare-store.test.ts` \u2192 5 passed. In the browser, add three phones from a listing, confirm the drawer appears, open `/en/compare?ids=\u2026`, toggle \"Highlight differences\", then try adding a laptop and confirm the replace dialog. `pnpm typecheck && pnpm",
+        "Step 5: Commit: `git add src/components/compare \"src/app/[locale]/(shop)/compare\" src/components/catalog/product-card.tsx messages tests/unit/components/compare-store.test.ts && git commit -m \"feat(compare): localStorage store, compare button, drawer and comparison table\"`"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Recently viewed",
+      "scope": "**Files:**\n- Create: `src/components/catalog/recent-store.ts`, `src/components/catalog/recently-viewed.tsx`\n- Modify: `src/app/[locale]/(shop)/p/[slug]/page.tsx` (already renders `<RecentlyViewed />` from Task 20)\n\n**Interfaces:**\n- `src/components/catalog/recent-store.ts`: `export const RECENT_KEY = 'hh_recent'`; `export const RECENT_MAX = 12`; `export function pushRecent(productId: string): void`; `export function readRecent(): string[]`; `export function useRecentIds(): string[]`.\n- `src/components/catalog/recently-viewed.tsx`: `export function RecentlyViewed(props: { currentProductId?: string })` \u2014 `\"use client\"`; on mount calls `recordProductView({ productId })` when `currentProductId` is set (which also writes the DB row for signed-in users), pushes the id into `localStorage`, then hydrates the rail with `getProductCardsAction({ productIds })`, excluding the current product. Renders nothing when fewer than two ids remain.",
+      "steps": [
+        "Step 1: Extend `tests/unit/components/compare-store.test.ts` with a `recent-store` describe block (same file avoids a second setup):",
+        "Step 2: Run `pnpm test:unit tests/unit/components/compare-store.test.ts` \u2192 import error for `recent-store`.",
+        "Step 3a: Create `src/components/catalog/recent-store.ts`:",
+        "Step 3b: Create `src/components/catalog/recently-viewed.tsx`:",
+        "Step 4: Run `pnpm test:unit tests/unit/components` \u2192 all pass. In the browser, open three products in sequence and confirm the rail fills up and never contains the product being viewed. `pnpm typecheck && pnpm lint`.",
+        "Step 5: Commit: `git add src/components/catalog/recent-store.ts src/components/catalog/recently-viewed.tsx tests/unit/components && git commit -m \"feat(catalog): recently viewed rail backed by localStorage and recordProductView\"`"
+      ]
+    },
+    {
+      "number": 23,
+      "title": "Home page",
+      "scope": "**Files:**\n- Create: `src/components/home/hero-carousel.tsx`, `category-tiles.tsx`, `trust-row.tsx`, `brand-strip.tsx`, `assistant-teaser.tsx`\n- Modify: `src/app/[locale]/(shop)/page.tsx`, `src/app/[locale]/(shop)/loading.tsx`, `messages/en.json`, `messages/so.json`\n\n**Interfaces:**\n- `export function HeroCarousel(props: { banners: BannerDTO[] })` \u2014 `\"use client\"`; autoplay 6 s, pause on hover and on focus, stops entirely under `prefers-reduced-motion`; `role=\"region\"` with `aria-roledescription=\"carousel\"`, previous/next buttons and slide dots, each slide `role=\"group\"` with `aria-label` \"Slide n of m\".\n- `export function CategoryTiles(props: { tiles: HomeDataDTO['categoryTiles'] })` \u2014 server component; renders the lucide icon named by `iconName` from a fixed allowlist map, falling back to `LayoutGrid`.\n- `export function TrustRow()`, `export function BrandStrip(props: { brands: HomeDataDTO['featuredBrands'] })`, `export function AssistantTeaser()` \u2014 server components.\n- The page composes, in the order of `10 \u00a72`: hero carousel; category tiles; flash-sale rail with `PromoCountdown`; featured collections rails; brand strip; trust row; new-arrivals grid; assistant teaser; and, for signed-in users, a server-rendered \"Recently viewed\" rail from `getRecentlyViewedForUser`.",
+      "steps": [
+        "Step 1: Add to `tests/e2e/catalog.spec.ts`:",
+        "Step 2: Run it \u2192 fails against the Phase 0 placeholder home.",
+        "Step 3a: Create `src/components/home/hero-carousel.tsx`:",
+        "Step 3b: Create `src/components/home/category-tiles.tsx`:",
+        "Step 3c: Create `trust-row.tsx`, `brand-strip.tsx`, `assistant-teaser.tsx`:",
+        "Step 3d: Replace `src/app/[locale]/(shop)/page.tsx`:",
+        "Step 3e: Message namespace `home`:",
+        "Step 4: Run the home e2e spec \u2192 pass. Check the carousel with the keyboard and with `prefers-reduced-motion: reduce` (autoplay must stop). `pnpm typecheck && pnpm lint && pnpm i18n:check`.",
+        "Step 5: Commit: `git add src/components/home \"src/app/[locale]/(shop)/page.tsx\" messages && git commit -m \"feat(home): hero carousel, tiles, flash sales, collections, brands, trust row and new arrivals\"`"
+      ]
+    },
+    {
+      "number": 24,
+      "title": "sitemap.ts, robots.ts and hreflang coverage",
+      "scope": "**Files:**\n- Create: `src/app/sitemap.ts`, `src/app/robots.ts`\n- Delete: `public/robots.txt` (the Phase 0 placeholder)\n- Test: `tests/integration/catalog/sitemap.test.ts`\n\n**Interfaces:** Produces the two Next metadata routes. `sitemap()` emits, for **both** locales with `alternates.languages`: home, every ACTIVE non-deleted product (`/p/<slug>`, `lastModified = updatedAt`), every active category (`/c/<path>`), every active brand (`/b/<slug>`), every published content page (`/pages/<slug>`). `robots()` disallows `/admin`, `/api`, and per-locale `/checkout`, `/account`, `/cart`, `/compare`, `/search` (`08 \u00a79`), and points `sitemap` at `absoluteUrl('/sitemap.xml')`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/integration/catalog/sitemap.test.ts`:",
+        "Step 2: Run `pnpm test:int tests/integration/catalog/sitemap.test.ts` \u2192 import errors.",
+        "Step 3a: Create `src/app/sitemap.ts`:",
+        "Step 3b: Create `src/app/robots.ts`:",
+        "Step 3c: Delete `public/robots.txt` so the metadata route wins.",
+        "Step 4: Run `pnpm test:int tests/integration/catalog/sitemap.test.ts` \u2192 all pass. `pnpm build` and check `/sitemap.xml` and `/robots.txt` on `pnpm start`.",
+        "Step 5: Commit: `git add src/app/sitemap.ts src/app/robots.ts tests/integration/catalog/sitemap.test.ts && git rm public/robots.txt && git commit -m \"feat(seo): sitemap with hreflang alternates and robots rules\"`"
+      ]
+    },
+    {
+      "number": 25,
+      "title": "Dark mode toggle wiring (M10)",
+      "scope": "**Files:**\n- Modify: `src/app/[locale]/layout.tsx`, `src/components/providers/ThemeProvider.tsx`, `src/components/layout/ThemeToggle.tsx`, `src/components/layout/Footer.tsx`, `src/app/globals.css`, `messages/en.json`, `messages/so.json`\n- Test: `tests/unit/components/theme-toggle.test.tsx`\n\n**Interfaces:** `export function ThemeToggle(props: { className?: string })` \u2014 a three-state control (System / Light / Dark) built on `next-themes`' `useTheme`, rendered as a `radiogroup` so it is keyboard operable and announced. `ThemeProvider` uses `attribute=\"class\"`, `defaultTheme=\"system\"`, `enableSystem`, `disableTransitionOnChange`.",
+      "steps": [
+        "Step 1: Write the failing test `tests/unit/components/theme-toggle.test.tsx`:",
+        "Step 2: Run `pnpm test:unit tests/unit/components/theme-toggle.test.tsx` \u2192 fails (the Phase 0 toggle is a two-state button or a stub).",
+        "Step 3a: Replace `src/components/layout/ThemeToggle.tsx`:",
+        "Step 3b: Ensure `src/components/providers/ThemeProvider.tsx` passes `attribute=\"class\" defaultTheme=\"system\" enableSystem disableTransitionOnChange`, that `src/app/[locale]/layout.tsx` sets `<html lang={locale} suppressHydrationWarning>` and wraps the tree in `ThemeProvider`, and that `globals.css` ",
+        "Step 3c: Render `<ThemeToggle />` in the `Footer` \"Stay connected\" column next to the locale and currency switchers (`10 \u00a72`).",
+        "Step 3d: Message keys under `common.theme`: `label` = `Theme` / `Muuqaalka`, `system` = `System` / `Nidaamka`, `light` = `Light` / `Iftiin`, `dark` = `Dark` / `Mugdi`.",
+        "Step 4: Run `pnpm test:unit tests/unit/components/theme-toggle.test.tsx` \u2192 pass. In the browser, toggle to Dark and confirm every catalog surface (cards, facets, gallery, compare table, countdown badge) keeps \u2265 4.5:1 contrast, then reload and confirm the choice sticks. `pnpm typecheck && pnpm lint &",
+        "Step 5: Commit: `git add src/components/layout/ThemeToggle.tsx src/components/providers src/app messages tests/unit/components/theme-toggle.test.tsx && git commit -m \"feat(ui): wire system/light/dark theme toggle into the layout shell\"`"
+      ]
+    },
+    {
+      "number": 26,
+      "title": "E2E smoke for home, category and product with axe",
+      "scope": "**Files:**\n- Create/complete: `tests/e2e/catalog.spec.ts`\n- Modify: `package.json` (add `@axe-core/playwright` if Phase 0 did not), `playwright.config.ts` (only if the seeded webServer is missing)\n\n**Interfaces:** Produces the Phase 1 e2e gate. Runs against `next start` on the seeded test DB with `PROVIDER_MODE=fake` (`12 \u00a71`). Uses the seeded handles from `12 \u00a72`: product slug `samsung-galaxy-s25-256gb`, category `smartphones`, brand `samsung`.",
+      "steps": [
+        "Step 1: Write the complete `tests/e2e/catalog.spec.ts`, collecting the specs added in Tasks 15\u201323 plus accessibility:",
+        "Step 2: Run `pnpm test:e2e tests/e2e/catalog.spec.ts` on both Playwright projects (desktop Chromium and Pixel 7). Any failure here is a real defect \u2014 fix the application, never the assertion, unless the assertion contradicts a spec.",
+        "Step 3: Fix whatever fails. Typical, expected fixes: a missing `aria-label`, a colour-contrast violation on `--color-ink-3` over `--color-surface-2` (darken the token in `globals.css` and record it in the progress note as a design-token adjustment), a duplicate landmark from mounting `CompareDrawer`",
+        "Step 4: Run the full suite: `pnpm test:e2e`.",
+        "Step 5: Commit: `git add tests/e2e package.json && git commit -m \"test(e2e): catalog smoke for home, category, brand, product, search, compare with axe\"`"
+      ]
+    },
+    {
+      "number": 27,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:** Modify `docs/plans/progress/phase-01.md`",
+      "steps": [
+        "Step 1: Run each gate command from `12-testing.md \u00a76` separately and capture the real output:",
+        "Step 2: Verify the Phase 1 acceptance list by hand and record the result of each line:",
+        "Step 3: Paste every command's output into `docs/plans/progress/phase-01.md` under \"Gate output\", fill the task log with one row per commit (`git log --oneline` since the Phase 0 tip), and list any deviation under \"Spec deviations\" (this must be empty or explicitly approved by the user). Set `Status:",
+        "Step 4: Confirm the Phase 2 hand-off contract still holds, exactly as `docs/plans/phase-02-cart-pricing.md` Task 0 checks it:",
+        "Step 5: Commit: `git add docs/plans/progress/phase-01.md && git commit -m \"docs(phase-01): green gate output and phase completion note\"`"
+      ]
+    }
+  ]
+}

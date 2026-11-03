@@ -1,0 +1,68 @@
+{
+  "slug": "samsung-galaxy-tab-a9-plus",
+  "sku": "SAM-TABA9P",
+  "name": "Samsung Galaxy Tab A9+",
+  "brand": "samsung",
+  "category": "tablets",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "samsung galaxy tab a9 plus android tablet",
+  "publishedDaysAgo": 55,
+  "translations": {
+    "en": {
+      "name": "Samsung Galaxy Tab A9+",
+      "shortDescription": "11\" budget-friendly tablet with quad speakers, great for streaming.",
+      "description": "## Samsung Galaxy Tab A9+\n\nAn 11-inch LCD display with quad speakers tuned by AKG, ideal for streaming and family use.\n\n- 4 GB RAM, 64 GB storage with microSD expansion\n- 7040 mAh battery\n- Wi-Fi only, no SIM slot"
+    },
+    "so": {
+      "name": "Samsung Galaxy Tab A9+",
+      "shortDescription": "Tablet 11\" oo qiime jaban leh afar weheliye, ku habboon daawashada muuqaalka.",
+      "description": "## Samsung Galaxy Tab A9+\n\nShaashad LCD 11 inch ah oo leh afar weheliye oo uu dhisay AKG, ku habboon daawashada iyo isticmaalka qoyska.\n\n- 4 GB RAM, kayd 64 GB oo lagu kordhin karo microSD\n- Baytari 7040 mAh ah\n- Wi-Fi kaliya, lama geliyo SIM"
+    }
+  },
+  "attributes": {
+    "os": "android",
+    "chipset": "Snapdragon 695",
+    "ram": "4gb",
+    "storage": "64gb",
+    "screen_size": 11,
+    "display_type": "lcd",
+    "refresh_rate": "90hz",
+    "cellular": false,
+    "stylus_support": false,
+    "battery_mah": 7040
+  },
+  "media": [
+    {
+      "key": "seed/products/samsung-galaxy-tab-a9-plus/0.webp",
+      "alt": "samsung galaxy tab a9 plus",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "SAM-TABA9P-64-GRY",
+      "options": [
+        {
+          "key": "color",
+          "value": "graphite",
+          "labelEn": "Graphite",
+          "labelSo": "Dam"
+        }
+      ],
+      "priceUsdCents": 19900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 20,
+        "NBO": 12,
+        "KLA": 6
+      }
+    }
+  ]
+}

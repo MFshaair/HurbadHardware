@@ -1,0 +1,54 @@
+{
+  "slug": "kingston-fury-beast-32gb-ddr5-kit",
+  "sku": "KIN-FB32KIT",
+  "name": "Kingston FURY Beast 32GB (2x16GB) DDR5 Kit",
+  "brand": "kingston",
+  "category": "memory",
+  "status": "ACTIVE",
+  "warrantyMonths": 60,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "kingston fury beast 32gb kit ddr5 dual channel",
+  "publishedDaysAgo": 58,
+  "translations": {
+    "en": {
+      "name": "Kingston FURY Beast 32GB (2x16GB) DDR5 Kit",
+      "shortDescription": "32GB dual-channel DDR5 kit (2x16GB), 6000 MT/s.",
+      "description": "## Kingston FURY Beast 32GB DDR5 Kit\n\nA matched pair of 16GB DDR5 modules for dual-channel performance at 6000 MT/s.\n\n- 32 GB total (2× 16 GB), DDR5-6000\n- Factory-tested as a matched kit\n- Intel XMP 3.0 ready"
+    },
+    "so": {
+      "name": "Kingston FURY Beast 32GB (2x16GB) DDR5 Kit",
+      "shortDescription": "Xirmo xusuus DDR5 ah oo 32GB ah (2x16GB), 6000 MT/s.",
+      "description": "## Kingston FURY Beast 32GB DDR5 Kit\n\nLabo module oo 16GB DDR5 ah oo isku jaanqaada si loo helo waxqabad dual-channel ah oo 6000 MT/s ah.\n\n- Wadarta 32 GB (2× 16 GB), DDR5-6000\n- Warshadda ayaa lagu tijaabiyay sida xirmo isku jaanqaadsan\n- Diyaar u ah Intel XMP 3.0"
+    }
+  },
+  "attributes": {
+    "component_type": "ram",
+    "memory_type": "ddr5",
+    "capacity": "32gb",
+    "speed_mhz": 6000
+  },
+  "media": [
+    {
+      "key": "seed/products/kingston-fury-beast-32gb-ddr5-kit/0.webp",
+      "alt": "kingston fury beast 32gb ddr5 kit",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "KIN-FB32KIT-STD",
+      "options": [],
+      "priceUsdCents": 9900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 7,
+        "NBO": 4
+      }
+    }
+  ]
+}

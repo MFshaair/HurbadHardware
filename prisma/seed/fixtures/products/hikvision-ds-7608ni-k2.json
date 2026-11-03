@@ -1,0 +1,60 @@
+{
+  "slug": "hikvision-ds-7608ni-k2",
+  "sku": "HIK-7608NIK2",
+  "name": "Hikvision DS-7608NI-K2 8-Channel NVR",
+  "brand": "hikvision",
+  "category": "recorders",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "hikvision nvr 8 channel 4k",
+  "publishedDaysAgo": 95,
+  "translations": {
+    "en": {
+      "name": "Hikvision DS-7608NI-K2 8-Channel NVR",
+      "shortDescription": "8-channel NVR supporting up to 4K recording, two SATA bays.",
+      "description": "## Hikvision DS-7608NI-K2\n\nAn 8-channel network video recorder supporting up to 8MP camera input and 4K HDMI output.\n\n- 8 IP camera channels\n- Two SATA bays, up to 16 TB each\n- Smart search and mobile viewing via Hik-Connect"
+    },
+    "so": {
+      "name": "Hikvision DS-7608NI-K2 8-Channel NVR",
+      "shortDescription": "NVR 8-kanaal ah oo taageerta duubista 4K, leh laba meelood oo SATA ah.",
+      "description": "## Hikvision DS-7608NI-K2\n\nQalab duubista muuqaalka shabakadda ah oo 8-kanaal ah, taageerta gelinta kaamirad ilaa 8MP ah iyo bixinta HDMI 4K ah.\n\n- 8 kanaal oo kaamirad IP ah\n- Laba meelood oo SATA ah, mid kasta ilaa 16 TB\n- Raadinta caqliga leh iyo daawasho mobile ah oo lagu maro Hik-Connect"
+    }
+  },
+  "attributes": {
+    "camera_type": "nvr",
+    "resolution_mp": 8,
+    "night_vision_m": 0,
+    "ip_or_analog": "ip",
+    "poe": "none",
+    "channels": 8,
+    "storage_included_tb": 0,
+    "outdoor": false,
+    "audio": false,
+    "ai_detection": false
+  },
+  "media": [
+    {
+      "key": "seed/products/hikvision-ds-7608ni-k2/0.webp",
+      "alt": "hikvision ds 7608ni k2",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HIK-7608NIK2-STD",
+      "options": [],
+      "priceUsdCents": 12900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 4,
+        "NBO": 2
+      }
+    }
+  ]
+}

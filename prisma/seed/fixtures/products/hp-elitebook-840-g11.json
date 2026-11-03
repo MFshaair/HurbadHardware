@@ -1,0 +1,79 @@
+{
+  "slug": "hp-elitebook-840-g11",
+  "sku": "HP-EB840G11",
+  "name": "HP EliteBook 840 G11",
+  "brand": "hp",
+  "category": "business-laptops",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "elitebook business laptop intel core ultra 14 inch",
+  "publishedDaysAgo": 40,
+  "translations": {
+    "en": {
+      "name": "HP EliteBook 840 G11",
+      "shortDescription": "14\" business laptop, Intel Core Ultra 7, 16 GB RAM, 512 GB SSD, 3-year warranty.",
+      "description": "## HP EliteBook 840 G11\n\nA 14-inch business notebook built for daily travel: aluminium chassis, 1.36 kg, spill-resistant backlit keyboard and a 5 MP camera with privacy shutter.\n\n- Intel Core Ultra 7 155U\n- 16 GB or 32 GB LPDDR5 memory\n- 512 GB or 1 TB NVMe SSD\n- Thunderbolt 4, HDMI 2.1, Wi-Fi 6E\n\nIncludes a three-year official HP warranty."
+    },
+    "so": {
+      "name": "HP EliteBook 840 G11",
+      "shortDescription": "Laptop ganacsi 14\", Intel Core Ultra 7, 16 GB RAM, 512 GB SSD, dammaanad 3 sano ah.",
+      "description": "## HP EliteBook 840 G11\n\nLaptop ganacsi oo 14 inch ah oo loogu talagalay socdaal maalinle: jidh aluminium ah, 1.36 kg, kiiboodh iftiin leh oo biyo iska celiya iyo kaamiro 5 MP oo dabool leh.\n\n- Intel Core Ultra 7 155U\n- Xusuus 16 GB ama 32 GB LPDDR5\n- Kayd 512 GB ama 1 TB NVMe SSD\n- Thunderbolt 4, HDMI 2.1, Wi-Fi 6E\n\nWaxaa la socda dammaanad rasmi ah oo HP oo saddex sano ah."
+    }
+  },
+  "attributes": {
+    "os": "windows",
+    "cpu_brand": "intel",
+    "cpu_model": "Core Ultra 7 155U",
+    "ram": "16gb",
+    "ram_upgradeable": false,
+    "storage": "512gb",
+    "storage_type": "ssd",
+    "gpu": "Intel Graphics",
+    "gpu_type": "integrated",
+    "screen_size": 14,
+    "resolution": "fhd",
+    "refresh_rate": "60hz",
+    "touchscreen": false,
+    "weight_kg": 1.36,
+    "battery_wh": 56,
+    "keyboard_backlit": true,
+    "ports": "2× Thunderbolt 4, 2× USB-A, HDMI 2.1"
+  },
+  "media": [
+    {
+      "key": "seed/products/hp-elitebook-840-g11/open.webp",
+      "alt": "HP EliteBook 840 G11 open",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HP-EB840-16-512",
+      "options": [
+        { "key": "ram", "value": "16gb", "labelEn": "16 GB", "labelSo": "16 GB" },
+        { "key": "storage", "value": "512gb", "labelEn": "512 GB", "labelSo": "512 GB" }
+      ],
+      "priceUsdCents": 139900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": { "MGQ": 6, "NBO": 6 }
+    },
+    {
+      "sku": "HP-EB840-32-1TB",
+      "options": [
+        { "key": "ram", "value": "32gb", "labelEn": "32 GB", "labelSo": "32 GB" },
+        { "key": "storage", "value": "1tb", "labelEn": "1 TB", "labelSo": "1 TB" }
+      ],
+      "priceUsdCents": 179900,
+      "compareAtUsdCents": null,
+      "isDefault": false,
+      "position": 1,
+      "stock": { "MGQ": 2, "NBO": 1 }
+    }
+  ]
+}

@@ -1,0 +1,217 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/sora';
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+/*
+ * Not in 14-design-integration.md §2's own listing, but required regardless: next-themes
+ * (Task 17's ThemeProvider) toggles a `.dark` class on <html>, and Tailwind v4's `dark:` variant
+ * targets `prefers-color-scheme` unless told otherwise — this is what wires the two together.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: 'Sora Variable', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: 'DM Sans Variable', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, Menlo, monospace;
+
+  /* brand */
+  --color-primary: #ff7417;
+  --color-primary-press: #d95f0e;
+  --color-primary-deep: #b84d05;
+  --color-primary-soft: #ffe8d6;
+  --color-primary-tint: #fff4eb;
+  --color-on-primary: #1a0c02;
+
+  /* ink (light canvas) */
+  --color-ink: #0f0f10;
+  --color-ink-2: #3d3d42;
+  --color-ink-3: #6f6f78;
+  --color-ink-4: #a2a2aa;
+
+  /* on night */
+  --color-on-dark: #f7f5f0;
+  --color-on-dark-2: #b9b6ad;
+  --color-on-dark-3: #7d7b74;
+
+  /* canvases */
+  --color-night: #0a0a0b;
+  --color-night-2: #141416;
+  --color-night-3: #1d1d21;
+  --color-cream: #fbfaf6;
+  --color-soft: #f4f2ec;
+  --color-light: #ffffff;
+  --color-hairline: #e6e3db;
+  --color-hairline-2: #d6d2c7;
+  --color-hairline-dark: #26262b;
+  --color-hairline-dark-2: #333339;
+
+  /* semantic */
+  --color-success: #157347;
+  --color-success-soft: #d7f5e3;
+  --color-warning: #9a5b00;
+  --color-warning-soft: #fff0c2;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fde3e1;
+  --color-info: #1f4fbf;
+  --color-info-soft: #e3ebfb;
+  --color-whatsapp: #25d366;
+  --color-mpesa: #3cb44b;
+  --color-evc: #1a9bd7;
+
+  /* radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-pill: 9999px;
+
+  /* shadows */
+  --shadow-1: 0 1px 2px rgb(15 15 16 / 0.06), 0 4px 12px rgb(15 15 16 / 0.06);
+  --shadow-2:
+    0 8px 8px rgb(0 0 0 / 0.06), 0 4px 4px rgb(0 0 0 / 0.06), 0 2px 2px rgb(0 0 0 / 0.06),
+    0 0 0 1px rgb(0 0 0 / 0.06);
+  --shadow-3: 0 25px 50px -12px rgb(15 15 16 / 0.25);
+  --shadow-sheen: inset 0 1px 0 rgb(255 255 255 / 0.05);
+
+  /* type scale (size / line-height / tracking) — used via utilities below */
+  --text-display-xxl: 88px;
+  --text-display-xxl--line-height: 1;
+  --text-display-xxl--letter-spacing: -2.6px;
+  --text-display-xl: 64px;
+  --text-display-xl--line-height: 1.02;
+  --text-display-xl--letter-spacing: -1.9px;
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 1.08;
+  --text-display-lg--letter-spacing: -1.2px;
+  --text-display-md: 36px;
+  --text-display-md--line-height: 1.12;
+  --text-display-md--letter-spacing: -0.7px;
+  --text-heading-xl: 28px;
+  --text-heading-xl--line-height: 1.2;
+  --text-heading-xl--letter-spacing: -0.4px;
+  --text-heading-lg: 22px;
+  --text-heading-lg--line-height: 1.25;
+  --text-heading-lg--letter-spacing: -0.2px;
+  --text-heading-md: 18px;
+  --text-heading-md--line-height: 1.3;
+  --text-price-lg: 32px;
+  --text-price-lg--line-height: 1;
+  --text-price-lg--letter-spacing: -0.6px;
+  --text-price-md: 20px;
+  --text-price-md--line-height: 1;
+  --text-price-md--letter-spacing: -0.2px;
+  --text-body-lg: 18px;
+  --text-body-lg--line-height: 1.55;
+  --text-body-md: 15px;
+  --text-body-md--line-height: 1.5;
+  --text-tabular: 14px;
+  --text-tabular--line-height: 1.4;
+  --text-tabular--letter-spacing: -0.2px;
+  --text-caption: 13px;
+  --text-caption--line-height: 1.45;
+  --text-micro: 12px;
+  --text-micro--line-height: 1.4;
+  --text-micro--letter-spacing: 0.1px;
+  --text-eyebrow: 12px;
+  --text-eyebrow--line-height: 1.2;
+  --text-eyebrow--letter-spacing: 1.4px;
+}
+
+/* shadcn semantic aliases — light (cream) canvas */
+:root {
+  --background: var(--color-cream);
+  --foreground: var(--color-ink);
+  --card: var(--color-light);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-light);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-on-primary);
+  --secondary: var(--color-ink);
+  --secondary-foreground: var(--color-on-dark);
+  --muted: var(--color-soft);
+  --muted-foreground: var(--color-ink-3);
+  --accent: var(--color-primary-tint);
+  --accent-foreground: var(--color-primary-deep);
+  --destructive: var(--color-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--color-hairline);
+  --input: var(--color-hairline-2);
+  --ring: var(--color-primary);
+  --radius: var(--radius-md);
+}
+/* Dark mode (M10) = the night canvas */
+.dark {
+  --background: var(--color-night);
+  --foreground: var(--color-on-dark);
+  --card: var(--color-night-2);
+  --card-foreground: var(--color-on-dark);
+  --popover: var(--color-night-2);
+  --popover-foreground: var(--color-on-dark);
+  --secondary: var(--color-on-dark);
+  --secondary-foreground: var(--color-night);
+  --muted: var(--color-night-3);
+  --muted-foreground: var(--color-on-dark-2);
+  --accent: var(--color-night-3);
+  --accent-foreground: var(--color-on-dark);
+  --border: var(--color-hairline-dark);
+  --input: var(--color-hairline-dark-2);
+}
+
+/*
+ * Not in 14-design-integration.md §2's own listing either: the block above defines the shadcn
+ * aliases as plain custom properties, but Tailwind v4 only generates a utility like `bg-card` or
+ * `text-muted-foreground` from a `--color-*` name registered inside `@theme`. Without this bridge,
+ * every shadcn/ui primitive from Task 17 that wasn't hand-edited (card, dialog, popover, …) renders
+ * with classes Tailwind doesn't recognize. `--color-primary`/`--color-on-primary` etc. are already
+ * registered above and are deliberately not re-bridged here to avoid a circular var() reference.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+  }
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 300;
+  }
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+  .eyebrow {
+    font-size: var(--text-eyebrow);
+    line-height: var(--text-eyebrow--line-height);
+    letter-spacing: var(--text-eyebrow--letter-spacing);
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+}

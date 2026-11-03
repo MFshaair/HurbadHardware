@@ -1,0 +1,30 @@
+[
+  {
+    "slug": "privacy",
+    "titleEn": "Privacy Policy",
+    "titleSo": "Siyaasadda Sirta",
+    "bodyEn": "## What we collect\n\nWe collect the information you give us when you create an account, place an order, or contact support: your name, phone number, email, delivery address, and order history. We never sell your data to third parties.\n\n## How we use it\n\nWe use your information to process orders, send delivery and payment updates by WhatsApp, SMS or email, and to improve our catalog and recommendations. Payment details are handled directly by our payment providers (WaafiPay, Safaricom, Telebirr, Stripe) and are never stored on our servers.\n\n## Your rights\n\nYou can request a copy of your data, ask us to correct it, or request account deletion at any time from your account settings or by contacting us on WhatsApp.",
+    "bodySo": "## Waxa aan ururino\n\nWaxaan ururinaa macluumaadka aad noo siiso marka aad abuurto akoon, aad dalbato alaab, ama aad nala soo xiriirto: magacaaga, lambarka taleefankaaga, email-kaaga, cinwaanka gaarsiinta, iyo taariikhda dalabyadaada. Weligeen ma iibinno xogtaada dad saddexaad ah.\n\n## Sida aan u isticmaalno\n\nWaxaan isticmaalnaa macluumaadkaaga si aan u habayno dalabyada, u soo dirno cusbooneysiinta gaarsiinta iyo lacag bixinta WhatsApp, SMS ama email, iyo si aan u hagaajino alaabta iyo talo bixinta. Faahfaahinta lacag bixinta waxaa si toos ah u maareeya bixiyeyaasha lacag bixinta (WaafiPay, Safaricom, Telebirr, Stripe) oo aan weligeen ku kaydinin server-yadeena.\n\n## Xuquuqdaada\n\nWaxaad codsan kartaa nuqul xogtaada ah, inaan sixno, ama inaan tirtirno akoonkaaga goor kasta oo aad doonto, taasoo aad ka samayn karto dejinta akoonkaaga ama adiga oo nala soo xiriira WhatsApp."
+  },
+  {
+    "slug": "terms",
+    "titleEn": "Terms and Conditions",
+    "titleSo": "Shuruudaha iyo Xaaladaha",
+    "bodyEn": "## Orders and pricing\n\nAll prices are shown in your selected display currency and are converted from our canonical USD prices at checkout. Prices, stock and promotions can change at any time before an order is confirmed.\n\n## Payment and delivery\n\nWe accept EVC Plus, eDahab, M-Pesa, Telebirr, major cards and cash on delivery where available. Delivery times shown at checkout are estimates based on your city and chosen delivery zone.\n\n## Warranty and returns\n\nEvery product page states its warranty period and whether it carries an official manufacturer warranty. See our Warranty page for full terms.",
+    "bodySo": "## Dalabka iyo Qiimaha\n\nQiimaha oo dhammi waxaa lagu muujiyaa lacagta aad dooratay oo laga soo beddelay qiimaha aasaasiga ah ee USD marka la dalbanayo. Qiimaha, keydka iyo dallacaadaha waxaa laga bedeli karaa wakhti kasta ka hor inta dalabku la xaqiijin.\n\n## Lacag bixinta iyo Gaarsiinta\n\nWaxaan aqbalnaa EVC Plus, eDahab, M-Pesa, Telebirr, kaadhadhka waaweyn iyo lacag marka la keeno meelaha ay suurtogal tahay. Waqtiga gaarsiinta ee lagu muujiyay marka la dalbanayo waa qiyaas ku salaysan magaaladaada iyo aagga gaarsiinta ee aad dooratay.\n\n## Dammaanad iyo Celinta\n\nBog kasta oo alaab ah wuxuu sheegayaa muddada dammaanadda iyo in ay sidoo kale haysato dammaanad rasmi ah oo warshada. Fiiri boggayaga Dammaanadda si aad u aragto shuruudaha buuxa."
+  },
+  {
+    "slug": "warranty",
+    "titleEn": "Warranty",
+    "titleSo": "Dammaanadda",
+    "bodyEn": "## Official manufacturer warranty\n\nProducts marked with an official warranty badge are covered directly by the brand's East Africa service network. The warranty period is shown on every product page and on your order confirmation.\n\n## What is covered\n\nManufacturing defects, hardware failures under normal use, and battery defects within the first six months are covered. Physical damage, water damage and unauthorised repairs void the warranty.\n\n## How to claim\n\nContact us on WhatsApp with your order number and a description of the fault. We will arrange a free diagnostic check and, if covered, a repair or replacement at no cost.",
+    "bodySo": "## Dammaanadda Rasmiga ah ee Warshada\n\nAlaabta leh sumadda dammaanadda rasmiga ah waxaa si toos ah u daboolaya shabakadda adeegga ee sumadda ka socota Bariga Afrika. Muddada dammaanadda waxaa lagu muujiyaa bog kasta oo alaab ah iyo xaqiijinta dalabkaaga.\n\n## Waxa ay Daboshaa\n\nCilladaha wax soo saarka, khaladaadka qalabka marka si caadi ah loo isticmaalo, iyo cilladaha baytariga lixda bilood ee ugu horreeya ayaa la daboolaa. Dhaawac jireed, dhaawac biyo iyo dayactir aan la ogolayn ayaa dammaanadda buriya.\n\n## Sida Loo Codsado\n\nNala soo xiriir WhatsApp adiga oo wata lambarka dalabkaaga iyo sharaxaad ku saabsan cilladda. Waxaan diyaarin doonaa hubin bilaash ah, haddiise la daboolo, dayactir ama beddelid lacag la'aan ah."
+  },
+  {
+    "slug": "shipping",
+    "titleEn": "Shipping and Delivery",
+    "titleSo": "Gaarsiinta iyo Rarka",
+    "bodyEn": "## Delivery zones\n\nWe deliver to major cities across Somalia, Kenya, Ethiopia, Djibouti and Uganda. Delivery fees and estimated times depend on your city and are shown at checkout before you pay.\n\n## Pickup locations\n\nYou can collect your order for free at our Mogadishu, Nairobi or Kampala stores during opening hours shown on each store's page.\n\n## Free delivery\n\nOrders above the free-shipping threshold in capital cities qualify for free delivery automatically — no code needed.",
+    "bodySo": "## Aagagga Gaarsiinta\n\nWaxaan gaarsiinaa magaalooyinka waaweyn ee Soomaaliya, Kenya, Itoobiya, Jabuuti iyo Uganda. Kharashka gaarsiinta iyo waqtiga qiyaasta ah waxay ku xirantahay magaaladaada waxaana lagu muujiyaa marka la dalbanayo ka hor inta aan la bixin.\n\n## Meelaha Qaadashada\n\nWaxaad ka qaadan kartaa dalabkaaga bilaash ah dukaamadayada Muqdisho, Nayroobi ama Kampala intii lagu jiro saacadaha furitaanka ee bog kasta oo dukaanka lagu muujiyay.\n\n## Gaarsiin Bilaash ah\n\nDalabyada ka sareeya heerka gaarsiinta bilaashka ah ee magaalooyinka caasimadda ah ayaa si otomaatig ah u heli kara gaarsiin bilaash ah — koodh looma baahna."
+  }
+]

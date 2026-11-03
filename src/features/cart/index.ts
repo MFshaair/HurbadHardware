@@ -1,0 +1,1 @@
+export { mergeGuestCartIntoUser } from './merge';

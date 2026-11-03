@@ -1,0 +1,43 @@
+[
+  {
+    "code": "MGQ",
+    "name": "Mogadishu Store",
+    "country": "SO",
+    "city": "Mogadishu",
+    "isPickupLocation": true,
+    "pickupAddress": "Maka Al Mukarama Road, Hodan, Mogadishu",
+    "pickupHours": "Sat–Thu 08:00–20:00"
+  },
+  {
+    "code": "NBO",
+    "name": "Nairobi Store",
+    "country": "KE",
+    "city": "Nairobi",
+    "isPickupLocation": true,
+    "pickupAddress": "Moi Avenue, Nairobi CBD",
+    "pickupHours": "Mon–Sat 09:00–18:00"
+  },
+  {
+    "code": "ADD",
+    "name": "Addis Ababa Warehouse",
+    "country": "ET",
+    "city": "Addis Ababa",
+    "isPickupLocation": false
+  },
+  {
+    "code": "JIB",
+    "name": "Djibouti Warehouse",
+    "country": "DJ",
+    "city": "Djibouti City",
+    "isPickupLocation": false
+  },
+  {
+    "code": "KLA",
+    "name": "Kampala Store",
+    "country": "UG",
+    "city": "Kampala",
+    "isPickupLocation": true,
+    "pickupAddress": "Kampala Road, Kampala",
+    "pickupHours": "Mon–Sat 09:00–19:00"
+  }
+]

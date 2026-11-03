@@ -1,0 +1,58 @@
+{
+  "slug": "tp-link-eap225",
+  "sku": "TPL-EAP225",
+  "name": "TP-Link EAP225 Access Point",
+  "brand": "tp-link",
+  "category": "access-points",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "tp-link eap225 access point ac1350",
+  "publishedDaysAgo": 90,
+  "translations": {
+    "en": {
+      "name": "TP-Link EAP225 Access Point",
+      "shortDescription": "AC1350 ceiling-mount access point with Omada SDN support.",
+      "description": "## TP-Link EAP225\n\nAn AC1350 dual-band access point designed for ceiling mounting in offices, shops and hotels.\n\n- Dual-band 802.11ac, up to 1350 Mbps combined\n- Free Omada software-defined networking controller\n- 802.3af PoE powered"
+    },
+    "so": {
+      "name": "TP-Link EAP225 Access Point",
+      "shortDescription": "Access point AC1350 ah oo dusha saabka lagu rako, taageerta Omada SDN.",
+      "description": "## TP-Link EAP225\n\nAccess point AC1350 laba-baanto ah, loogu talagalay saabka xafiisyada, dukaamada iyo hudheellada.\n\n- Laba-baanto 802.11ac, ilaa 1350 Mbps\n- Controller bilaash ah oo Omada ah\n- Waxaa lagu shaqaysiiyaa PoE 802.3af"
+    }
+  },
+  "attributes": {
+    "device_type": "access-point",
+    "wifi_standard": "wifi5",
+    "max_speed_mbps": 1350,
+    "ports_count": 1,
+    "port_speed": "1g",
+    "poe": "poe",
+    "managed": true,
+    "mesh": false
+  },
+  "media": [
+    {
+      "key": "seed/products/tp-link-eap225/0.webp",
+      "alt": "tp link eap225",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "TPL-EAP225-STD",
+      "options": [],
+      "priceUsdCents": 0,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 0,
+        "NBO": 0
+      }
+    }
+  ]
+}

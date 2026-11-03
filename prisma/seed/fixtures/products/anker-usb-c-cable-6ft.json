@@ -1,0 +1,55 @@
+{
+  "slug": "anker-usb-c-cable-6ft",
+  "sku": "ANK-CABLE6FT",
+  "name": "Anker USB-C to USB-C Cable (1.8m)",
+  "brand": "anker",
+  "category": "chargers-cables",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "anker usb-c cable braided 1.8m",
+  "publishedDaysAgo": 110,
+  "translations": {
+    "en": {
+      "name": "Anker USB-C to USB-C Cable (1.8m)",
+      "shortDescription": "Durable braided USB-C to USB-C cable, 1.8 metres.",
+      "description": "## Anker USB-C to USB-C Cable\n\nA braided nylon cable rated for 100W charging and fast data transfer, built to survive daily use.\n\n- 1.8 m length\n- 100W charging support\n- 480 Mbps data transfer"
+    },
+    "so": {
+      "name": "Anker USB-C to USB-C Cable (1.8m)",
+      "shortDescription": "Fiilo USB-C ah oo adag, 1.8 mitir dherer ah.",
+      "description": "## Anker USB-C to USB-C Cable\n\nFiilo dun ah oo adag, loogu talagalay chaajin ilaa 100W ah iyo wareejin xog oo degdeg ah, loo dhisay si uu u adkaysto isticmaal maalinle ah.\n\n- Dherer 1.8 m ah\n- Taageerta chaajinta 100W\n- Wareejinta xogta 480 Mbps"
+    }
+  },
+  "attributes": {
+    "accessory_type": "cable",
+    "compatibility": "Any USB-C device",
+    "wattage_w": 100,
+    "connector": ["usb-c"],
+    "wireless": false
+  },
+  "media": [
+    {
+      "key": "seed/products/anker-usb-c-cable-6ft/0.webp",
+      "alt": "anker usb c cable 6ft",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "ANK-CABLE6FT-STD",
+      "options": [],
+      "priceUsdCents": 1200,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 60,
+        "NBO": 35
+      }
+    }
+  ]
+}

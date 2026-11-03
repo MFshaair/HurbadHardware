@@ -1,0 +1,74 @@
+{
+  "slug": "lenovo-thinkpad-e14",
+  "sku": "LEN-TPE14",
+  "name": "Lenovo ThinkPad E14",
+  "brand": "lenovo",
+  "category": "business-laptops",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "lenovo thinkpad e14 business laptop",
+  "publishedDaysAgo": 65,
+  "translations": {
+    "en": {
+      "name": "Lenovo ThinkPad E14",
+      "shortDescription": "14\" business laptop, Intel Core i5, 8 GB RAM, durable ThinkPad build.",
+      "description": "## Lenovo ThinkPad E14\n\nA reliable 14-inch business laptop with the legendary ThinkPad keyboard and MIL-SPEC durability testing.\n\n- Intel Core i5-1335U\n- 8 GB or 16 GB RAM\n- 512 GB NVMe SSD\n- TrackPoint and spill-resistant keyboard"
+    },
+    "so": {
+      "name": "Lenovo ThinkPad E14",
+      "shortDescription": "Laptop ganacsi 14\" ah, Intel Core i5, 8 GB RAM, dhismo adag oo ThinkPad ah.",
+      "description": "## Lenovo ThinkPad E14\n\nLaptop ganacsi oo la isku halleyn karo oo 14 inch ah, leh kiiboodhka caanka ah ee ThinkPad iyo tijaabo adkaysi heer MIL-SPEC ah.\n\n- Intel Core i5-1335U\n- 8 GB ama 16 GB RAM\n- 512 GB NVMe SSD\n- TrackPoint iyo kiiboodh biyo iska celiya"
+    }
+  },
+  "attributes": {
+    "os": "windows",
+    "cpu_brand": "intel",
+    "cpu_model": "Core i5-1335U",
+    "ram": "8gb",
+    "ram_upgradeable": true,
+    "storage": "512gb",
+    "storage_type": "ssd",
+    "gpu": "Intel Iris Xe Graphics",
+    "gpu_type": "integrated",
+    "screen_size": 14,
+    "resolution": "fhd",
+    "refresh_rate": "60hz",
+    "touchscreen": false,
+    "weight_kg": 1.59,
+    "battery_wh": 45,
+    "keyboard_backlit": false,
+    "ports": "1× USB-C, 2× USB-A, HDMI, Ethernet"
+  },
+  "media": [
+    {
+      "key": "seed/products/lenovo-thinkpad-e14/0.webp",
+      "alt": "lenovo thinkpad e14",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "LEN-TPE14-8-512",
+      "options": [
+        {
+          "key": "ram",
+          "value": "8gb",
+          "labelEn": "8 GB",
+          "labelSo": "8 GB"
+        }
+      ],
+      "priceUsdCents": 69900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 7,
+        "NBO": 4
+      }
+    }
+  ]
+}

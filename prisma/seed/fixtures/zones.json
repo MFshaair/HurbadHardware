@@ -1,0 +1,145 @@
+[
+  {
+    "country": "SO",
+    "city": "Mogadishu",
+    "nameEn": "Mogadishu",
+    "nameSo": "Muqdisho",
+    "feeUsdCents": 300,
+    "freeShippingThresholdUsdCents": 50000,
+    "codEnabled": true,
+    "etaMinDays": 1,
+    "etaMaxDays": 2
+  },
+  {
+    "country": "SO",
+    "city": "Hargeisa",
+    "nameEn": "Hargeisa",
+    "nameSo": "Hargeysa",
+    "feeUsdCents": 800,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 2,
+    "etaMaxDays": 5
+  },
+  {
+    "country": "SO",
+    "city": "Bosaso",
+    "nameEn": "Bosaso",
+    "nameSo": "Boosaaso",
+    "feeUsdCents": 1000,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 3,
+    "etaMaxDays": 6
+  },
+  {
+    "country": "SO",
+    "city": "Garowe",
+    "nameEn": "Garowe",
+    "nameSo": "Garoowe",
+    "feeUsdCents": 1000,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 3,
+    "etaMaxDays": 6
+  },
+  {
+    "country": "SO",
+    "city": "Kismayo",
+    "nameEn": "Kismayo",
+    "nameSo": "Kismaayo",
+    "feeUsdCents": 1200,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 3,
+    "etaMaxDays": 7
+  },
+  {
+    "country": "KE",
+    "city": "Nairobi",
+    "nameEn": "Nairobi",
+    "nameSo": "Nayroobi",
+    "feeUsdCents": 300,
+    "freeShippingThresholdUsdCents": 50000,
+    "codEnabled": true,
+    "etaMinDays": 1,
+    "etaMaxDays": 2
+  },
+  {
+    "country": "KE",
+    "city": "Mombasa",
+    "nameEn": "Mombasa",
+    "nameSo": "Mombasa",
+    "feeUsdCents": 700,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 2,
+    "etaMaxDays": 4
+  },
+  {
+    "country": "KE",
+    "city": "Kisumu",
+    "nameEn": "Kisumu",
+    "nameSo": "Kisumu",
+    "feeUsdCents": 800,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 2,
+    "etaMaxDays": 5
+  },
+  {
+    "country": "ET",
+    "city": "Addis Ababa",
+    "nameEn": "Addis Ababa",
+    "nameSo": "Addis Ababa",
+    "feeUsdCents": 400,
+    "freeShippingThresholdUsdCents": 50000,
+    "codEnabled": false,
+    "etaMinDays": 1,
+    "etaMaxDays": 3
+  },
+  {
+    "country": "ET",
+    "city": "Dire Dawa",
+    "nameEn": "Dire Dawa",
+    "nameSo": "Dire Dawa",
+    "feeUsdCents": 900,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 2,
+    "etaMaxDays": 5
+  },
+  {
+    "country": "DJ",
+    "city": "Djibouti City",
+    "nameEn": "Djibouti City",
+    "nameSo": "Magaalada Jabuuti",
+    "feeUsdCents": 400,
+    "freeShippingThresholdUsdCents": 50000,
+    "codEnabled": true,
+    "etaMinDays": 1,
+    "etaMaxDays": 3
+  },
+  {
+    "country": "UG",
+    "city": "Kampala",
+    "nameEn": "Kampala",
+    "nameSo": "Kampala",
+    "feeUsdCents": 400,
+    "freeShippingThresholdUsdCents": 50000,
+    "codEnabled": true,
+    "etaMinDays": 1,
+    "etaMaxDays": 3
+  },
+  {
+    "country": "UG",
+    "city": "Entebbe",
+    "nameEn": "Entebbe",
+    "nameSo": "Entebbe",
+    "feeUsdCents": 600,
+    "freeShippingThresholdUsdCents": null,
+    "codEnabled": false,
+    "etaMinDays": 2,
+    "etaMaxDays": 4
+  }
+]

@@ -1,0 +1,320 @@
+{
+  "phase": 7,
+  "name": "Phase 7 \u2014 Hardening and Launch",
+  "source": "docs/plans/phase-07-hardening-launch.md",
+  "tasks": [
+    {
+      "number": 1,
+      "title": "Re-read the rules, verify prerequisites, add the phase scripts",
+      "scope": "**Files:**\n- Create: `tests/unit/phase7-prereqs.test.ts`\n- Modify: `package.json`\n\n**Interfaces:**\n- Consumes: everything in the Prerequisites table.\n- Produces: `pnpm check:secrets`, `pnpm check:sql`, `pnpm check:audit`, `pnpm check:ssrf`, `pnpm security:all`, `pnpm ops:reconcile`, `pnpm verify:vercel`, `pnpm verify:monitoring`, `pnpm test:e2e:matrix` (scripts registered now, implemented in the tasks that own them; each script file is created in its own task, so `security:all` only becomes runnable at Task 11).",
+      "steps": [
+        "Step 1: Re-read `docs/README.md` \"Rules for the implementing model\" and `docs/plans/00-phases.md` \"Cross-phase rules\". Then write the prerequisite test:",
+        "Step 2: Run `pnpm vitest run tests/unit/phase7-prereqs.test.ts --project unit`. Expected: all green. If any row fails, STOP and report the exact missing prerequisite (file path or exported name) to the user; do not continue to Task 2 and do not create the missing artefact here.",
+        "Step 3: Add the phase scripts to `package.json` (keep every existing script unchanged):",
+        "Step 4: Run `pnpm typecheck && pnpm lint && pnpm test:unit`. Expected: pass (the new scripts are not executed yet).",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 2,
+      "title": "IDOR negative suite",
+      "scope": "Checklist item: *\"No IDOR: every order/address/review access checks ownership (tests exist for negative cases).\"*\n\n**Files:**\n- Create: `tests/integration/security/ctx.ts`, `tests/integration/security/idor.test.ts`\n- Test: the file above\n\n**Interfaces:**\n- Consumes: `createUser`, `createProduct`, `createOrder` (`tests/fixtures/factories.ts`); `truncateAll` (`tests/integration/truncate.ts`); actions `getOrder`, `cancelMyOrder`, `listAddresses`, `upsertAddress`, `deleteAddress`, `setDefaultAddress`, `voteReviewHelpful`, `toggleWishlist`, `getWishlist`, `adminGetOrder`, `adminTransitionOrder`, `adminAdjustStock`, `adminListCustomers`, `adminSetUserRole`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the harness and the failing test.",
+        "Step 2: Run `pnpm vitest run tests/integration/security/idor.test.ts --project integration`. Expected failure on the first run: either an import error for an action path that Phases 3\u20135 placed elsewhere, or a genuine denial that returns `INTERNAL` instead of `FORBIDDEN`.",
+        "Step 3: Fix, in this order:",
+        "Step 4: Run `pnpm vitest run tests/integration/security/idor.test.ts --project integration`. Expected: all pass. Then run the full suite once (`pnpm test:int`) to confirm no ownership predicate you added broke a happy path.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 3,
+      "title": "CSRF verification",
+      "scope": "Checklist item: *\"CSRF: Server Actions (Next.js origin check) + `sameSite=lax`; webhook routes are the only unauthenticated POSTs.\"*\n\n**Files:**\n- Create: `tests/integration/security/csrf.test.ts`\n- Modify (only if a gap is found): `src/lib/cookies.ts`, `src/lib/auth.ts`\n\n**Interfaces:**\n- Consumes: `COOKIES` from `src/lib/cookies.ts` (names and options set in Phase 0); the route file tree under `src/app/api`.\n- Produces: no runtime exports; a machine-checked inventory of unauthenticated POST endpoints.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/integration/security/csrf.test.ts --project integration`. Expected failures name the exact gap: an unexpected POST route, a webhook missing `force-dynamic`/`maxDuration`, an action not wrapped by `createAction`, or a cookie option.",
+        "Step 3: Fix each reported gap in production code (add the missing route-segment config, wrap the stray action, correct the cookie option). If an unexpected POST route is legitimate, it must be either (a) converted to a Server Action, or (b) added to `ALLOWED_UNAUTHENTICATED_POST` **with** a one-line",
+        "Step 4: Run `pnpm vitest run tests/integration/security/csrf.test.ts --project integration`. Expected: 5 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 4,
+      "title": "Markdown sanitisation against an XSS payload corpus",
+      "scope": "Checklist item: *\"XSS: Markdown sanitised; CSP nonce active; no inline event handlers.\"* (Markdown half; nonce in Task 5.)\n\n**Files:**\n- Create: `tests/unit/security/xss-payloads.ts`, `tests/unit/components/markdown-sanitise.test.tsx`\n- Modify (only if a payload escapes): `src/components/Markdown.tsx`\n\n**Interfaces:**\n- Consumes: `Markdown({ source })`.\n- Produces: `XSS_PAYLOADS: readonly { name: string; markdown: string; mustNotContain: readonly string[] }[]`.",
+      "steps": [
+        "Step 1: Write the payload corpus and the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/components/markdown-sanitise.test.tsx --project unit`. Any failing payload is a real vulnerability.",
+        "Step 3: Fix `src/components/Markdown.tsx` so every payload is neutralised. The required configuration is the GitHub schema minus raw HTML, plus a URL protocol allowlist:",
+        "Step 4: Also assert the sanitiser is the *only* HTML sink. Add to the same test file:",
+        "Step 5: Run `pnpm vitest run tests/unit/components/markdown-sanitise.test.tsx --project unit`. Expected: 20 payloads + 5 safe cases + 2 structural tests pass.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 5,
+      "title": "CSP nonce presence, header set and error-page leak (e2e)",
+      "scope": "Checklist items: *\"XSS: \u2026 CSP nonce active; no inline event handlers\"* and *\"Error pages don't leak stack traces (production `error.tsx` shows event id only).\"*\n\n**Files:**\n- Create: `tests/e2e/security.spec.ts`, `src/app/[locale]/(shop)/__boom/page.tsx` (test-only, 404 unless `PROVIDER_MODE=fake`)\n- Modify (only if a gap is found): `src/middleware.ts`, `next.config.ts`, `src/app/[locale]/(shop)/error.tsx`\n\n**Interfaces:**\n- Consumes: the running app (`pnpm start`, `PROVIDER_MODE=fake`) via Playwright's `webServer`.\n- Produces: `__boom` route used only by this spec.",
+      "steps": [
+        "Step 1: Write the failing spec.",
+        "Step 2: Add the test-only throwing route (mirrors the `__fake` guard from Phase 0):",
+        "Step 3: Run `pnpm build && pnpm test:e2e -- tests/e2e/security.spec.ts`. Expected failures point at the exact gap.",
+        "Step 4: Fix production code for each failure:",
+        "Step 5: Run `pnpm i18n:check && pnpm build && pnpm test:e2e -- tests/e2e/security.spec.ts` on both projects (`--project=desktop --project=mobile`). Expected: 9 tests \u00d7 2 projects pass.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 6,
+      "title": "SQL-injection attempts on listProducts and a raw-SQL scan",
+      "scope": "Checklist item: *\"Injection: only Prisma or `Prisma.sql` tagged templates; no string-concatenated SQL.\"*\n\n**Files:**\n- Create: `tests/integration/security/sql-injection.test.ts`, `scripts/check-sql.ts`, `tests/unit/scripts/check-sql.test.ts`\n- Modify (only if a gap is found): `src/features/catalog/queries.ts`, `src/features/search/queries.ts`\n\n**Interfaces:**\n- Consumes: `listProducts(params: ListingParams, locale, currency)`.\n- Produces: `checkSql(root: string): SqlFinding[]` and a CLI exiting 1 on findings.",
+      "steps": [
+        "Step 1: Write the failing integration test.",
+        "Step 2: Run `pnpm vitest run tests/integration/security/sql-injection.test.ts --project integration`. A failure here means real interpolation. Fix by converting the offending query to a `Prisma.sql` tagged template with `${value}` placeholders (Prisma parameterises them), `Prisma.join` for `IN` list",
+        "Step 3: Write the failing scan-script test.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/check-sql.test.ts --project unit`. Expected: `Cannot find module '../../../scripts/check-sql'`.",
+        "Step 5: Implement the scanner with the TypeScript compiler API.",
+        "Step 6: Run `pnpm vitest run tests/unit/scripts/check-sql.test.ts --project unit && pnpm check:sql`. Expected: 6 tests pass and `check:sql OK`. If `check:sql` reports findings in real code, fix the code (Step 2's shapes), never the scanner.",
+        "Step 7: Commit:"
+      ]
+    },
+    {
+      "number": 7,
+      "title": "OTP brute-force test",
+      "scope": "Checklist item: *\"Auth brute force: OTP limits verified by test.\"*\n\n**Files:**\n- Create: `tests/integration/security/otp-bruteforce.test.ts`\n- Modify (only if a gap is found): `src/features/auth/otp.ts`, `src/features/auth/actions.ts`, `src/lib/ratelimit.ts`\n\n**Interfaces:**\n- Consumes: `requestOtp` action; `verifyOtp(phone, code)` and `otpRedisKey(phone)` from `src/features/auth/otp.ts`; `kv` from `src/lib/redis.ts`; `callAsUser`/`expectDenied` from Task 2.\n- Produces: none.",
+      "steps": [
+        "Step 1: Write the failing test \u2014 it exercises every limit in `11-security.md \u00a71` and `\u00a74`.",
+        "Step 2: Run `pnpm vitest run tests/integration/security/otp-bruteforce.test.ts --project integration`. Any failure is a real gap.",
+        "Step 3: Fix the OTP path so `requestOtp` runs, in this exact order: `verifyHuman(token, ctx.ip)` \u2192 `checkRateLimit('otp:ip', ctx.ip)` \u2192 `checkRateLimit('otp:phone', phone)` \u2192 cooldown check (`OTP_RESEND_TOO_SOON`) \u2192 generate with `crypto.randomInt(0, 1_000_000)` zero-padded to 6 \u2192 store `{ hash: sha",
+        "Step 4: Run `pnpm vitest run tests/integration/security/otp-bruteforce.test.ts --project integration`. Expected: 10 tests pass.",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 8,
+      "title": "Secret grep script",
+      "scope": "Checklist item: *\"Secrets: `git secrets`-style grep in CI for `sk_`, `SG.`, `-----BEGIN`.\"*\n\n**Files:**\n- Create: `scripts/check-secrets.ts`, `tests/unit/scripts/check-secrets.test.ts`\n- Modify: `.github/workflows/ci.yml`\n\n**Interfaces:**\n- Produces: `SECRET_PATTERNS`, `checkSecrets(root: string, files?: string[]): SecretFinding[]`, CLI exiting 1 on findings.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts/check-secrets.test.ts --project unit`. Expected: module not found.",
+        "Step 3: Implement.",
+        "Step 4: Wire it into CI. In `.github/workflows/ci.yml`, in the `static` job:",
+        "Step 5: Run `pnpm vitest run tests/unit/scripts/check-secrets.test.ts --project unit && pnpm check:secrets`. Expected: 9 tests pass and `check:secrets OK`. If it finds something real: **rotate the credential first**, then remove it from the file, then from git history (`git filter-repo`), and record",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 9,
+      "title": "Audit reflection \u2014 every admin action sets audit",
+      "scope": "Checklist item: *\"Admin actions audited.\"*\n\n**Files:**\n- Create: `scripts/check-audit.ts`, `tests/unit/scripts/check-audit.test.ts`, `tests/integration/security/audit-writes.test.ts`\n- Modify: `.github/workflows/ci.yml`\n\n**Interfaces:**\n- Produces: `checkAudit(root: string): AuditFinding[]`, `READ_ONLY_ALLOWLIST`. An offender is any `createAction({ \u2026 })` with `auth` in `staff|manager|admin` and no `audit` property, or any `admin*`-named action without `audit`.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/scripts/check-audit.test.ts --project unit`. Expected: module not found.",
+        "Step 3: Implement.",
+        "Step 4: Run `pnpm check:audit`. Every finding is a real gap: add `audit: { entityType, action, entityId }` to the action and make its handler call `ctx.audit.setBefore(...)` / `ctx.audit.setAfter(...)` (`09-admin.md \u00a73`; status changes log `{ from, to, note }`). Add a name to `READ_ONLY_ALLOWLIST` o",
+        "Step 5: Add the runtime companion test \u2014 a static check alone can be satisfied by a misconfigured `audit`.",
+        "Step 6: Run `pnpm check:audit && pnpm vitest run tests/unit/scripts/check-audit.test.ts --project unit && pnpm vitest run tests/integration/security/audit-writes.test.ts --project integration`. Add `pnpm check:audit` to the `static` CI job next to `check:secrets`.",
+        "Step 7: Commit:"
+      ]
+    },
+    {
+      "number": 10,
+      "title": "SSRF scan and BotID coverage",
+      "scope": "Checklist items: *\"SSRF: no user-supplied URLs fetched server-side\"* and *\"BotID verified server-side with `remoteip`.\"*\n\n**Files:**\n- Create: `scripts/check-ssrf.ts`, `tests/unit/scripts/check-ssrf.test.ts`, `tests/integration/security/turnstile-coverage.test.ts`\n- Modify: `.github/workflows/ci.yml`\n\n**Interfaces:**\n- Produces: `checkSsrf(root: string): SsrfFinding[]` \u2014 flags a request target that is not a literal, a same-origin path, an `env`-derived template, or a module-level constant.",
+      "steps": [
+        "Step 1: Write the failing tests.",
+        "Step 2: Run both files. Expected: `check-ssrf` module missing; the BotID test may fail if a feature accepts a token without verifying it.",
+        "Step 3: Implement `scripts/check-ssrf.ts`.",
+        "Step 4: Run `pnpm check:ssrf`. For each finding, either bind the target to a module-level constant / `env` value, or keep the base fixed and pass the user value as an encoded query parameter. A stored carrier tracking URL is **never** fetched server-side \u2014 it is rendered as `<a href rel=\"noopener no",
+        "Step 5: Run `pnpm vitest run tests/unit/scripts/check-ssrf.test.ts --project unit && pnpm vitest run tests/integration/security/turnstile-coverage.test.ts --project integration && pnpm check:ssrf`. Expected: green. Add `pnpm check:ssrf` to the `static` CI job.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 11,
+      "title": "Dependency audit and Renovate",
+      "scope": "Spec: `11-security.md \u00a710` \u2014 *\"`pnpm audit --prod` in CI (fail on high/critical), Renovate weekly PRs, lockfile committed, `engines` pinned, `packageManager` field set.\"*\n\n**Files:**\n- Create: `renovate.json`, `tests/unit/repo-hygiene.test.ts`\n- Modify: `.github/workflows/ci.yml`, `package.json` (only if `engines`/`packageManager` are missing)\n\n**Interfaces:** configuration only.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/repo-hygiene.test.ts --project unit`. Expected: the Renovate assertions fail.",
+        "Step 3: Create `renovate.json`.",
+        "Step 4: Make sure the `static` job in `.github/workflows/ci.yml` runs all five commands, then run the audit locally:",
+        "Step 5: Run `pnpm vitest run tests/unit/repo-hygiene.test.ts --project unit && pnpm audit --prod --audit-level=high`. Expected: green.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 12,
+      "title": "Lighthouse CI with the product budget",
+      "scope": "Spec: `12-testing.md \u00a71` (LHCI on `/en`, `/en/c/smartphones`, `/en/p/<seeded-slug>`, mobile) and `01-product-spec.md \u00a76` (the budget).\n\n**Files:**\n- Modify: `.lighthouserc.json`\n- Create: `lighthouse-budgets.json`, `tests/unit/lighthouse-config.test.ts`\n- Modify: `.github/workflows/ci.yml` (`lighthouse` job)\n\n**Interfaces:**\n- Produces: `pnpm lhci` asserting the budget; `LHCI_BUILD_CONTEXT__*` / `--collect.url` overrides supplied by CI.",
+      "steps": [
+        "Step 1: Write the failing config test \u2014 the budget must be machine-checked, not eyeballed.",
+        "Step 2: Run `pnpm vitest run tests/unit/lighthouse-config.test.ts --project unit`. Expected: fails against the Phase 0 config (`warn` levels, no budgets file).",
+        "Step 3: Replace `.lighthouserc.json`.",
+        "Step 4: Update the `lighthouse` job in `.github/workflows/ci.yml` so it runs against the preview URL and blocks only on a breach greater than 10% (13 \u00a74 job 7), while `pnpm lhci` locally/at the phase gate is strict:",
+        "Step 5: Run `pnpm vitest run tests/unit/lighthouse-config.test.ts --project unit`. Expected: 4 tests pass.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Measure-fix loop until the budget is met",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/lighthouse.md`\n- Modify: whichever page/component files the measurements indict (no speculative changes)\n\n**Interfaces:** none \u2014 this task changes code only where a measurement demands it.",
+      "steps": [
+        "Step 1: Create the log with the baseline table and fill the \"before\" row from a real run.",
+        "Step 2: Run the baseline:",
+        "Step 3: Fix **one** indicted thing per round, re-measure, and record. Only these remedies are in scope (each is already sanctioned by the specs \u2014 do not introduce a new library or pattern):",
+        "Step 4: Repeat until all three URLs pass. Record every round, including the ones you reverted (they are evidence that the remaining number is real).",
+        "Step 5: Run the full local gate to prove nothing regressed: `pnpm typecheck && pnpm lint && pnpm i18n:check && pnpm test:unit && pnpm test:int`.",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Full e2e matrix and flake policy",
+      "scope": "Spec: `12-testing.md \u00a74` journeys 1\u201312 on both the desktop and mobile profiles; `13-deployment.md \u00a74` job 5 shards \u00d72.\n\n**Files:**\n- Modify: `playwright.config.ts`, `.github/workflows/ci.yml`\n- Create: `docs/testing/flake-policy.md`, `tests/e2e/matrix.spec.ts`\n- Test: `tests/unit/e2e-coverage.test.ts`\n\n**Interfaces:**\n- Produces: `pnpm test:e2e:matrix`; a machine-checked list proving every journey of `12-testing.md \u00a74` has a spec.",
+      "steps": [
+        "Step 1: Write the failing coverage test \u2014 it fails if a journey has no spec, which is the only way to prove \"full matrix\".",
+        "Step 2: Run `pnpm vitest run tests/unit/e2e-coverage.test.ts --project unit`. Expected: failures for every journey whose spec title lacks the `[Jn]` tag, plus the missing policy file.",
+        "Step 3: Tag the existing specs. Do **not** write new journeys here \u2014 Phases 1\u20136 delivered them; this task only makes the matrix legible and runnable. Rename each journey's top-level test title to carry its tag, e.g.",
+        "Step 4: Harden `playwright.config.ts` for the matrix run:",
+        "Step 5: Update the `e2e` job in `.github/workflows/ci.yml` to a sharded matrix over both projects:",
+        "Step 6: Write the flake policy.",
+        "Step 7: Run the whole matrix locally and record the result:",
+        "Step 8: Commit:"
+      ]
+    },
+    {
+      "number": 15,
+      "title": "scripts/ops-reconcile.ts and the audited adminMarkPaidManually action",
+      "scope": "Spec: `13-deployment.md \u00a79` runbook 1 \u2014 *\"run `pnpm ops:reconcile --paymentId` (script calling `reconcilePending` for one id); if provider shows success but we do not, apply manually via admin 'Mark paid (provider ref)' (ADMIN only, audited).\"*\n\n**Files:**\n- Create: `scripts/ops-reconcile.ts`, `src/components/admin/orders/MarkPaidDialog.tsx`, `tests/integration/payments/mark-paid-manually.test.ts`, `tests/unit/scripts/ops-reconcile.test.ts`\n- Modify: `src/features/payments/service.ts`, `src/features/payments/schemas.ts`, `src/features/payments/admin-actions.ts`, `src/app/admin/orders/[id]/page.tsx`, `package.json` (script added in Task 1)\n\n**Interfaces:**\n- Consumes: `reconcilePending()`, `applyProviderResult(paymentId, result, source)`, `getProvider(name)` from `src/features/payments/providers`, `transition` from `src/features/orders/service.ts`.\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing integration test.",
+        "Step 2: Run `pnpm vitest run tests/integration/payments/mark-paid-manually.test.ts --project integration`. Expected: `adminMarkPaidManually` does not exist.",
+        "Step 3: Implement the service, schema and action.",
+        "Step 4: Add the admin UI (`09-admin.md \u00a72.7` payment card, `\u00a74` \"every destructive action has a confirm dialog naming the entity\").",
+        "Step 5: Write the failing script test and implement the script.",
+        "Step 6: Run `pnpm vitest run tests/unit/scripts/ops-reconcile.test.ts --project unit && pnpm vitest run tests/integration/payments/mark-paid-manually.test.ts --project integration && pnpm check:audit && pnpm typecheck && pnpm lint`. Expected: all green, and `check:audit` still reports OK (the new ac",
+        "Step 7: Commit:"
+      ]
+    },
+    {
+      "number": 16,
+      "title": "The six runbooks",
+      "scope": "Spec: `13-deployment.md \u00a79` \u2014 the outlines to be written in full during this phase.\n\n**Files:**\n- Create: `docs/runbooks/README.md`, `docs/runbooks/01-payment-stuck-pending.md`, `02-webhook-signature-failures.md`, `03-whatsapp-template-rejected.md`, `04-fx-rate-anomaly.md`, `05-rollback.md`, `06-stock-discrepancy.md`\n- Test: `tests/unit/runbooks.test.ts`\n\n**Interfaces:** documentation. Every command and SQL statement in them must be runnable as written.",
+      "steps": [
+        "Step 1: Write the failing test that keeps the runbooks honest.",
+        "Step 2: Run `pnpm vitest run tests/unit/runbooks.test.ts --project unit`. Expected: every file missing.",
+        "Step 3: Write `docs/runbooks/README.md`.",
+        "Step 4: Write `docs/runbooks/01-payment-stuck-pending.md`.",
+        "Step 5: Write `docs/runbooks/02-webhook-signature-failures.md`.",
+        "Step 6: Write `docs/runbooks/03-whatsapp-template-rejected.md`.",
+        "Step 7: Write `docs/runbooks/04-fx-rate-anomaly.md`.",
+        "Step 8: Write `docs/runbooks/05-rollback.md`.",
+        "Step 9: Write `docs/runbooks/06-stock-discrepancy.md`.",
+        "Step 10: Run `pnpm vitest run tests/unit/runbooks.test.ts --project unit`. Expected: all pass. Then verify by hand that each SQL statement parses against the test database:",
+        "Step 11: Commit:"
+      ]
+    },
+    {
+      "number": 17,
+      "title": "Production seed (db:seed:prod)",
+      "scope": "Spec: `13-deployment.md \u00a77` \u2014 *\"Seed production: run `pnpm db:seed:prod` (subset: countries, rates, warehouses, zones, payment configs, attributes, categories, content pages, settings; **no demo products/users**) once, via a GitHub Action `workflow_dispatch`.\"*\n\n**Files:**\n- Create: `prisma/seed/prod.ts`, `tests/integration/seed/prod-seed.test.ts`\n- Modify: `prisma/seed/index.ts`, `.github/workflows/seed-prod.yml`\n\n**Interfaces:**\n- Consumes: the existing seed modules (`prisma/seed/lib.ts`, `prisma/seed/fixtures/*.json`).\n- Produces:",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/integration/seed/prod-seed.test.ts --project integration`. Expected: `prisma/seed/prod.ts` missing.",
+        "Step 3: Implement `prisma/seed/prod.ts` by reusing the step functions the full seed already has \u2014 do not duplicate the fixture data.",
+        "Step 4: Update `.github/workflows/seed-prod.yml` so it is a deliberate, typed, one-time action.",
+        "Step 5: Extend `tests/integration/truncate.ts` with the `includeReferenceData` option the test needs (the default behaviour \u2014 preserving `CountryConfig`, `ExchangeRate`, `PaymentMethodConfig`, `Warehouse`, `DeliveryZone`, per `12-testing.md \u00a72` \u2014 stays the default):",
+        "Step 6: Run `pnpm vitest run tests/integration/seed/prod-seed.test.ts --project integration && pnpm test:int`. Expected: green (and no other integration test broken by the truncate change).",
+        "Step 7: Commit:"
+      ]
+    },
+    {
+      "number": 18,
+      "title": "Vercel configuration and verification script",
+      "scope": "Spec: `13-deployment.md \u00a76`, ADR-008.\n\n**Files:**\n- Create: `docs/ops/vercel.md`, `scripts/verify-vercel.ts`, `tests/unit/scripts/verify-vercel.test.ts`\n- Modify: none\n\n**Interfaces:**\n- Produces:",
+      "steps": [
+        "Step 1: Write `docs/ops/vercel.md` \u2014 the exact settings, so the click-through is reproducible.",
+        "Step 2: Write the failing script test.",
+        "Step 3: Implement `scripts/verify-vercel.ts`.",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/verify-vercel.test.ts --project unit`. Expected: 5 tests pass.",
+        "Step 5: Apply the Vercel settings from `docs/ops/vercel.md` (this part is manual and is done once the domain points at Vercel \u2014 the actual cutover is Task 20). Then run the script against production and paste the output into `docs/plans/progress/go-live.md` (created in Task 21).",
+        "Step 6: Commit:"
+      ]
+    },
+    {
+      "number": 19,
+      "title": "Vercel production settings",
+      "scope": "Spec: `13-deployment.md \u00a75`, `\u00a74` job 6.\n\n**Files:**\n- Create: `docs/ops/vercel.md`, `tests/unit/vercel-config.test.ts`\n- Modify: `vercel.json` (create it if Phase 0 did not), `src/app/[locale]/(checkout)/checkout/pay/[orderId]/page.tsx` and the `placeOrder` route segment (only to confirm `maxDuration`)\n\n**Interfaces:** configuration.",
+      "steps": [
+        "Step 1: Write the failing test.",
+        "Step 2: Run `pnpm vitest run tests/unit/vercel-config.test.ts --project unit`.",
+        "Step 3: Create `vercel.json`:",
+        "Step 4: Write `docs/ops/vercel.md`.",
+        "Step 5: Apply the settings in the Vercel dashboard, then verify:",
+        "Step 6: Run `pnpm vitest run tests/unit/vercel-config.test.ts --project unit`. Expected: 5 tests pass.",
+        "Step 7: Commit:"
+      ]
+    },
+    {
+      "number": 20,
+      "title": "DNS cutover and rollback plan",
+      "scope": "**Files:**\n- Create: `docs/ops/dns-cutover.md`\n- Test: `tests/unit/runbooks.test.ts` (extend with a check that the cutover doc exists and has a rollback section)\n\n**Interfaces:** documentation; the executable parts reuse `pnpm verify:vercel` and runbook 5.",
+      "steps": [
+        "Step 1: Extend the runbook test:",
+        "Step 2: Run the test, see it fail, then write `docs/ops/dns-cutover.md`.",
+        "Step 3: Run `pnpm vitest run tests/unit/runbooks.test.ts --project unit`. Expected: pass.",
+        "Step 4: Commit:"
+      ]
+    },
+    {
+      "number": 21,
+      "title": "Provider production verification with a results table",
+      "scope": "Spec: `13-deployment.md \u00a710` \u2014 *\"Each payment provider tested in production with a real small transaction and refund (WaafiPay, Daraja, Telebirr, Stripe) \u2014 record references in `docs/plans/progress/go-live.md`.\"*\n\n**Files:**\n- Create: `docs/plans/progress/go-live.md`\n- Test: `tests/unit/go-live-template.test.ts`\n\n**Interfaces:** documentation with a fixed table shape so the evidence is comparable and complete.",
+      "steps": [
+        "Step 1: Write the failing template test \u2014 the template must contain a row for every provider and every checklist line, so nothing can be quietly dropped.",
+        "Step 2: Create `docs/plans/progress/go-live.md`.",
+        "Step 3: Run `pnpm vitest run tests/unit/go-live-template.test.ts --project unit`. Expected: 4 tests pass.",
+        "Step 4: Execute the section 2 verification once production is reachable (this is real money \u2014 do it deliberately, with the business's own phone and card, in a single sitting, and refund every charge the same day). Fill every cell as you go, not afterwards from memory.",
+        "Step 5: Commit the filled record (it contains no secrets):"
+      ]
+    },
+    {
+      "number": 22,
+      "title": "Post-launch monitoring",
+      "scope": "Spec: `13-deployment.md \u00a78`.\n\n**Files:**\n- Create: `docs/ops/monitoring.md`, `scripts/verify-monitoring.ts`, `tests/unit/scripts/verify-monitoring.test.ts`\n- Modify: none\n\n**Interfaces:**\n- Produces: `runMonitoringChecks(opts): Promise<CheckResult[]>` (health endpoint, Sentry DSN reachability, uptime monitor, log drain heartbeat).",
+      "steps": [
+        "Step 1: Write `docs/ops/monitoring.md` with the alert rules and the Axiom queries written out in full \u2014 they must be copy-pasteable, not described.",
+        "Step 2: Write the failing script test and implement `scripts/verify-monitoring.ts`.",
+        "Step 3: Create the four Sentry rules, the Inngest alerts, the uptime monitors and the five saved Axiom queries as written. Prove each one fires at least once:",
+        "Step 4: Run `pnpm vitest run tests/unit/scripts/verify-monitoring.test.ts --project unit`, then, against production:",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 23,
+      "title": "Execute the go-live checklist",
+      "scope": "Spec: `13-deployment.md \u00a710`, and `01-product-spec.md \u00a77` (\"Definition of done\").\n\n**Files:**\n- Modify: `docs/plans/progress/go-live.md` (fill it), `docs/plans/progress/incidents.md` (create, empty with the header)\n\n**Interfaces:** none. This task produces evidence, not code.",
+      "steps": [
+        "Step 1: Create `docs/plans/progress/incidents.md`:",
+        "Step 2: Work through `13-deployment.md \u00a710` line by line, filling the matching row of",
+        "Step 3: Do the backup restore test properly, since it is the one line people skip:",
+        "Step 4: When every row is filled and every box is ticked, complete \u00a77 Sign-off with both names",
+        "Step 5: Commit:"
+      ]
+    },
+    {
+      "number": 24,
+      "title": "Phase gate and progress note",
+      "scope": "**Files:**\n- Create: `docs/plans/progress/phase-07.md`\n- Modify: none\n\n**Interfaces:** none.",
+      "steps": [
+        "Step 1: Run the gates of `12-testing.md \u00a76`, one command at a time, capturing the real output. Do not proceed past a failure \u2014 fix it, then restart the sequence from the top.",
+        "Step 2: Create `docs/plans/progress/phase-07.md` with the pasted output and the ticked OWASP checklist:",
+        "Step 3: Confirm the definition of done in `01-product-spec.md \u00a77`: every MVP row implemented, every phase gate green with pasted output (`docs/plans/progress/phase-00.md` \u2026 `phase-07.md`), and the `13-deployment.md \u00a710` checklist complete. If any earlier phase's progress note is missing its pasted o",
+        "Step 4: Commit:"
+      ]
+    }
+  ]
+}

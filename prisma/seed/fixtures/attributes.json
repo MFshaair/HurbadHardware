@@ -1,0 +1,679 @@
+{
+  "attributes": [
+    { "key": "brand_series", "type": "TEXT", "labelEn": "Series", "labelSo": "Taxanaha" },
+    {
+      "key": "os",
+      "type": "SELECT",
+      "labelEn": "Operating system",
+      "labelSo": "Nidaamka hawlgalka",
+      "options": [
+        { "value": "android", "labelEn": "Android", "labelSo": "Android" },
+        { "value": "ios", "labelEn": "iOS", "labelSo": "iOS" },
+        { "value": "windows", "labelEn": "Windows", "labelSo": "Windows" },
+        { "value": "macos", "labelEn": "macOS", "labelSo": "macOS" },
+        { "value": "chromeos", "labelEn": "ChromeOS", "labelSo": "ChromeOS" },
+        { "value": "none", "labelEn": "None", "labelSo": "Midna" }
+      ]
+    },
+    { "key": "chipset", "type": "TEXT", "isFilterable": false, "labelEn": "Chipset", "labelSo": "Chipset" },
+    {
+      "key": "ram",
+      "type": "SELECT",
+      "unit": "GB",
+      "labelEn": "RAM",
+      "labelSo": "RAM",
+      "options": [
+        { "value": "4gb", "labelEn": "4 GB", "labelSo": "4 GB" },
+        { "value": "6gb", "labelEn": "6 GB", "labelSo": "6 GB" },
+        { "value": "8gb", "labelEn": "8 GB", "labelSo": "8 GB" },
+        { "value": "12gb", "labelEn": "12 GB", "labelSo": "12 GB" },
+        { "value": "16gb", "labelEn": "16 GB", "labelSo": "16 GB" },
+        { "value": "32gb", "labelEn": "32 GB", "labelSo": "32 GB" },
+        { "value": "64gb", "labelEn": "64 GB", "labelSo": "64 GB" }
+      ]
+    },
+    {
+      "key": "storage",
+      "type": "SELECT",
+      "labelEn": "Storage",
+      "labelSo": "Kaydka",
+      "options": [
+        { "value": "64gb", "labelEn": "64 GB", "labelSo": "64 GB" },
+        { "value": "128gb", "labelEn": "128 GB", "labelSo": "128 GB" },
+        { "value": "256gb", "labelEn": "256 GB", "labelSo": "256 GB" },
+        { "value": "512gb", "labelEn": "512 GB", "labelSo": "512 GB" },
+        { "value": "1tb", "labelEn": "1 TB", "labelSo": "1 TB" },
+        { "value": "2tb", "labelEn": "2 TB", "labelSo": "2 TB" }
+      ]
+    },
+    {
+      "key": "screen_size",
+      "type": "NUMBER",
+      "unit": "inch",
+      "labelEn": "Screen size",
+      "labelSo": "Cabbirka shaashadda"
+    },
+    {
+      "key": "display_type",
+      "type": "SELECT",
+      "labelEn": "Display type",
+      "labelSo": "Nooca shaashadda",
+      "options": [
+        { "value": "lcd", "labelEn": "LCD", "labelSo": "LCD" },
+        { "value": "oled", "labelEn": "OLED", "labelSo": "OLED" },
+        { "value": "amoled", "labelEn": "AMOLED", "labelSo": "AMOLED" },
+        { "value": "ltpo-amoled", "labelEn": "LTPO AMOLED", "labelSo": "LTPO AMOLED" }
+      ]
+    },
+    {
+      "key": "refresh_rate",
+      "type": "SELECT",
+      "labelEn": "Refresh rate",
+      "labelSo": "Heerka cusbooneysiinta",
+      "options": [
+        { "value": "60hz", "labelEn": "60 Hz", "labelSo": "60 Hz" },
+        { "value": "90hz", "labelEn": "90 Hz", "labelSo": "90 Hz" },
+        { "value": "120hz", "labelEn": "120 Hz", "labelSo": "120 Hz" },
+        { "value": "144hz", "labelEn": "144 Hz", "labelSo": "144 Hz" }
+      ]
+    },
+    {
+      "key": "main_camera_mp",
+      "type": "NUMBER",
+      "unit": "MP",
+      "labelEn": "Main camera",
+      "labelSo": "Kaamirada weyn"
+    },
+    {
+      "key": "battery_mah",
+      "type": "NUMBER",
+      "unit": "mAh",
+      "labelEn": "Battery capacity",
+      "labelSo": "Awoodda baytariga"
+    },
+    {
+      "key": "charging_w",
+      "type": "NUMBER",
+      "unit": "W",
+      "labelEn": "Charging speed",
+      "labelSo": "Xawaaraha chaajinta"
+    },
+    {
+      "key": "network",
+      "type": "MULTI",
+      "labelEn": "Network",
+      "labelSo": "Shabakadda",
+      "options": [
+        { "value": "4g", "labelEn": "4G", "labelSo": "4G" },
+        { "value": "5g", "labelEn": "5G", "labelSo": "5G" }
+      ]
+    },
+    { "key": "dual_sim", "type": "BOOLEAN", "labelEn": "Dual SIM", "labelSo": "Laba SIM" },
+    { "key": "nfc", "type": "BOOLEAN", "labelEn": "NFC", "labelSo": "NFC" },
+    {
+      "key": "water_resistance",
+      "type": "SELECT",
+      "labelEn": "Water resistance",
+      "labelSo": "Biyo ka celin",
+      "options": [
+        { "value": "none", "labelEn": "None", "labelSo": "Midna" },
+        { "value": "ip54", "labelEn": "IP54", "labelSo": "IP54" },
+        { "value": "ip67", "labelEn": "IP67", "labelSo": "IP67" },
+        { "value": "ip68", "labelEn": "IP68", "labelSo": "IP68" }
+      ]
+    },
+    {
+      "key": "cpu_brand",
+      "type": "SELECT",
+      "labelEn": "Processor brand",
+      "labelSo": "Sumadda processor-ka",
+      "options": [
+        { "value": "intel", "labelEn": "Intel", "labelSo": "Intel" },
+        { "value": "amd", "labelEn": "AMD", "labelSo": "AMD" },
+        { "value": "apple", "labelEn": "Apple", "labelSo": "Apple" }
+      ]
+    },
+    { "key": "cpu_model", "type": "TEXT", "labelEn": "Processor model", "labelSo": "Nooca processor-ka" },
+    {
+      "key": "ram_upgradeable",
+      "type": "BOOLEAN",
+      "labelEn": "RAM upgradeable",
+      "labelSo": "RAM-ka la kordhin karo"
+    },
+    {
+      "key": "storage_type",
+      "type": "SELECT",
+      "labelEn": "Storage type",
+      "labelSo": "Nooca kaydka",
+      "options": [
+        { "value": "ssd", "labelEn": "SSD", "labelSo": "SSD" },
+        { "value": "hdd", "labelEn": "HDD", "labelSo": "HDD" }
+      ]
+    },
+    { "key": "gpu", "type": "TEXT", "labelEn": "Graphics", "labelSo": "Kaadhka sawirka" },
+    {
+      "key": "gpu_type",
+      "type": "SELECT",
+      "labelEn": "Graphics type",
+      "labelSo": "Nooca kaadhka sawirka",
+      "options": [
+        { "value": "integrated", "labelEn": "Integrated", "labelSo": "Ku dheggan" },
+        { "value": "dedicated", "labelEn": "Dedicated", "labelSo": "Gaar ah" }
+      ]
+    },
+    {
+      "key": "resolution",
+      "type": "SELECT",
+      "labelEn": "Resolution",
+      "labelSo": "Heerka sawirka",
+      "options": [
+        { "value": "hd", "labelEn": "HD", "labelSo": "HD" },
+        { "value": "fhd", "labelEn": "Full HD", "labelSo": "Full HD" },
+        { "value": "qhd", "labelEn": "QHD", "labelSo": "QHD" },
+        { "value": "4k", "labelEn": "4K", "labelSo": "4K" },
+        { "value": "retina", "labelEn": "Retina", "labelSo": "Retina" }
+      ]
+    },
+    { "key": "touchscreen", "type": "BOOLEAN", "labelEn": "Touchscreen", "labelSo": "Shaashad taabasho" },
+    { "key": "weight_kg", "type": "NUMBER", "unit": "kg", "labelEn": "Weight", "labelSo": "Miisaanka" },
+    {
+      "key": "battery_wh",
+      "type": "NUMBER",
+      "unit": "Wh",
+      "labelEn": "Battery capacity",
+      "labelSo": "Awoodda baytariga"
+    },
+    {
+      "key": "keyboard_backlit",
+      "type": "BOOLEAN",
+      "labelEn": "Backlit keyboard",
+      "labelSo": "Kiiboodh iftiin leh"
+    },
+    { "key": "ports", "type": "TEXT", "labelEn": "Ports", "labelSo": "Dekedaha" },
+    { "key": "cellular", "type": "BOOLEAN", "labelEn": "Cellular (SIM)", "labelSo": "SIM shabakad" },
+    {
+      "key": "stylus_support",
+      "type": "BOOLEAN",
+      "labelEn": "Stylus support",
+      "labelSo": "Taageerada qalinka"
+    },
+    {
+      "key": "device_type",
+      "type": "SELECT",
+      "labelEn": "Device type",
+      "labelSo": "Nooca qalabka",
+      "options": [
+        { "value": "router", "labelEn": "Router", "labelSo": "Router" },
+        { "value": "switch", "labelEn": "Switch", "labelSo": "Switch" },
+        { "value": "access-point", "labelEn": "Access point", "labelSo": "Access Point" },
+        { "value": "modem", "labelEn": "Modem", "labelSo": "Modem" },
+        { "value": "extender", "labelEn": "Extender", "labelSo": "Extender" },
+        { "value": "cable", "labelEn": "Cable", "labelSo": "Fiilo" }
+      ]
+    },
+    {
+      "key": "wifi_standard",
+      "type": "SELECT",
+      "labelEn": "Wi-Fi standard",
+      "labelSo": "Heerka Wi-Fi",
+      "options": [
+        { "value": "wifi5", "labelEn": "Wi-Fi 5", "labelSo": "Wi-Fi 5" },
+        { "value": "wifi6", "labelEn": "Wi-Fi 6", "labelSo": "Wi-Fi 6" },
+        { "value": "wifi6e", "labelEn": "Wi-Fi 6E", "labelSo": "Wi-Fi 6E" },
+        { "value": "wifi7", "labelEn": "Wi-Fi 7", "labelSo": "Wi-Fi 7" },
+        { "value": "none", "labelEn": "None", "labelSo": "Midna" }
+      ]
+    },
+    {
+      "key": "max_speed_mbps",
+      "type": "NUMBER",
+      "unit": "Mbps",
+      "labelEn": "Max speed",
+      "labelSo": "Xawaaraha ugu sarreeya"
+    },
+    { "key": "ports_count", "type": "NUMBER", "labelEn": "Number of ports", "labelSo": "Tirada dekedaha" },
+    {
+      "key": "port_speed",
+      "type": "SELECT",
+      "labelEn": "Port speed",
+      "labelSo": "Xawaaraha dekedda",
+      "options": [
+        { "value": "100m", "labelEn": "100 Mbps", "labelSo": "100 Mbps" },
+        { "value": "1g", "labelEn": "1 Gbps", "labelSo": "1 Gbps" },
+        { "value": "2.5g", "labelEn": "2.5 Gbps", "labelSo": "2.5 Gbps" },
+        { "value": "10g", "labelEn": "10 Gbps", "labelSo": "10 Gbps" }
+      ]
+    },
+    {
+      "key": "poe",
+      "type": "SELECT",
+      "labelEn": "PoE",
+      "labelSo": "PoE",
+      "options": [
+        { "value": "none", "labelEn": "None", "labelSo": "Midna" },
+        { "value": "poe", "labelEn": "PoE", "labelSo": "PoE" },
+        { "value": "poe+", "labelEn": "PoE+", "labelSo": "PoE+" },
+        { "value": "poe++", "labelEn": "PoE++", "labelSo": "PoE++" }
+      ]
+    },
+    { "key": "managed", "type": "BOOLEAN", "labelEn": "Managed", "labelSo": "La maamulo" },
+    { "key": "mesh", "type": "BOOLEAN", "labelEn": "Mesh support", "labelSo": "Taageerada Mesh" },
+    {
+      "key": "cable_length_m",
+      "type": "NUMBER",
+      "unit": "m",
+      "labelEn": "Cable length",
+      "labelSo": "Dhererka fiilada"
+    },
+    {
+      "key": "cable_category",
+      "type": "SELECT",
+      "labelEn": "Cable category",
+      "labelSo": "Nooca fiilada",
+      "options": [
+        { "value": "cat5e", "labelEn": "Cat5e", "labelSo": "Cat5e" },
+        { "value": "cat6", "labelEn": "Cat6", "labelSo": "Cat6" },
+        { "value": "cat6a", "labelEn": "Cat6a", "labelSo": "Cat6a" },
+        { "value": "cat7", "labelEn": "Cat7", "labelSo": "Cat7" },
+        { "value": "fiber", "labelEn": "Fiber", "labelSo": "Fiber" }
+      ]
+    },
+    {
+      "key": "camera_type",
+      "type": "SELECT",
+      "labelEn": "Camera type",
+      "labelSo": "Nooca kaamirada",
+      "options": [
+        { "value": "bullet", "labelEn": "Bullet", "labelSo": "Bullet" },
+        { "value": "dome", "labelEn": "Dome", "labelSo": "Dome" },
+        { "value": "ptz", "labelEn": "PTZ", "labelSo": "PTZ" },
+        { "value": "turret", "labelEn": "Turret", "labelSo": "Turret" },
+        { "value": "nvr", "labelEn": "NVR", "labelSo": "NVR" },
+        { "value": "dvr", "labelEn": "DVR", "labelSo": "DVR" },
+        { "value": "kit", "labelEn": "Kit", "labelSo": "Xirmo" }
+      ]
+    },
+    {
+      "key": "resolution_mp",
+      "type": "NUMBER",
+      "unit": "MP",
+      "labelEn": "Resolution",
+      "labelSo": "Heerka sawirka"
+    },
+    {
+      "key": "night_vision_m",
+      "type": "NUMBER",
+      "unit": "m",
+      "labelEn": "Night vision range",
+      "labelSo": "Fogaanta aragtida habeenka"
+    },
+    {
+      "key": "ip_or_analog",
+      "type": "SELECT",
+      "labelEn": "IP or analog",
+      "labelSo": "IP ama analog",
+      "options": [
+        { "value": "ip", "labelEn": "IP", "labelSo": "IP" },
+        { "value": "analog", "labelEn": "Analog", "labelSo": "Analog" }
+      ]
+    },
+    { "key": "channels", "type": "NUMBER", "labelEn": "Channels", "labelSo": "Kanaallada" },
+    {
+      "key": "storage_included_tb",
+      "type": "NUMBER",
+      "unit": "TB",
+      "labelEn": "Included storage",
+      "labelSo": "Kaydka ku jira"
+    },
+    { "key": "outdoor", "type": "BOOLEAN", "labelEn": "Outdoor rated", "labelSo": "Ku habboon banaanka" },
+    { "key": "audio", "type": "BOOLEAN", "labelEn": "Audio", "labelSo": "Codka" },
+    { "key": "ai_detection", "type": "BOOLEAN", "labelEn": "AI detection", "labelSo": "Ogaanshaha AI" },
+    {
+      "key": "printer_type",
+      "type": "SELECT",
+      "labelEn": "Printer type",
+      "labelSo": "Nooca daabacaha",
+      "options": [
+        { "value": "inkjet", "labelEn": "Inkjet", "labelSo": "Inkjet" },
+        { "value": "laser", "labelEn": "Laser", "labelSo": "Laser" },
+        { "value": "ink-tank", "labelEn": "Ink tank", "labelSo": "Ink tank" },
+        { "value": "dot-matrix", "labelEn": "Dot matrix", "labelSo": "Dot matrix" },
+        { "value": "consumable", "labelEn": "Consumable", "labelSo": "La isticmaalo" }
+      ]
+    },
+    { "key": "color", "type": "BOOLEAN", "labelEn": "Color printing", "labelSo": "Daabac midab leh" },
+    {
+      "key": "functions",
+      "type": "MULTI",
+      "labelEn": "Functions",
+      "labelSo": "Shaqooyinka",
+      "options": [
+        { "value": "print", "labelEn": "Print", "labelSo": "Daabac" },
+        { "value": "scan", "labelEn": "Scan", "labelSo": "Iskaan" },
+        { "value": "copy", "labelEn": "Copy", "labelSo": "Nuqul" },
+        { "value": "fax", "labelEn": "Fax", "labelSo": "Fax" }
+      ]
+    },
+    {
+      "key": "ppm_mono",
+      "type": "NUMBER",
+      "unit": "ppm",
+      "labelEn": "Print speed (mono)",
+      "labelSo": "Xawaaraha daabacaadda"
+    },
+    {
+      "key": "duplex",
+      "type": "BOOLEAN",
+      "labelEn": "Automatic duplex",
+      "labelSo": "Labada dhinac otomaatig"
+    },
+    { "key": "wifi", "type": "BOOLEAN", "labelEn": "Wi-Fi", "labelSo": "Wi-Fi" },
+    {
+      "key": "paper_size",
+      "type": "SELECT",
+      "labelEn": "Paper size",
+      "labelSo": "Cabbirka waraaqda",
+      "options": [
+        { "value": "a4", "labelEn": "A4", "labelSo": "A4" },
+        { "value": "a3", "labelEn": "A3", "labelSo": "A3" }
+      ]
+    },
+    {
+      "key": "compatible_models",
+      "type": "TEXT",
+      "isFilterable": false,
+      "labelEn": "Compatible models",
+      "labelSo": "Moodooyinka la jaanqaadi karo"
+    },
+    {
+      "key": "page_yield",
+      "type": "NUMBER",
+      "unit": "pages",
+      "labelEn": "Page yield",
+      "labelSo": "Tirada bogagga"
+    },
+    {
+      "key": "accessory_type",
+      "type": "SELECT",
+      "labelEn": "Accessory type",
+      "labelSo": "Nooca agabka",
+      "options": [
+        { "value": "charger", "labelEn": "Charger", "labelSo": "Chaajin" },
+        { "value": "cable", "labelEn": "Cable", "labelSo": "Fiilo" },
+        { "value": "case", "labelEn": "Case", "labelSo": "Kiis" },
+        { "value": "screen-protector", "labelEn": "Screen protector", "labelSo": "Ilaaliye shaashad" },
+        { "value": "headphones", "labelEn": "Headphones", "labelSo": "Dhegdhuumiyayaal" },
+        { "value": "earbuds", "labelEn": "Earbuds", "labelSo": "Earbuds" },
+        { "value": "speaker", "labelEn": "Speaker", "labelSo": "Weheliye" },
+        { "value": "power-bank", "labelEn": "Power bank", "labelSo": "Power bank" },
+        { "value": "flash-drive", "labelEn": "Flash drive", "labelSo": "Flash drive" },
+        { "value": "memory-card", "labelEn": "Memory card", "labelSo": "Kaadhka xusuusta" },
+        { "value": "external-drive", "labelEn": "External drive", "labelSo": "Kaydka dibadda" },
+        { "value": "mouse", "labelEn": "Mouse", "labelSo": "Mouse" },
+        { "value": "keyboard", "labelEn": "Keyboard", "labelSo": "Kiiboodh" },
+        { "value": "stand", "labelEn": "Stand", "labelSo": "Taagane" },
+        { "value": "bag", "labelEn": "Bag", "labelSo": "Boorso" }
+      ]
+    },
+    { "key": "compatibility", "type": "TEXT", "labelEn": "Compatibility", "labelSo": "La jaanqaadka" },
+    {
+      "key": "wattage_w",
+      "type": "NUMBER",
+      "unit": "W",
+      "labelEn": "Wattage",
+      "labelSo": "Awoodda korontada"
+    },
+    {
+      "key": "capacity",
+      "type": "SELECT",
+      "labelEn": "Capacity",
+      "labelSo": "Awoodda",
+      "options": [
+        { "value": "32gb", "labelEn": "32 GB", "labelSo": "32 GB" },
+        { "value": "64gb", "labelEn": "64 GB", "labelSo": "64 GB" },
+        { "value": "128gb", "labelEn": "128 GB", "labelSo": "128 GB" },
+        { "value": "256gb", "labelEn": "256 GB", "labelSo": "256 GB" },
+        { "value": "512gb", "labelEn": "512 GB", "labelSo": "512 GB" },
+        { "value": "1tb", "labelEn": "1 TB", "labelSo": "1 TB" },
+        { "value": "2tb", "labelEn": "2 TB", "labelSo": "2 TB" },
+        { "value": "4tb", "labelEn": "4 TB", "labelSo": "4 TB" }
+      ]
+    },
+    {
+      "key": "connector",
+      "type": "MULTI",
+      "labelEn": "Connector",
+      "labelSo": "Xidhiidhiyaha",
+      "options": [
+        { "value": "usb-a", "labelEn": "USB-A", "labelSo": "USB-A" },
+        { "value": "usb-c", "labelEn": "USB-C", "labelSo": "USB-C" },
+        { "value": "lightning", "labelEn": "Lightning", "labelSo": "Lightning" },
+        { "value": "hdmi", "labelEn": "HDMI", "labelSo": "HDMI" },
+        { "value": "3.5mm", "labelEn": "3.5mm", "labelSo": "3.5mm" }
+      ]
+    },
+    { "key": "wireless", "type": "BOOLEAN", "labelEn": "Wireless", "labelSo": "La xiriir la'aan" },
+    {
+      "key": "component_type",
+      "type": "SELECT",
+      "labelEn": "Component type",
+      "labelSo": "Nooca qaybta",
+      "options": [
+        { "value": "cpu", "labelEn": "CPU", "labelSo": "CPU" },
+        { "value": "gpu", "labelEn": "GPU", "labelSo": "GPU" },
+        { "value": "ram", "labelEn": "RAM", "labelSo": "RAM" },
+        { "value": "ssd", "labelEn": "SSD", "labelSo": "SSD" },
+        { "value": "hdd", "labelEn": "HDD", "labelSo": "HDD" },
+        { "value": "psu", "labelEn": "PSU", "labelSo": "PSU" },
+        { "value": "motherboard", "labelEn": "Motherboard", "labelSo": "Motherboard" },
+        { "value": "cooler", "labelEn": "Cooler", "labelSo": "Qaboojiye" },
+        { "value": "case", "labelEn": "Case", "labelSo": "Kiis" }
+      ]
+    },
+    {
+      "key": "socket",
+      "type": "SELECT",
+      "labelEn": "Socket",
+      "labelSo": "Socket",
+      "options": [
+        { "value": "am4", "labelEn": "AM4", "labelSo": "AM4" },
+        { "value": "am5", "labelEn": "AM5", "labelSo": "AM5" },
+        { "value": "lga1700", "labelEn": "LGA1700", "labelSo": "LGA1700" },
+        { "value": "lga1851", "labelEn": "LGA1851", "labelSo": "LGA1851" }
+      ]
+    },
+    { "key": "cores", "type": "NUMBER", "labelEn": "Cores", "labelSo": "Cores" },
+    {
+      "key": "boost_clock_ghz",
+      "type": "NUMBER",
+      "unit": "GHz",
+      "labelEn": "Boost clock",
+      "labelSo": "Xawaaraha ugu sarreeya"
+    },
+    { "key": "vram_gb", "type": "NUMBER", "unit": "GB", "labelEn": "VRAM", "labelSo": "VRAM" },
+    {
+      "key": "memory_type",
+      "type": "SELECT",
+      "labelEn": "Memory type",
+      "labelSo": "Nooca xusuusta",
+      "options": [
+        { "value": "ddr4", "labelEn": "DDR4", "labelSo": "DDR4" },
+        { "value": "ddr5", "labelEn": "DDR5", "labelSo": "DDR5" },
+        { "value": "gddr6", "labelEn": "GDDR6", "labelSo": "GDDR6" },
+        { "value": "gddr6x", "labelEn": "GDDR6X", "labelSo": "GDDR6X" }
+      ]
+    },
+    { "key": "speed_mhz", "type": "NUMBER", "unit": "MHz", "labelEn": "Speed", "labelSo": "Xawaaraha" },
+    {
+      "key": "form_factor",
+      "type": "SELECT",
+      "labelEn": "Form factor",
+      "labelSo": "Qaabka",
+      "options": [
+        { "value": "atx", "labelEn": "ATX", "labelSo": "ATX" },
+        { "value": "matx", "labelEn": "mATX", "labelSo": "mATX" },
+        { "value": "itx", "labelEn": "ITX", "labelSo": "ITX" },
+        { "value": "m2-2280", "labelEn": "M.2 2280", "labelSo": "M.2 2280" },
+        { "value": "2.5in", "labelEn": "2.5\"", "labelSo": "2.5\"" },
+        { "value": "3.5in", "labelEn": "3.5\"", "labelSo": "3.5\"" }
+      ]
+    },
+    {
+      "key": "efficiency",
+      "type": "SELECT",
+      "labelEn": "80 PLUS rating",
+      "labelSo": "Heerka 80 PLUS",
+      "options": [
+        { "value": "80plus", "labelEn": "80 PLUS", "labelSo": "80 PLUS" },
+        { "value": "bronze", "labelEn": "Bronze", "labelSo": "Bronze" },
+        { "value": "gold", "labelEn": "Gold", "labelSo": "Gold" },
+        { "value": "platinum", "labelEn": "Platinum", "labelSo": "Platinum" },
+        { "value": "titanium", "labelEn": "Titanium", "labelSo": "Titanium" }
+      ]
+    },
+    {
+      "key": "interface",
+      "type": "SELECT",
+      "labelEn": "Interface",
+      "labelSo": "Interface",
+      "options": [
+        { "value": "pcie4", "labelEn": "PCIe 4.0", "labelSo": "PCIe 4.0" },
+        { "value": "pcie5", "labelEn": "PCIe 5.0", "labelSo": "PCIe 5.0" },
+        { "value": "sata", "labelEn": "SATA", "labelSo": "SATA" },
+        { "value": "nvme", "labelEn": "NVMe", "labelSo": "NVMe" }
+      ]
+    }
+  ],
+  "sets": [
+    {
+      "name": "Smartphones",
+      "items": [
+        { "key": "brand_series", "group": "General", "position": 1 },
+        { "key": "os", "group": "Performance", "position": 2, "isRequired": true },
+        { "key": "chipset", "group": "Performance", "position": 3 },
+        { "key": "ram", "group": "Performance", "position": 4, "isRequired": true },
+        { "key": "storage", "group": "Performance", "position": 5, "isRequired": true },
+        { "key": "screen_size", "group": "Display", "position": 6 },
+        { "key": "display_type", "group": "Display", "position": 7 },
+        { "key": "refresh_rate", "group": "Display", "position": 8 },
+        { "key": "main_camera_mp", "group": "Camera", "position": 9 },
+        { "key": "battery_mah", "group": "Battery", "position": 10 },
+        { "key": "charging_w", "group": "Battery", "position": 11 },
+        { "key": "network", "group": "Connectivity", "position": 12 },
+        { "key": "dual_sim", "group": "Connectivity", "position": 13 },
+        { "key": "nfc", "group": "Connectivity", "position": 14 },
+        { "key": "water_resistance", "group": "Build", "position": 15 }
+      ]
+    },
+    {
+      "name": "Laptops",
+      "items": [
+        { "key": "os", "group": "General", "position": 1, "isRequired": true },
+        { "key": "cpu_brand", "group": "Performance", "position": 2, "isRequired": true },
+        { "key": "cpu_model", "group": "Performance", "position": 3 },
+        { "key": "ram", "group": "Performance", "position": 4, "isRequired": true },
+        { "key": "ram_upgradeable", "group": "Performance", "position": 5 },
+        { "key": "storage", "group": "Performance", "position": 6, "isRequired": true },
+        { "key": "storage_type", "group": "Performance", "position": 7 },
+        { "key": "gpu", "group": "Performance", "position": 8 },
+        { "key": "gpu_type", "group": "Performance", "position": 9 },
+        { "key": "screen_size", "group": "Display", "position": 10 },
+        { "key": "resolution", "group": "Display", "position": 11 },
+        { "key": "refresh_rate", "group": "Display", "position": 12 },
+        { "key": "touchscreen", "group": "Display", "position": 13 },
+        { "key": "weight_kg", "group": "Build", "position": 14 },
+        { "key": "battery_wh", "group": "Battery", "position": 15 },
+        { "key": "keyboard_backlit", "group": "Build", "position": 16 },
+        { "key": "ports", "group": "Connectivity", "position": 17 }
+      ]
+    },
+    {
+      "name": "Tablets",
+      "items": [
+        { "key": "os", "group": "General", "position": 1, "isRequired": true },
+        { "key": "chipset", "group": "Performance", "position": 2 },
+        { "key": "ram", "group": "Performance", "position": 3, "isRequired": true },
+        { "key": "storage", "group": "Performance", "position": 4, "isRequired": true },
+        { "key": "screen_size", "group": "Display", "position": 5 },
+        { "key": "display_type", "group": "Display", "position": 6 },
+        { "key": "refresh_rate", "group": "Display", "position": 7 },
+        { "key": "cellular", "group": "Connectivity", "position": 8 },
+        { "key": "stylus_support", "group": "General", "position": 9 },
+        { "key": "battery_mah", "group": "Battery", "position": 10 }
+      ]
+    },
+    {
+      "name": "Networking",
+      "items": [
+        { "key": "device_type", "group": "General", "position": 1, "isRequired": true },
+        { "key": "wifi_standard", "group": "Wireless", "position": 2 },
+        { "key": "max_speed_mbps", "group": "Wireless", "position": 3 },
+        { "key": "ports_count", "group": "General", "position": 4 },
+        { "key": "port_speed", "group": "General", "position": 5 },
+        { "key": "poe", "group": "General", "position": 6 },
+        { "key": "managed", "group": "General", "position": 7 },
+        { "key": "mesh", "group": "Wireless", "position": 8 },
+        { "key": "cable_length_m", "group": "General", "position": 9 },
+        { "key": "cable_category", "group": "General", "position": 10 }
+      ]
+    },
+    {
+      "name": "CCTV",
+      "items": [
+        { "key": "camera_type", "group": "General", "position": 1, "isRequired": true },
+        { "key": "resolution_mp", "group": "Video", "position": 2 },
+        { "key": "night_vision_m", "group": "Video", "position": 3 },
+        { "key": "ip_or_analog", "group": "Video", "position": 4 },
+        { "key": "poe", "group": "General", "position": 5 },
+        { "key": "channels", "group": "Recording", "position": 6 },
+        { "key": "storage_included_tb", "group": "Recording", "position": 7 },
+        { "key": "outdoor", "group": "Build", "position": 8 },
+        { "key": "audio", "group": "General", "position": 9 },
+        { "key": "ai_detection", "group": "General", "position": 10 }
+      ]
+    },
+    {
+      "name": "Printers",
+      "items": [
+        { "key": "printer_type", "group": "General", "position": 1, "isRequired": true },
+        { "key": "color", "group": "General", "position": 2 },
+        { "key": "functions", "group": "General", "position": 3 },
+        { "key": "ppm_mono", "group": "Performance", "position": 4 },
+        { "key": "duplex", "group": "General", "position": 5 },
+        { "key": "wifi", "group": "Connectivity", "position": 6 },
+        { "key": "paper_size", "group": "General", "position": 7 },
+        { "key": "compatible_models", "group": "General", "position": 8 },
+        { "key": "page_yield", "group": "General", "position": 9 }
+      ]
+    },
+    {
+      "name": "Accessories",
+      "items": [
+        { "key": "accessory_type", "group": "General", "position": 1, "isRequired": true },
+        { "key": "compatibility", "group": "General", "position": 2 },
+        { "key": "wattage_w", "group": "General", "position": 3 },
+        { "key": "capacity", "group": "General", "position": 4 },
+        { "key": "connector", "group": "General", "position": 5 },
+        { "key": "wireless", "group": "General", "position": 6 },
+        { "key": "battery_mah", "group": "General", "position": 7 }
+      ]
+    },
+    {
+      "name": "Components",
+      "items": [
+        { "key": "component_type", "group": "General", "position": 1, "isRequired": true },
+        { "key": "socket", "group": "Performance", "position": 2 },
+        { "key": "cores", "group": "Performance", "position": 3 },
+        { "key": "boost_clock_ghz", "group": "Performance", "position": 4 },
+        { "key": "vram_gb", "group": "Performance", "position": 5 },
+        { "key": "memory_type", "group": "Performance", "position": 6 },
+        { "key": "capacity", "group": "Performance", "position": 7 },
+        { "key": "speed_mhz", "group": "Performance", "position": 8 },
+        { "key": "form_factor", "group": "Build", "position": 9 },
+        { "key": "wattage_w", "group": "Build", "position": 10 },
+        { "key": "efficiency", "group": "Build", "position": 11 },
+        { "key": "interface", "group": "Build", "position": 12 }
+      ]
+    }
+  ]
+}

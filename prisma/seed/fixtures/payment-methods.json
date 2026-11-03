@@ -1,0 +1,74 @@
+[
+  {
+    "method": "EVC_PLUS",
+    "provider": "WAAFIPAY",
+    "enabled": true,
+    "countries": ["SO"],
+    "currencies": ["USD"],
+    "displayNameEn": "EVC Plus",
+    "displayNameSo": "EVC Plus",
+    "instructionsEn": "Enter your EVC Plus number. You will get a push prompt to approve the payment.",
+    "instructionsSo": "Geli lambarkaaga EVC Plus. Waxaad heli doontaa fariin aad ku ansixiso lacag bixinta.",
+    "position": 1
+  },
+  {
+    "method": "EDAHAB",
+    "provider": "WAAFIPAY",
+    "enabled": true,
+    "countries": ["SO"],
+    "currencies": ["USD"],
+    "displayNameEn": "eDahab",
+    "displayNameSo": "eDahab",
+    "instructionsEn": "Enter your eDahab number. You will get a push prompt to approve the payment.",
+    "instructionsSo": "Geli lambarkaaga eDahab. Waxaad heli doontaa fariin aad ku ansixiso lacag bixinta.",
+    "position": 2
+  },
+  {
+    "method": "MPESA",
+    "provider": "DARAJA",
+    "enabled": true,
+    "countries": ["KE"],
+    "currencies": ["KES"],
+    "displayNameEn": "M-Pesa",
+    "displayNameSo": "M-Pesa",
+    "instructionsEn": "Enter your Safaricom number. Approve the STK push on your phone.",
+    "instructionsSo": "Geli lambarkaaga Safaricom. Ka ansixi codsiga taleefankaaga.",
+    "position": 3
+  },
+  {
+    "method": "TELEBIRR",
+    "provider": "TELEBIRR",
+    "enabled": true,
+    "countries": ["ET"],
+    "currencies": ["ETB"],
+    "displayNameEn": "Telebirr",
+    "displayNameSo": "Telebirr",
+    "instructionsEn": "You will be redirected to Telebirr to complete the payment.",
+    "instructionsSo": "Waxaa lagu gudbin doonaa Telebirr si aad lacag bixinta u dhammaystirto.",
+    "position": 4
+  },
+  {
+    "method": "CARD",
+    "provider": "STRIPE",
+    "enabled": true,
+    "countries": ["SO", "KE", "ET", "DJ", "UG"],
+    "currencies": ["USD", "KES", "ETB", "UGX"],
+    "displayNameEn": "Visa / Mastercard",
+    "displayNameSo": "Visa / Mastercard",
+    "instructionsEn": "You will be redirected to a secure card checkout.",
+    "instructionsSo": "Waxaa lagu gudbin doonaa bog ammaan ah oo kaadhka lagu bixiyo.",
+    "position": 5
+  },
+  {
+    "method": "COD",
+    "provider": "INTERNAL",
+    "enabled": true,
+    "countries": ["SO", "KE", "DJ", "UG"],
+    "currencies": ["USD", "KES", "DJF", "UGX"],
+    "displayNameEn": "Cash on Delivery",
+    "displayNameSo": "Lacag marka la keeno",
+    "instructionsEn": "Pay in cash when your order is delivered or collected.",
+    "instructionsSo": "Lacagta bixi marka dalabkaaga la keeno ama aad qaadato.",
+    "position": 6
+  }
+]

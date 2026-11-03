@@ -1,0 +1,60 @@
+{
+  "slug": "hikvision-ds-2cd1343g0",
+  "sku": "HIK-2CD1343",
+  "name": "Hikvision DS-2CD1343G0-I Dome Camera",
+  "brand": "hikvision",
+  "category": "cameras",
+  "status": "ACTIVE",
+  "warrantyMonths": 24,
+  "hasOfficialWarranty": true,
+  "isFeatured": true,
+  "keywords": "hikvision dome camera ip 4mp",
+  "publishedDaysAgo": 40,
+  "translations": {
+    "en": {
+      "name": "Hikvision DS-2CD1343G0-I Dome Camera",
+      "shortDescription": "4MP outdoor IP dome camera with 30m night vision.",
+      "description": "## Hikvision DS-2CD1343G0-I\n\nA weatherproof 4MP IP dome camera built for 24-hour outdoor monitoring.\n\n- 4MP resolution, H.265+ compression\n- 30m IR night vision\n- PoE powered, IP67 weatherproof"
+    },
+    "so": {
+      "name": "Hikvision DS-2CD1343G0-I Dome Camera",
+      "shortDescription": "Kaamirad IP dome ah oo 4MP ah, loogu talagalay banaanka, leh aragti habeen 30m ah.",
+      "description": "## Hikvision DS-2CD1343G0-I\n\nKaamirad IP dome ah oo cimilada u adkaysan karta, 4MP ah, loogu talagalay ilaalinta banaanka 24 saacadood.\n\n- Sawir 4MP ah, cadadyo H.265+\n- Aragti habeen IR ah oo 30m ah\n- Waxaa lagu shaqaysiiyaa PoE, cimilada u adkaysan karta IP67"
+    }
+  },
+  "attributes": {
+    "camera_type": "dome",
+    "resolution_mp": 4,
+    "night_vision_m": 30,
+    "ip_or_analog": "ip",
+    "poe": "poe",
+    "channels": 1,
+    "storage_included_tb": 0,
+    "outdoor": true,
+    "audio": false,
+    "ai_detection": false
+  },
+  "media": [
+    {
+      "key": "seed/products/hikvision-ds-2cd1343g0/0.webp",
+      "alt": "hikvision ds 2cd1343g0",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HIK-2CD1343-STD",
+      "options": [],
+      "priceUsdCents": 4900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 22,
+        "NBO": 14
+      }
+    }
+  ]
+}

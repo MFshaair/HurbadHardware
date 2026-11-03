@@ -1,0 +1,47 @@
+[
+  {
+    "file": "AccountOverview.dc.html",
+    "w": 1440,
+    "h": 2050
+  },
+  {
+    "file": "AccountOrders.dc.html",
+    "w": 1440,
+    "h": 1980
+  },
+  {
+    "file": "AccountOrderDetail.dc.html",
+    "w": 1440,
+    "h": 2680
+  },
+  {
+    "file": "AccountReturns.dc.html",
+    "w": 1440,
+    "h": 2540
+  },
+  {
+    "file": "AccountAddresses.dc.html",
+    "w": 1440,
+    "h": 2320
+  },
+  {
+    "file": "AccountProfile.dc.html",
+    "w": 1440,
+    "h": 2760
+  },
+  {
+    "file": "AccountWishlist.dc.html",
+    "w": 1440,
+    "h": 2180
+  },
+  {
+    "file": "AccountLoyalty.dc.html",
+    "w": 1440,
+    "h": 2120
+  },
+  {
+    "file": "MobileAccountOrders.dc.html",
+    "w": 390,
+    "h": 1760
+  }
+]

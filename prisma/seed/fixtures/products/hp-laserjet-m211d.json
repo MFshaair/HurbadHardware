@@ -1,0 +1,57 @@
+{
+  "slug": "hp-laserjet-m211d",
+  "sku": "HP-LJM211D",
+  "name": "HP LaserJet M211d",
+  "brand": "hp",
+  "category": "laser-printers",
+  "status": "ACTIVE",
+  "warrantyMonths": 12,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "hp laserjet m211d mono laser printer",
+  "publishedDaysAgo": 60,
+  "translations": {
+    "en": {
+      "name": "HP LaserJet M211d",
+      "shortDescription": "Compact monochrome laser printer with automatic duplex.",
+      "description": "## HP LaserJet M211d\n\nA compact monochrome laser printer for home offices, with fast first-page-out time and automatic two-sided printing.\n\n- Up to 29 ppm print speed\n- Automatic duplex printing\n- Compact footprint"
+    },
+    "so": {
+      "name": "HP LaserJet M211d",
+      "shortDescription": "Daabace laser ah oo madow-caddaan ah, leh daabacaad labada dhinac otomaatig ah.",
+      "description": "## HP LaserJet M211d\n\nDaabace laser ah oo madow-caddaan ah oo yar, loogu talagalay xafiisyada guriga, leh xawaare degdeg ah iyo daabacaad labada dhinac otomaatig ah.\n\n- Xawaaraha daabacaadda ilaa 29 ppm\n- Daabacaad labada dhinac otomaatig ah\n- Cabbir yar"
+    }
+  },
+  "attributes": {
+    "printer_type": "laser",
+    "color": false,
+    "functions": ["print"],
+    "ppm_mono": 29,
+    "duplex": true,
+    "wifi": false,
+    "paper_size": "a4"
+  },
+  "media": [
+    {
+      "key": "seed/products/hp-laserjet-m211d/0.webp",
+      "alt": "hp laserjet m211d",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "HP-LJM211D-STD",
+      "options": [],
+      "priceUsdCents": 13900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 8,
+        "NBO": 5
+      }
+    }
+  ]
+}

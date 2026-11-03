@@ -1,0 +1,55 @@
+{
+  "slug": "asus-prime-b760m-k",
+  "sku": "ASU-B760MK",
+  "name": "ASUS Prime B760M-K Motherboard",
+  "brand": "asus",
+  "category": "motherboards",
+  "status": "ACTIVE",
+  "warrantyMonths": 36,
+  "hasOfficialWarranty": true,
+  "isFeatured": false,
+  "keywords": "asus prime b760m-k motherboard lga1700 matx",
+  "publishedDaysAgo": 80,
+  "translations": {
+    "en": {
+      "name": "ASUS Prime B760M-K Motherboard",
+      "shortDescription": "mATX motherboard for 12th/13th/14th Gen Intel processors.",
+      "description": "## ASUS Prime B760M-K\n\nA reliable mATX motherboard for Intel 12th, 13th and 14th generation processors, with DDR5 support.\n\n- LGA1700 socket\n- DDR5 memory support, up to 192 GB\n- PCIe 4.0 x16 slot, M.2 NVMe support"
+    },
+    "so": {
+      "name": "ASUS Prime B760M-K Motherboard",
+      "shortDescription": "Motherboard mATX ah oo loogu talagalay processors-ka Intel jiilka 12-aad, 13-aad iyo 14-aad.",
+      "description": "## ASUS Prime B760M-K\n\nMotherboard mATX ah oo la isku halleyn karo, loogu talagalay processors-ka Intel jiilka 12-aad, 13-aad iyo 14-aad, taageerta DDR5.\n\n- Socket LGA1700\n- Taageerta xusuusta DDR5, ilaa 192 GB\n- Bar PCIe 4.0 x16 ah, taageerta M.2 NVMe"
+    }
+  },
+  "attributes": {
+    "component_type": "motherboard",
+    "socket": "lga1700",
+    "memory_type": "ddr5",
+    "form_factor": "matx",
+    "interface": "pcie4"
+  },
+  "media": [
+    {
+      "key": "seed/products/asus-prime-b760m-k/0.webp",
+      "alt": "asus prime b760m k",
+      "width": 1200,
+      "height": 1200,
+      "position": 0
+    }
+  ],
+  "variants": [
+    {
+      "sku": "ASU-B760MK-STD",
+      "options": [],
+      "priceUsdCents": 10900,
+      "compareAtUsdCents": null,
+      "isDefault": true,
+      "position": 0,
+      "stock": {
+        "MGQ": 4,
+        "NBO": 2
+      }
+    }
+  ]
+}

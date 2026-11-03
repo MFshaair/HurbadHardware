@@ -1,0 +1,225 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  :root{--p:#ff7417;--p-press:#d95f0e;--p-deep:#b84d05;--p-soft:#ffe8d6;--p-tint:#fff4eb;--on-p:#1a0c02;
+    --ink:#0f0f10;--ink2:#3d3d42;--ink3:#6f6f78;--ink4:#a2a2aa;--od:#f7f5f0;--od2:#b9b6ad;--od3:#7d7b74;
+    --night:#0a0a0b;--night2:#141416;--night3:#1d1d21;--cream:#fbfaf6;--soft:#f4f2ec;--light:#ffffff;
+    --hl:#e6e3db;--hl2:#d6d2c7;--hld:#26262b;--hld2:#333339;
+    --ok:#157347;--ok-s:#d7f5e3;--warn:#9a5b00;--warn-s:#fff0c2;--bad:#b3261e;--bad-s:#fde3e1;--info:#1f4fbf;--info-s:#e3ebfb;
+    --wa:#25d366;--mpesa:#3cb44b;--evc:#1a9bd7;
+    --fd:"Sora","Helvetica Neue",Arial,sans-serif;--fb:"DM Sans","Helvetica Neue",Arial,sans-serif;--fm:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --sh1:0 1px 2px rgba(15,15,16,.06),0 4px 12px rgba(15,15,16,.06);
+    --sh2:0 8px 8px rgba(0,0,0,.06),0 4px 4px rgba(0,0,0,.06),0 2px 2px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.06);
+    --sh3:0 25px 50px -12px rgba(15,15,16,.25);}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);font-family:var(--fb);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  a{color:var(--ink);text-decoration:none} a:hover{color:var(--p-deep)}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .display{font-family:var(--fd);font-weight:300;letter-spacing:-.03em;line-height:1.02}
+  .h{font-family:var(--fd);font-weight:400;letter-spacing:-.01em;line-height:1.2}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink3)}
+  .mono{font-family:var(--fm);font-size:13px;font-weight:500}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 22px;border-radius:9999px;font:600 15px/1 var(--fb);border:1px solid transparent;cursor:pointer;white-space:nowrap}
+  .btn-lg{height:48px;padding:0 26px;font-size:16px}
+  .btn-sm{height:36px;padding:0 16px;font-size:14px}
+  .btn-p{background:var(--p);color:var(--on-p)}
+  .btn-ink{background:var(--ink);color:var(--od)}
+  .btn-o{background:var(--light);color:var(--ink);border-color:var(--ink)}
+  .btn-od{background:transparent;color:var(--od);border-color:var(--od)}
+  .btn-g{background:transparent;color:var(--ink2)}
+  .btn-wa{background:var(--wa);color:var(--ink)}
+  .btn-icon{width:44px;padding:0}
+  .input{height:44px;padding:0 14px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);font:400 15px var(--fb);color:var(--ink);display:flex;align-items:center;gap:10px}
+  .input .ph{color:var(--ink3)}
+  .input.focus{outline:2px solid var(--p);outline-offset:2px}
+  .input.err{border-color:var(--bad)}
+  .label{font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:6px;display:block}
+  .help{font-size:13px;color:var(--ink3)}
+  .card{background:var(--light);border:1px solid var(--hl);border-radius:14px}
+  .card-n{background:var(--night2);border:1px solid var(--hld);border-radius:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.05);color:var(--od)}
+  .tag{display:inline-flex;align-items:center;height:22px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:500;background:var(--soft);color:var(--ink2)}
+  .tag-p{background:var(--p-soft);color:var(--p-deep)}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:9999px;font-size:12px;font-weight:600}
+  .pill-ok{background:var(--ok-s);color:var(--ok)} .pill-warn{background:var(--warn-s);color:var(--warn)} .pill-bad{background:var(--bad-s);color:var(--bad)} .pill-info{background:var(--info-s);color:var(--info)} .pill-n{background:var(--soft);color:var(--ink2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .hr{height:1px;background:var(--hl)}
+  .container{width:1280px;margin:0 auto;padding:0 32px}
+  .nav{display:flex;align-items:center;gap:32px;height:64px;padding:0 32px}
+  .nav-links{display:flex;gap:24px;font-weight:500;font-size:14px}
+  .logo{display:flex;align-items:center;gap:10px;font-family:var(--fb);font-weight:700;font-size:17px;letter-spacing:.6px;text-transform:uppercase;color:var(--p);line-height:1}
+  .logo .mk{width:32px;height:32px;border-radius:7px;background:var(--p);display:grid;grid-template-columns:4px 9px 4px;align-items:center;justify-content:center;flex:none}
+  .logo .mk i{display:block;height:20px;background:#fff;border-radius:1px}
+  .logo .mk b{display:block;height:4px;background:#fff}
+  .logo span{font-weight:300;color:var(--ink);letter-spacing:2.6px;font-size:12px;margin-left:2px}
+  .product{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .product .img{aspect-ratio:1;border-radius:10px;background:var(--soft);display:flex;align-items:center;justify-content:center;position:relative}
+  .product .name{font:500 15px/1.3 var(--fd);letter-spacing:-.01em}
+  .price{font-family:var(--fd);font-weight:500;font-size:20px;letter-spacing:-.2px;font-feature-settings:"tnum"}
+  .price-lg{font-family:var(--fd);font-weight:400;font-size:32px;letter-spacing:-.6px;font-feature-settings:"tnum";line-height:1}
+  .strike{font-size:13px;color:var(--ink3);text-decoration:line-through;font-feature-settings:"tnum"}
+  .table{width:100%;border-collapse:collapse}
+  .table th{background:var(--soft);font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink3);text-align:left;padding:12px 16px;border-bottom:1px solid var(--hl)}
+  .table td{padding:0 16px;height:48px;border-bottom:1px solid var(--hl);font-size:14px;font-feature-settings:"tnum"}
+  .table .r{text-align:right}
+  .fab{position:absolute;right:32px;bottom:32px;width:56px;height:56px;border-radius:9999px;background:var(--wa);display:flex;align-items:center;justify-content:center;box-shadow:var(--sh2)}
+  .ico{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+  .ico-sm{width:16px;height:16px}
+  .photo{background:radial-gradient(120% 90% at 50% 40%,#2a2a2f 0%,#141416 60%,#0a0a0b 100%)}
+  .mat{background:var(--soft)}
+  .device{border-radius:18px;background:linear-gradient(160deg,#3a3a40,#17171a);box-shadow:0 20px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.12)}
+  .laptop{border-radius:10px;background:linear-gradient(160deg,#d9d7d0,#a8a6a0)}
+  .footer{background:var(--night);color:var(--od2);padding:64px 32px 32px}
+  .footer h4{color:var(--od);font:600 13px var(--fb);margin:0 0 14px}
+  .footer a{color:var(--od2);font-size:14px;display:block;margin-bottom:10px}
+  .footer a:hover{color:var(--od)}
+  .side{width:240px;background:var(--night);color:var(--od2);padding:20px 12px;display:flex;flex-direction:column;gap:4px}
+  .side .item{display:flex;align-items:center;gap:10px;height:36px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;border-left:3px solid transparent}
+  .side .item.on{background:var(--night3);color:var(--od);border-left-color:var(--p)}
+  .side .grp{font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--od3);padding:16px 12px 6px}
+  .topbar{height:56px;border-bottom:1px solid var(--hl);background:var(--light);display:flex;align-items:center;gap:16px;padding:0 24px}
+  .kpi{background:var(--light);border:1px solid var(--hl);border-radius:14px;padding:20px}
+  .kpi .v{font-family:var(--fd);font-weight:400;font-size:28px;letter-spacing:-.5px;font-feature-settings:"tnum"}
+  .steps{display:flex;gap:0;align-items:center}
+  .step{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink3)}
+  .step .n{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--hl2);display:flex;align-items:center;justify-content:center;font-size:12px}
+  .step.done .n{background:var(--ink);border-color:var(--ink);color:var(--od)}
+  .step.on{color:var(--ink)} .step.on .n{border-color:var(--p);background:var(--p);color:var(--on-p)}
+  .step-line{width:40px;height:1px;background:var(--hl2);margin:0 10px}
+  .pay{display:flex;align-items:center;gap:14px;height:64px;padding:0 16px;border:1px solid var(--hl);border-radius:12px;background:var(--light)}
+  .pay.on{border:2px solid var(--p);background:var(--p-tint)}
+  .pay .glyph{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font:600 11px var(--fb);background:var(--soft);color:var(--ink2)}
+  .pay.on .glyph{color:#fff}
+  .radio{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--hl2);margin-left:auto}
+  .pay.on .radio{border:6px solid var(--p);background:#fff}
+  .tl{display:flex;flex-direction:column;position:relative}
+  .tl .ev{display:flex;gap:16px;padding-bottom:22px;position:relative}
+  .tl .ev:before{content:"";position:absolute;left:5px;top:16px;bottom:0;width:2px;background:var(--hl)}
+  .tl .ev:last-child:before{display:none}
+  .tl .d{width:12px;height:12px;border-radius:50%;background:var(--ink);flex:none;margin-top:4px}
+  .tl .ev.now .d{background:var(--p);box-shadow:0 0 0 4px var(--p-soft)}
+  .tl .ev.next .d{background:var(--hl2)}
+  .tl .ev.next{color:var(--ink3)}
+  .otp{display:flex;gap:10px}
+  .otp i{width:52px;height:60px;border:1px solid var(--hl2);border-radius:10px;background:var(--light);display:flex;align-items:center;justify-content:center;font:500 24px var(--fd);font-style:normal}
+  .otp i.on{outline:2px solid var(--p);outline-offset:2px}
+  .bottombar{position:absolute;left:0;right:0;bottom:0;height:64px;background:var(--light);border-top:1px solid var(--hl);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+  .announce{height:36px;background:var(--ink);color:var(--od);font-size:13px;display:flex;align-items:center;justify-content:center;gap:10px}
+</style>
+<style>
+  .sumrow{display:flex;justify-content:space-between;font-size:14px}
+  .statepanel{border:1px dashed var(--hl2);border-radius:22px;padding:32px;background:var(--soft)}
+</style>
+</helmet>
+
+<div style="width:1440px;background:#fbfaf6;position:relative;font-family:var(--fb)">
+
+  <!-- Minimal header -->
+  <div style="background:#ffffff;border-bottom:1px solid #e6e3db">
+    <div class="container" style="display:flex;align-items:center;height:72px;gap:24px">
+      <div class="logo"><div class="mk"><i></i><b></b><i></i></div>Hurbad <span>Hardware</span></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;font-size:13px;font-weight:600;color:var(--ok)">
+        <svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 1 1 8 0v3"></path></svg>
+        Secure payment
+      </div>
+      <div class="btn btn-sm btn-wa"><svg class="ico ico-sm" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"></path></svg>Help on WhatsApp</div>
+    </div>
+  </div>
+
+  <!-- Waiting state -->
+  <div class="container" style="padding-top:56px;padding-bottom:48px;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:48px;align-items:start">
+
+    <div class="card" style="padding:48px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;box-shadow:var(--sh2)">
+
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:56px;height:56px;border-radius:12px;background:var(--evc);color:#fff;display:flex;align-items:center;justify-content:center;font:600 15px var(--fb)">EVC</div>
+        <div style="text-align:left">
+          <div style="font-weight:600;font-size:16px">EVC Plus</div>
+          <div class="num" style="font-size:14px;color:var(--ink2)">+252 61 *** 5678</div>
+        </div>
+      </div>
+
+      <!-- 120-second ring countdown at 01:47 -->
+      <div style="position:relative;width:196px;height:196px;display:flex;align-items:center;justify-content:center">
+        <svg viewBox="0 0 200 200" style="position:absolute;inset:0;width:196px;height:196px;transform:rotate(-90deg)">
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#e6e3db" stroke-width="10"></circle>
+          <circle cx="100" cy="100" r="88" fill="none" stroke="#ff7417" stroke-width="10" stroke-linecap="round" stroke-dasharray="553" stroke-dashoffset="94"></circle>
+        </svg>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+          <span class="mono" style="font-size:38px;letter-spacing:-1px;color:var(--ink)">01:47</span>
+          <span style="font-size:12px;color:var(--ink3)">left to confirm</span>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:center">
+        <div class="display" style="font-size:32px;letter-spacing:-.8px">Confirm the payment prompt on your phone</div>
+        <p style="margin:0;max-width:460px;color:var(--ink2);font-size:15px;line-height:1.55">We sent a USSD prompt to <span class="num" style="font-weight:600;color:var(--ink)">+252 61 *** 5678</span>. Enter your EVC Plus PIN to approve <span class="num" style="font-weight:600;color:var(--ink)">$1,289.00</span>. Keep this page open — it updates by itself.</p>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;color:var(--ink2);font-size:14px;font-weight:600">
+        <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#ff7417;stroke-width:2.5;stroke-linecap:round"><circle cx="12" cy="12" r="9" stroke="#e6e3db"></circle><path d="M12 3a9 9 0 0 1 9 9"></path></svg>
+        Waiting for confirmation…
+      </div>
+
+      <div class="hr" style="width:100%"></div>
+
+      <div style="display:flex;align-items:center;justify-content:center;gap:24px;font-size:13px;color:var(--ink3)">
+        <span>Order <span class="mono" style="color:var(--ink);font-size:14px">HH-260913-K7Q2M</span></span>
+        <span style="color:var(--ink4)">·</span>
+        <span>Reference <span class="mono" style="color:var(--ink2);font-size:14px">EVC-8841236</span></span>
+      </div>
+
+      <a style="font-size:14px;font-weight:600;color:var(--ink2);text-decoration:underline">Choose another method</a>
+    </div>
+
+    <!-- Order recap -->
+    <div class="card" style="padding:24px;display:flex;flex-direction:column;gap:14px;position:sticky;top:24px">
+      <div class="h" style="font-size:18px">You are paying</div>
+      <div class="sumrow"><span style="color:var(--ink2)">Items (3)</span><span class="num" style="font-weight:600">$1,297.00</span></div>
+      <div class="sumrow"><span style="color:var(--ink2)">Loyalty points (1,200)</span><span class="num" style="font-weight:600;color:var(--ok)">−$12.00</span></div>
+      <div class="sumrow"><span style="color:var(--ink2)">Delivery — Mogadishu Central</span><span class="num" style="font-weight:600">$4.00</span></div>
+      <div class="hr"></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:600">Total</span><span class="price-lg num">$1,289.00</span></div>
+      <span class="num" style="font-size:13px;color:var(--ink3)">≈ KSh 166,600 · charged in USD</span>
+      <div class="hr"></div>
+      <div style="font-size:13px;color:var(--ink2);display:flex;gap:8px;align-items:flex-start">
+        <svg class="ico ico-sm" viewBox="0 0 24 24" style="flex:none;margin-top:2px"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8h.01"></path></svg>
+        Nothing leaves your wallet until you enter your PIN. If the prompt does not arrive, dial <span class="mono" style="font-size:13px">*712#</span> and approve the pending request.
+      </div>
+    </div>
+  </div>
+
+  <!-- Second state: FAILED variant -->
+  <div class="container" style="padding-bottom:80px">
+    <div class="eyebrow" style="margin-bottom:14px">State variant · payment failed</div>
+    <div class="statepanel">
+      <div class="card" style="padding:48px;display:flex;flex-direction:column;align-items:center;gap:22px;text-align:center;max-width:760px;margin:0 auto">
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--bad-s);color:var(--bad);display:flex;align-items:center;justify-content:center">
+          <svg class="ico" viewBox="0 0 24 24" style="width:32px;height:32px"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+        </div>
+        <span class="pill pill-bad" style="height:28px;padding:0 14px"><i class="dot"></i>Payment failed · timed out</span>
+        <div class="display" style="font-size:28px;letter-spacing:-.7px">We did not get a confirmation from EVC Plus</div>
+        <p style="margin:0;max-width:520px;color:var(--ink2);font-size:15px;line-height:1.55">The prompt on <span class="num" style="font-weight:600;color:var(--ink)">+252 61 *** 5678</span> expired after 120 seconds, or the request was declined. No money was taken. Your order <span class="mono" style="font-size:14px">HH-260913-K7Q2M</span> is held for 30 minutes.</p>
+        <div style="display:flex;gap:12px">
+          <div class="btn btn-lg btn-p">Try again</div>
+          <div class="btn btn-lg btn-o" style="border-color:var(--hl2)">Choose another method</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink3)">
+          <svg class="ico ico-sm" viewBox="0 0 24 24" style="color:var(--wa)"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.2-4.5A9 9 0 1 1 21 12z"></path></svg>
+          Stuck? Message us on WhatsApp and we will finish the order with you.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
