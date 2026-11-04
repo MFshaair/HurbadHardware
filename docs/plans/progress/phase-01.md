@@ -98,6 +98,7 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 |---|---|---|
 | 1 — Kickoff | 4150a4f | Prerequisites verified, starting gate green |
 | 2 — Promotion pricing (HRN-26) | 5e008d7 | Window, status, specificity and price selection implemented; 15 pricing tests passed |
+| 3 — Catalog DTOs and mappers (HRN-27) | 05ddb14 | 15 mapper tests and typecheck passed |
 
 ## Gate output (Task 27)
 
@@ -110,3 +111,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-26/102-geteffectiveprice-promotion-window-resolution
 - Tag: `issue-hrn-26`
 - The implementation and tests were already present when this review began; the initial failing-test run was not independently observed.
+
+## Task 3 — Catalog DTOs and mappers (HRN-27)
+
+- [x] Implemented catalog DTOs and mappers in `05ddb14`. The prescribed test first failed for the missing module, then all 15 tests passed; `pnpm typecheck` and pre-commit lint passed.
+- Preserved the existing CategoryNodeDTO shape as required; the example included an extra imageKey. Used the provider registry for storage, as documented in prerequisites.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-27/103-catalog-dtos-and-mappers
+- Tag: `issue-hrn-27`
