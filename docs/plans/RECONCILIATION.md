@@ -136,3 +136,8 @@ Course lessons touched: M1-L01, M1-L04, M1-L05, M1-L13, M4-L08, M6-L03, M7-L07, 
 - Facet own-key exclusion is implemented with one query per facet key (Phase 1 Task 7), cached 60 s per filter-set.
 - Pickup availability per city on the product page = availability in the pickup warehouse of the cookie country (one warehouse per country in MVP).
 - `descriptionHtml` in `ProductDetailDTO` is the **sanitised** HTML produced server-side from Markdown; the raw Markdown is never sent to the client.
+
+
+## Security update — Zod major version (2026-11-04)
+
+Use Zod 4.6.7 or later within major version 4. This supersedes earlier Zod 3 pins: GHSA-mrhx-c7xc-m3w5 affects versions below 4.6.6 and has no patched Zod 3 release. Validate schemas and action error handling when implementing future plan examples.

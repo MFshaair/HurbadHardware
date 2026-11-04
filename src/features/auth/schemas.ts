@@ -14,12 +14,12 @@ export const verifyOtpSchema = z.object({
     .regex(/^\d{6}$/),
 });
 
-export const magicLinkSchema = z.object({ email: z.string().trim().toLowerCase().email() });
+export const magicLinkSchema = z.object({ email: z.string().trim().toLowerCase().pipe(z.email()) });
 
 export const signupProfileSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
-    email: z.string().trim().toLowerCase().email().max(254).optional(),
+    email: z.string().trim().toLowerCase().max(254).pipe(z.email()).optional(),
     country: z.enum(['SO', 'KE', 'ET', 'DJ', 'UG']),
     locale: z.enum(['en', 'so']),
     whatsappOptIn: z.boolean(),
@@ -28,7 +28,7 @@ export const signupProfileSchema = z
 export type SignupProfile = z.infer<typeof signupProfileSchema>;
 
 export const requestMagicLinkSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
+  email: z.string().trim().toLowerCase().max(254).pipe(z.email()),
   next: z.string().max(2048),
   locale: z.enum(['en', 'so']),
   recovery: z.boolean().default(false),

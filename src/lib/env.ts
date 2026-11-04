@@ -8,7 +8,7 @@ const tplJson = z
       const parsed: unknown = JSON.parse(s === '' ? '{}' : s);
       return z.object({ en: z.string().optional(), so: z.string().optional() }).parse(parsed);
     } catch {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'must be JSON like {"en":"HX..","so":"HX.."}' });
+      ctx.addIssue({ code: 'custom', message: 'must be JSON like {"en":"HX..","so":"HX.."}' });
       return z.NEVER;
     }
   });
@@ -25,15 +25,15 @@ const serverSchema = z
     NEXT_PUBLIC_APP_URL: optionalStr,
     NEXT_PUBLIC_MEDIA_HOST: z.string().min(1),
     SUPPORT_WHATSAPP_E164: z.string().regex(/^\+[1-9]\d{6,14}$/),
-    SUPPORT_EMAIL: z.string().email(),
+    SUPPORT_EMAIL: z.email(),
     VERCEL_URL: optionalStr,
     // Database
-    DATABASE_URL: z.string().url(),
-    DIRECT_URL: z.string().url(),
+    DATABASE_URL: z.url(),
+    DIRECT_URL: z.url(),
     DATABASE_URL_TEST: optionalStr,
     // Auth
     AUTH_SECRET: z.string().min(16),
-    AUTH_URL: z.string().url().optional(),
+    AUTH_URL: z.url().optional(),
     AUTH_GOOGLE_ID: optionalStr,
     AUTH_GOOGLE_SECRET: optionalStr,
     OTP_PEPPER: z.string().min(1),
@@ -126,7 +126,7 @@ const serverSchema = z
       for (const k of required)
         if (!v[k])
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             path: [k],
             message: `${k} is required when PROVIDER_MODE=live`,
           });
@@ -138,11 +138,10 @@ const serverSchema = z
         'AUTH_GOOGLE_ID',
         'AUTH_GOOGLE_SECRET',
       ] as const)
-        if (!v[k])
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: [k], message: `${k} is required in production` });
+        if (!v[k]) ctx.addIssue({ code: 'custom', path: [k], message: `${k} is required in production` });
       if (v.PROVIDER_MODE !== 'live')
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['PROVIDER_MODE'],
           message: 'production must run PROVIDER_MODE=live',
         });

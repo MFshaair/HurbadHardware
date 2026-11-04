@@ -32,7 +32,7 @@ export interface ActionContext {
   audit: { setBefore(value: unknown): void; setAfter(value: unknown): void };
 }
 
-export interface CreateActionOptions<I extends z.ZodTypeAny, O> {
+export interface CreateActionOptions<I extends z.ZodType, O> {
   schema: I;
   auth: AuthLevel;
   ratelimit?: { key: RateLimitName; limit: number; windowSeconds: number; by?: 'ip' | 'user' | 'ip+user' };
@@ -56,7 +56,7 @@ function limitIdentifier(by: 'ip' | 'user' | 'ip+user', ctx: { ip: string; userI
 }
 
 /** Parse → auth (+ amr) → rate limit → handler → audit → error mapping. */
-export function createAction<I extends z.ZodTypeAny, O>(
+export function createAction<I extends z.ZodType, O>(
   opts: CreateActionOptions<I, O>,
 ): (raw: unknown) => Promise<ActionResult<O>> {
   return async function action(raw: unknown): Promise<ActionResult<O>> {
@@ -88,7 +88,7 @@ export function createAction<I extends z.ZodTypeAny, O>(
           },
         };
       }
-      const input = parsed.data as z.infer<I>;
+      const input = parsed.data;
 
       if (opts.auth !== 'public') {
         if (!ctx.userId || !ctx.role) throw new AppError('UNAUTHENTICATED');
