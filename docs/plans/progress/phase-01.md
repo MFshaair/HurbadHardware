@@ -96,8 +96,17 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 
 | Task | Commit | Notes |
 |---|---|---|
-| 1 — Kickoff | (this commit) | Prerequisites verified, starting gate green |
+| 1 — Kickoff | 4150a4f | Prerequisites verified, starting gate green |
+| 2 — Promotion pricing (HRN-26) | 5e008d7 | Window, status, specificity and price selection implemented; 15 pricing tests passed |
 
 ## Gate output (Task 27)
 
 ## Spec deviations
+
+## Task 2 — Promotion pricing (HRN-26)
+
+- [x] Implemented promotion window and specificity rules in commit `5e008d7`.
+- [x] Verified `pnpm typecheck` and `pnpm test:unit`: 38 suites and 180 tests passed, including 15 pricing tests. Pre-commit formatting and lint passed.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-26/102-geteffectiveprice-promotion-window-resolution
+- Tag: `issue-hrn-26`
+- The implementation and tests were already present when this review began; the initial failing-test run was not independently observed.
