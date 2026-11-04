@@ -114,7 +114,9 @@ jobs:
       - run: pnpm test:e2e --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v4
         if: failure()
-        with: { name: playwright-report-${{ matrix.shard }}, path: playwright-report }
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: playwright-report
 
   deploy-prod:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_PROD_DEPLOY == 'true'
