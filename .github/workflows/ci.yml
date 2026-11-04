@@ -79,7 +79,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma generate
       - run: pnpm prisma migrate deploy
-      - run: pnpm test:int:ci --coverage
+      - run: pnpm test:int:ci
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: coverage-int, path: coverage }

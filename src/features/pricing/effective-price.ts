@@ -19,7 +19,12 @@ export interface EffectivePrice {
   promotion: { endsAt: Date; badge: string | null } | null;
 }
 
-interface VariantLike { id: string; productId: string; priceUsdCents: number; compareAtUsdCents: number | null }
+interface VariantLike {
+  id: string;
+  productId: string;
+  priceUsdCents: number;
+  compareAtUsdCents: number | null;
+}
 
 /** ENDED and DISABLED never price; the window decides between SCHEDULED and ACTIVE. */
 function statusAllows(status: PromotionStatus): boolean {
