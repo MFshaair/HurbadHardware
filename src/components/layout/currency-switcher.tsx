@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useTransition } from 'react';
-import { setDisplayCurrency } from '@/features/currency';
+import { setDisplayCurrency } from '@/features/currency/actions';
 import { CURRENCY_CODES, CURRENCY_META } from '@/lib/money';
 
 export function CurrencySwitcher({ current }: { current: CurrencyCode }) {

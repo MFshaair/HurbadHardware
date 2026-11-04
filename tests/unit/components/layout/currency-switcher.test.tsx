@@ -6,7 +6,7 @@ const { setDisplayCurrency, refresh } = vi.hoisted(() => ({
   setDisplayCurrency: vi.fn(async () => ({ ok: true as const, data: undefined })),
   refresh: vi.fn(),
 }));
-vi.mock('@/features/currency', () => ({ setDisplayCurrency }));
+vi.mock('@/features/currency/actions', () => ({ setDisplayCurrency }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 vi.mock('next-intl', () => ({
   useTranslations: (namespace: string) => (key: string) => `${namespace}.${key}`,
