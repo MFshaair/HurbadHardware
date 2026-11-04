@@ -99,6 +99,7 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 | 1 — Kickoff | 4150a4f | Prerequisites verified, starting gate green |
 | 2 — Promotion pricing (HRN-26) | 5e008d7 | Window, status, specificity and price selection implemented; 15 pricing tests passed |
 | 3 — Catalog DTOs and mappers (HRN-27) | 05ddb14 | 15 mapper tests and typecheck passed |
+| 4 — Exchange rates and cache tags (HRN-28) | de46f0a | Three database integration tests passed |
 
 ## Gate output (Task 27)
 
@@ -118,3 +119,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Preserved the existing CategoryNodeDTO shape as required; the example included an extra imageKey. Used the provider registry for storage, as documented in prerequisites.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-27/103-catalog-dtos-and-mappers
 - Tag: `issue-hrn-27`
+
+## Task 4 — Exchange-rate reads and catalog cache tags (HRN-28)
+
+- [x] Implemented cached exchange-rate reads and catalog cache helpers in `de46f0a`.
+- [x] Missing-module test failed first; three integration tests passed against the isolated verification database, using migrate deploy and reference seed without resetting it. Typecheck and lint passed.
+- Next.js data cache requires a running server, so integration tests replace the cache wrapper with a pass-through and exercise actual database reads. Cache behavior in a running Next server was not independently tested here.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-28/104-exchange-rate-read-service-and-catalog-cache-tags
+- Tag: `issue-hrn-28`
