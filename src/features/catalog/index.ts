@@ -30,3 +30,5 @@ export { recordProductView, getProductCardsAction } from './actions';
 export { recordProductViewSchema, getProductCardsSchema } from './schemas';
 
 export { getCompareData } from './queries';
+
+export { getHomeData } from './queries';

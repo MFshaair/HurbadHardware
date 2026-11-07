@@ -8,6 +8,7 @@ import { cachedCatalog } from './cache';
 import { getAvailableQtyMany, warehouseIdsForCountry } from './availability';
 import { availabilityOf, pickTranslation, toImageDTO, toVariantOptions, toPriceDTO } from './mappers';
 import type {
+  HomeDataDTO,
   CompareDTO,
   CompareRowDTO,
   BrandDTO,
@@ -24,7 +25,8 @@ const DEFAULT_COUNTRY: CountryCode = 'SO';
 
 function isNewArrival(publishedAt: Date | null): boolean {
   if (publishedAt === null) return false;
-  return Date.now() - publishedAt.getTime() < NEW_ARRIVAL_DAYS * 24 * 3600 * 1000;
+  const age = Date.now() - publishedAt.getTime();
+  return age >= 0 && age < NEW_ARRIVAL_DAYS * 24 * 3600 * 1000;
 }
 
 /** Ancestor paths of "a/b/c" → ["a", "a/b", "a/b/c"]. */
@@ -835,5 +837,153 @@ export async function getCompareData(
     products: cards,
     categoryName: pickTranslation(first.category.translations, locale)?.name ?? '',
     rows: [...attributeRows, ...fixedRows],
+  };
+}
+
+// ── Home ──────────────────────────────────────────────────────────────────
+
+const HOME_RAIL_SIZE = 8;
+const COLLECTION_SIZE = 12;
+
+export async function getHomeData(
+  locale: Locale,
+  currency: CurrencyCode,
+  country: CountryCode = DEFAULT_COUNTRY,
+): Promise<HomeDataDTO> {
+  const now = new Date();
+
+  const [bannerRows, tileRows, flashRows, collectionRows, brandRows, newRows] = await Promise.all([
+    db.banner.findMany({
+      where: {
+        isActive: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+        ],
+      },
+      orderBy: { position: 'asc' },
+    }),
+    db.category.findMany({
+      where: { isActive: true, depth: 0 },
+      orderBy: { position: 'asc' },
+      take: 8,
+      select: {
+        slug: true,
+        path: true,
+        iconName: true,
+        imageKey: true,
+        translations: { select: { locale: true, name: true } },
+      },
+    }),
+    db.promotion.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'SCHEDULED'] },
+        startsAt: { lte: now },
+        endsAt: { gt: now },
+        OR: [{ productId: { not: null } }, { variantId: { not: null } }],
+      },
+      orderBy: { endsAt: 'asc' },
+      select: { endsAt: true, productId: true, variant: { select: { productId: true } } },
+    }),
+    db.collection.findMany({
+      where: { isActive: true },
+      orderBy: { position: 'asc' },
+      select: {
+        slug: true,
+        titleEn: true,
+        titleSo: true,
+        items: { orderBy: { position: 'asc' }, take: COLLECTION_SIZE, select: { productId: true } },
+      },
+    }),
+    db.brand.findMany({
+      where: { isActive: true, isFeatured: true },
+      orderBy: { name: 'asc' },
+      select: { slug: true, name: true, logoKey: true },
+    }),
+    db.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        deletedAt: null,
+        publishedAt: { gte: new Date(now.getTime() - NEW_ARRIVAL_DAYS * 24 * 3600 * 1000), lte: now },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: HOME_RAIL_SIZE,
+      select: { id: true },
+    }),
+  ]);
+
+  const flashProductIds = [...new Set(flashRows.flatMap((p) => p.productId ?? p.variant?.productId ?? []))];
+
+  const [flashSales, newArrivals, ...collectionCards] = await Promise.all([
+    loadProductCards(flashProductIds, locale, currency, country),
+    loadProductCards(
+      newRows.map((r) => r.id),
+      locale,
+      currency,
+      country,
+    ),
+    ...collectionRows.map((c) =>
+      loadProductCards(
+        c.items.map((i) => i.productId),
+        locale,
+        currency,
+        country,
+      ),
+    ),
+  ]);
+
+  return {
+    banners: bannerRows.map((b) => {
+      const title = locale === 'so' ? b.titleSo : b.titleEn;
+      const subtitle = locale === 'so' ? b.subtitleSo : b.subtitleEn;
+      const ctaLabel = locale === 'so' ? b.ctaLabelSo : b.ctaLabelEn;
+      return {
+        id: b.id,
+        title,
+        subtitle,
+        ctaLabel,
+        ctaHref: b.ctaHref,
+        image: toImageDTO({ key: b.imageKey, alt: title, width: 1920, height: 1080 }, title),
+        mobileImage:
+          b.mobileImageKey === null
+            ? null
+            : toImageDTO({ key: b.mobileImageKey, alt: title, width: 1080, height: 1350 }, title),
+      };
+    }),
+    categoryTiles: tileRows.map((c) => {
+      const name = pickTranslation(c.translations, locale)?.name ?? c.slug;
+      return {
+        slug: c.slug,
+        path: c.path,
+        name,
+        iconName: c.iconName,
+        image:
+          c.imageKey === null
+            ? null
+            : toImageDTO({ key: c.imageKey, alt: name, width: null, height: null }, name),
+      };
+    }),
+    flashSales: flashSales.filter((card) => card.price.promotion !== null).slice(0, HOME_RAIL_SIZE),
+    flashSaleEndsAt:
+      flashSales
+        .filter((card) => card.price.promotion !== null)
+        .slice(0, HOME_RAIL_SIZE)
+        .map((card) => card.price.promotion?.endsAt)
+        .filter((end): end is string => end !== undefined)
+        .sort()[0] ?? null,
+    collections: collectionRows.map((c, i) => ({
+      slug: c.slug,
+      title: locale === 'so' ? c.titleSo : c.titleEn,
+      items: collectionCards[i] ?? [],
+    })),
+    featuredBrands: brandRows.map((b) => ({
+      slug: b.slug,
+      name: b.name,
+      logo:
+        b.logoKey === null
+          ? null
+          : toImageDTO({ key: b.logoKey, alt: b.name, width: null, height: null }, b.name),
+    })),
+    newArrivals,
   };
 }
