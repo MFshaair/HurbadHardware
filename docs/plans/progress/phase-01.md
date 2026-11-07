@@ -100,6 +100,7 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 | 2 — Promotion pricing (HRN-26) | 5e008d7 | Window, status, specificity and price selection implemented; 15 pricing tests passed |
 | 3 — Catalog DTOs and mappers (HRN-27) | 05ddb14 | 15 mapper tests and typecheck passed |
 | 4 — Exchange rates and cache tags (HRN-28) | de46f0a | Three database integration tests passed |
+| 5 — Catalog queries and availability (HRN-29) | f152e97 | 12 catalog and 41 total integration tests passed |
 
 ## Gate output (Task 27)
 
@@ -127,3 +128,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Next.js data cache requires a running server, so integration tests replace the cache wrapper with a pass-through and exercise actual database reads. Cache behavior in a running Next server was not independently tested here.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-28/104-exchange-rate-read-service-and-catalog-cache-tags
 - Tag: `issue-hrn-28`
+
+## Task 5 — Catalog queries and availability (HRN-29)
+
+- [x] Implemented availability, category, brand, cards and product detail, including slug redirects; implementation commit `f152e97`.
+- [x] The planned tests failed first for missing functions. Twelve catalog tests and all 41 integration tests passed against an isolated database; typecheck and lint passed. Next cache is mocked in integration tests.
+- Variant-only promotions are included, inactive warehouses are excluded, and reservation expiry uses UTC to match Prisma timestamp storage. Fixture data and the breadcrumb expectation were adapted to the existing schema and product breadcrumb.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-29/105-availability-reads-getcategorybypath-getbrand-getproductcards
+- Tag: `issue-hrn-29`
