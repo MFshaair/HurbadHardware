@@ -190,3 +190,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Visual check used a temporary local fixture page with placeholder images at desktop 1440 and mobile 390; screenshots: `docs/plans/progress/screenshots/hrn-36-37/desktop.png`, `mobile.png`. Dark-mode contrast was corrected. The temporary page was removed.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-36/112-catalog-ui-primitives-price-ratingstars-availabilitybadge
 - Tag: `issue-hrn-36`
+
+## Task 13 — Product cards and grids (HRN-37)
+
+- [x] Implemented product cards, responsive grid, loading skeleton and horizontal rail in `161e633`; cards show secondary USD when applicable. The test first failed on a missing component.
+- [x] Full unit suite passed 214 tests; typecheck, lint and formatting passed. The temporary fixture preview was inspected at 1440px and 390px with placeholder images; evidence is in `docs/plans/progress/screenshots/hrn-36-37/`. CompareButton remains scheduled for Task 21.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-37/113-productcard-productgrid-productrail
+- Tag: `issue-hrn-37`
