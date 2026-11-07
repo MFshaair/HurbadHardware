@@ -220,3 +220,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Browser inspection showed three Samsung fixture products and no brand filter at `/en/b/samsung`. Desktop and mobile screenshots: `docs/plans/progress/screenshots/hrn-40/` (fixture products have no images).
 - Linear: https://linear.app/hurbadnexus/issue/HRN-40/116-brand-page-localebslug
 - Tag: `issue-hrn-40`
+
+## Task 17 — Search page (HRN-41)
+
+- [x] Implemented dynamic search results, spelling suggestions, category links, empty-state guidance and noindex metadata in `48c638c`.
+- [x] The typo smoke test failed before implementation and passed on desktop and mobile afterwards. Typecheck, lint and 244 translation keys passed. Browser verification showed typo results and empty-state category/assistant links; a stale local catalog cache was cleared before the empty-state check.
+- Desktop/mobile screenshots: `docs/plans/progress/screenshots/hrn-41/` (fixture products have no images). The assistant link targets the planned assistant route, which is implemented in a later phase.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-41/117-search-page-localesearch
+- Tag: `issue-hrn-41`
