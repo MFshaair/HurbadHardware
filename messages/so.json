@@ -247,7 +247,23 @@
       "description": "Fadlan mar kale isku day daqiiqad kadib.",
       "withId": "Fadlan mar kale isku day. Tixraaca: {id}",
       "retry": "Isku day mar kale"
-    }
+    },
+    "quantity": "Tirada",
+    "increase": "Kordhi tirada",
+    "decrease": "Yaree tirada",
+    "unavailableCombination": "Lama heli karo",
+    "askOnWhatsApp": "Ku weydii WhatsApp",
+    "whatsappMessage": "Salaan Hurbad Hardware, waxaan doonayaa inaan wax ka weydiiyo {name} ({variant}). {url}",
+    "notifyMe": "I ogeysii",
+    "notifyMeSoon": "Digniinta alaabta waxay imanaysaa nooca xiga",
+    "flashSale": "Iibka degdegga ah",
+    "endsIn": "Wuxuu dhammaanayaa",
+    "countdownDays": "{days}m {hours}:{minutes}",
+    "specifications": "Tilmaamaha",
+    "keySpecs": "Tilmaamaha muhiimka ah",
+    "deliveryEstimate": "Gaarsiin {city} muddo {min}–{max} maalmood, laga bilaabo {fee}",
+    "galleryThumbnails": "Sawirrada alaabta",
+    "galleryImage": "Sawirka {index} ee {total}"
   },
   "search": {
     "assistant": "Weydii kaaliyaha AI",

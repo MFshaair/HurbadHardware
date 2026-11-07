@@ -247,7 +247,23 @@
       "description": "Please try again in a moment.",
       "withId": "Please try again. Reference: {id}",
       "retry": "Try again"
-    }
+    },
+    "quantity": "Quantity",
+    "increase": "Increase quantity",
+    "decrease": "Decrease quantity",
+    "unavailableCombination": "Unavailable",
+    "askOnWhatsApp": "Ask on WhatsApp",
+    "whatsappMessage": "Hello Hurbad Hardware, I would like to ask about {name} ({variant}). {url}",
+    "notifyMe": "Notify me",
+    "notifyMeSoon": "Stock alerts arrive in the next release",
+    "flashSale": "Flash sale",
+    "endsIn": "Ends in",
+    "countdownDays": "{days}d {hours}:{minutes}",
+    "specifications": "Specifications",
+    "keySpecs": "Key specifications",
+    "deliveryEstimate": "Delivery to {city} in {min}–{max} days, from {fee}",
+    "galleryThumbnails": "Product images",
+    "galleryImage": "Image {index} of {total}"
   },
   "search": {
     "assistant": "Ask the AI assistant",
