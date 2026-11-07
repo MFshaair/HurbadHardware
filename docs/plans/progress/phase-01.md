@@ -228,3 +228,9 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Desktop/mobile screenshots: `docs/plans/progress/screenshots/hrn-41/` (fixture products have no images). The assistant link targets the planned assistant route, which is implemented in a later phase.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-41/117-search-page-localesearch
 - Tag: `issue-hrn-41`
+
+## Task 18 — Search autocomplete (HRN-42, in progress)
+
+- Implemented debounced, abortable suggestions and keyboard/ARIA controls in `3031131`; the six planned unit tests, typecheck and lint passed. The initial test failed against the Phase 0 component. Browser inspection confirmed suggestions and arrow-key selection in the accessibility tree on desktop, with mobile suggestions visible; screenshots: `docs/plans/progress/screenshots/hrn-42/`.
+- Outstanding: verify the active suggestion is spoken using an actual screen reader. The accessibility tree alone does not establish spoken output; leave the issue In Progress and do not create the completion tag until verified.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-42/118-searchbox-autocomplete-with-keyboard-navigation
