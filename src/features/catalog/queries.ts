@@ -2,11 +2,14 @@ import { Prisma, type CountryCode } from '@prisma/client';
 import { db } from '@/lib/db';
 import { getRate } from '@/features/currency/service';
 import { getEffectivePrice, type PromotionLike } from '@/features/pricing/effective-price';
-import type { CurrencyCode, Locale } from '@/lib/money';
+import { formatMoney, type CurrencyCode, type Locale } from '@/lib/money';
+import { AppError } from '@/lib/errors';
 import { cachedCatalog } from './cache';
 import { getAvailableQtyMany, warehouseIdsForCountry } from './availability';
 import { availabilityOf, pickTranslation, toImageDTO, toVariantOptions, toPriceDTO } from './mappers';
 import type {
+  CompareDTO,
+  CompareRowDTO,
   BrandDTO,
   CategoryDTO,
   ImageDTO,
@@ -687,4 +690,150 @@ export async function getRecentlyViewedForUser(userId: string, limit = 12): Prom
     select: { productId: true },
   });
   return rows.map((r) => r.productId);
+}
+
+// ── Comparison ────────────────────────────────────────────────────────────
+
+const COMPARE_MAX = 4;
+
+/**
+ * 08 §7: up to 4 products of one category; one row per comparable attribute of the shared
+ * attribute set (in set order), then price, rating, warranty and availability.
+ */
+export async function getCompareData(
+  productIds: string[],
+  locale: Locale,
+  currency: CurrencyCode,
+  country: CountryCode = DEFAULT_COUNTRY,
+): Promise<CompareDTO> {
+  if (productIds.length > COMPARE_MAX) {
+    throw new AppError('COMPARE_LIMIT', `At most ${COMPARE_MAX} products can be compared`, {
+      limit: COMPARE_MAX,
+    });
+  }
+  if (productIds.length === 0) return { products: [], categoryName: '', rows: [] };
+
+  const rows = await db.product.findMany({
+    where: { id: { in: productIds }, status: 'ACTIVE', deletedAt: null },
+    select: {
+      id: true,
+      warrantyMonths: true,
+      categoryId: true,
+      category: { select: { attributeSetId: true, translations: { select: { locale: true, name: true } } } },
+    },
+  });
+  if (rows.length === 0) return { products: [], categoryName: '', rows: [] };
+
+  const categoryIds = new Set(rows.map((r) => r.categoryId));
+  if (categoryIds.size > 1) {
+    throw new AppError('COMPARE_MIXED_CATEGORY', 'Products must belong to the same category');
+  }
+
+  const cards = await loadProductCards(productIds, locale, currency, country);
+  const ordered = cards.map((c) => c.id);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const first = rows[0];
+  if (!first || cards.length === 0) return { products: [], categoryName: '', rows: [] };
+
+  const setItems =
+    first.category.attributeSetId === null
+      ? []
+      : await db.attributeSetItem.findMany({
+          where: { attributeSetId: first.category.attributeSetId, attribute: { isComparable: true } },
+          orderBy: { position: 'asc' },
+          select: {
+            attribute: {
+              select: {
+                id: true,
+                key: true,
+                unit: true,
+                translations: { select: { locale: true, label: true } },
+              },
+            },
+          },
+        });
+
+  const values = await db.productAttributeValue.findMany({
+    where: { productId: { in: ordered } },
+    select: {
+      productId: true,
+      attributeId: true,
+      valueText: true,
+      valueNumber: true,
+      valueBool: true,
+      option: { select: { value: true, translations: { select: { locale: true, label: true } } } },
+    },
+  });
+
+  const cellOf = (productId: string, attributeId: string): string | null => {
+    const parts = values
+      .filter((v) => v.productId === productId && v.attributeId === attributeId)
+      .map((v) =>
+        v.option !== null
+          ? (pickTranslation(v.option.translations, locale)?.label ?? v.option.value)
+          : (v.valueText ??
+            (v.valueNumber !== null
+              ? v.valueNumber.toString()
+              : v.valueBool !== null
+                ? String(v.valueBool)
+                : null)),
+      )
+      .filter((s): s is string => s !== null);
+    return parts.length === 0 ? null : parts.join(', ');
+  };
+
+  const equalityOf = (cells: (string | null)[]): boolean =>
+    cells.length > 1 && cells.every((c) => c !== null && c === cells[0]);
+
+  const attributeRows: CompareRowDTO[] = setItems.map((item) => {
+    const a = item.attribute;
+    const cells = ordered.map((pid) => {
+      const raw = cellOf(pid, a.id);
+      return raw;
+    });
+    return {
+      key: a.key,
+      label: pickTranslation(a.translations, locale)?.label ?? a.key,
+      unit: a.unit,
+      values: cells,
+      allEqual: equalityOf(cells),
+    };
+  });
+
+  const built = (key: string, label: string, values: (string | null)[]): CompareRowDTO => ({
+    key,
+    label,
+    unit: null,
+    values,
+    allEqual: equalityOf(values),
+  });
+
+  const fixedRows: CompareRowDTO[] = [
+    built(
+      'price',
+      'price',
+      cards.map((card) => formatMoney(card.price.price, locale)),
+    ),
+    built(
+      'rating',
+      'rating',
+      cards.map((c) => (c.ratingCount === 0 ? null : `${c.ratingAvg.toFixed(1)} (${c.ratingCount})`)),
+    ),
+    built(
+      'warranty',
+      'warranty',
+      ordered.map((id) => String(byId.get(id)?.warrantyMonths ?? 0)),
+    ),
+    built(
+      'availability',
+      'availability',
+      cards.map((card) => card.availability),
+    ),
+  ];
+
+  return {
+    products: cards,
+    categoryName: pickTranslation(first.category.translations, locale)?.name ?? '',
+    rows: [...attributeRows, ...fixedRows],
+  };
 }
