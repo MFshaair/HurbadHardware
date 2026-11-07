@@ -58,3 +58,29 @@ describe('compare-store', () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 });
+
+import { pushRecent, readRecent, RECENT_KEY, RECENT_MAX } from '@/components/catalog/recent-store';
+
+describe('recent-store', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('stores ids most-recent-first without duplicates', () => {
+    pushRecent('a');
+    pushRecent('b');
+    pushRecent('a');
+    expect(readRecent()).toEqual(['a', 'b']);
+  });
+
+  it('caps the list', () => {
+    for (let i = 0; i < RECENT_MAX + 5; i += 1) pushRecent(`p${i}`);
+    expect(readRecent()).toHaveLength(RECENT_MAX);
+    expect(readRecent()[0]).toBe(`p${RECENT_MAX + 4}`);
+  });
+
+  it('recovers from corrupt storage', () => {
+    localStorage.setItem(RECENT_KEY, '{{{');
+    expect(readRecent()).toEqual([]);
+  });
+});
