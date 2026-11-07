@@ -191,5 +191,23 @@
     "UPLOAD_TOO_LARGE": "That file is larger than 8 MB.",
     "SELF_ROLE_CHANGE": "You cannot change your own role.",
     "LAST_ADMIN": "There must always be at least one administrator."
+  },
+  "catalog": {
+    "inStock": "In stock",
+    "lowStock": "Only {count} left",
+    "outOfStock": "Out of stock",
+    "wasPrice": "Was {price}",
+    "savePercent": "Save {percent}%",
+    "ratingLabel": "{avg} out of 5",
+    "reviewCount": "{count, plural, =0 {No reviews} one {# review} other {# reviews}}",
+    "new": "New",
+    "officialWarranty": "Official warranty",
+    "warrantyMonths": "{months, plural, one {# month warranty} other {# months warranty}}",
+    "empty": {
+      "title": "Nothing to show here yet",
+      "description": "Try removing a filter or browsing another category.",
+      "browse": "Browse all products"
+    },
+    "lowStockGeneric": "Low stock"
   }
 }

@@ -191,5 +191,23 @@
     "UPLOAD_TOO_LARGE": "Faylkaasi wuu ka weyn yahay 8 MB.",
     "SELF_ROLE_CHANGE": "Ma beddeli kartid doorkaaga.",
     "LAST_ADMIN": "Mar walba waa inuu jiro ugu yaraan hal maamule."
+  },
+  "catalog": {
+    "inStock": "Waa la heli karaa",
+    "lowStock": "Waxaa hadhay {count} oo kaliya",
+    "outOfStock": "Ma jiro",
+    "wasPrice": "Wuxuu ahaa {price}",
+    "savePercent": "Badbaadi {percent}%",
+    "ratingLabel": "{avg} shan ka mid ah",
+    "reviewCount": "{count, plural, =0 {Faallooyin ma jiraan} one {# faallo} other {# faallo}}",
+    "new": "Cusub",
+    "officialWarranty": "Dammaanad rasmi ah",
+    "warrantyMonths": "{months, plural, one {Dammaanad # bil} other {Dammaanad # bilood}}",
+    "empty": {
+      "title": "Weli waxba lama helin",
+      "description": "Isku day inaad shaandhayn ka saarto ama qayb kale eegto.",
+      "browse": "Fiiri dhammaan alaabta"
+    },
+    "lowStockGeneric": "Alaab yar ayaa hadhay"
   }
 }
