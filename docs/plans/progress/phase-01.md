@@ -168,3 +168,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Missing functions failed the planned tests first. Six recommendation and two action integration tests passed, including concurrent guest-view debouncing, signed-in history and the card limit. Typecheck and lint passed. Tests used an isolated database and mocked Next cache and request context.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-33/109-related-products-frequently-bought-together-recently-viewed-and
 - Tag: `issue-hrn-33`
+
+## Task 10 — Product comparisons (HRN-34)
+
+- [x] Implemented comparison rows, localization, ordered cards, and category/quantity guards in `b69159b`. Comparable attributes remain visible when all values are missing, and units stay separate from cell values.
+- [x] The planned test first failed because the function was missing. Eight comparison tests passed; the full suite passed 93 integration and 208 unit tests. Typecheck and lint passed. Integration tests used an isolated database and mocked Next cache.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-34/110-getcomparedata
+- Tag: `issue-hrn-34`
