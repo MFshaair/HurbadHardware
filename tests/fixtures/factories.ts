@@ -44,6 +44,9 @@ export interface VariantSpec {
   options?: { key: string; value: string }[];
   compareAtUsdCents?: number | null;
   warehouseCode?: string;
+  optionsKey?: string;
+  isDefault?: boolean;
+  lowStockThreshold?: number;
 }
 
 /**
@@ -55,33 +58,48 @@ export async function createProduct(
     slug?: string;
     name?: string;
     categorySlug?: string;
+    categoryPath?: string;
+    translations?: { locale: 'en' | 'so'; name: string; shortDescription?: string }[];
     brandSlug?: string;
     status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
     variants?: VariantSpec[];
   } = {},
 ): Promise<Product> {
   const n = next();
-  const categorySlug = input.categorySlug ?? 'test-category';
+  const categoryPath = input.categoryPath ?? input.categorySlug ?? 'test-category';
   const brandSlug = input.brandSlug ?? 'test-brand';
-
-  const category = await db.category.upsert({
-    where: { slug: categorySlug },
-    create: {
-      slug: categorySlug,
-      path: categorySlug,
-      depth: 0,
-      translations: {
-        create: [
-          { locale: 'en', name: categorySlug },
-          { locale: 'so', name: categorySlug },
-        ],
+  const title = (slug: string): string =>
+    slug
+      .split('-')
+      .map((word) => word[0]!.toUpperCase() + word.slice(1))
+      .join(' ');
+  let parentId: string | null = null;
+  let category: Awaited<ReturnType<typeof db.category.findFirstOrThrow>> | undefined;
+  const segments = categoryPath.split('/');
+  for (const [depth, slug] of segments.entries()) {
+    const path = segments.slice(0, depth + 1).join('/');
+    category = await db.category.upsert({
+      where: { slug },
+      create: {
+        slug,
+        path,
+        depth,
+        parentId,
+        translations: {
+          create: [
+            { locale: 'en', name: title(slug) },
+            { locale: 'so', name: title(slug) },
+          ],
+        },
       },
-    },
-    update: {},
-  });
+      update: {},
+    });
+    parentId = category.id;
+  }
+  if (!category) throw new Error('Category path is empty');
   const brand = await db.brand.upsert({
     where: { slug: brandSlug },
-    create: { slug: brandSlug, name: brandSlug },
+    create: { slug: brandSlug, name: title(brandSlug) },
     update: {},
   });
   const warehouse = await db.warehouse.upsert({
@@ -108,7 +126,7 @@ export async function createProduct(
       status: input.status ?? 'ACTIVE',
       publishedAt: new Date(),
       translations: {
-        create: [
+        create: input.translations ?? [
           { locale: 'en', name },
           { locale: 'so', name },
         ],
@@ -124,10 +142,11 @@ export async function createProduct(
         productId: product.id,
         sku: spec.sku ?? `TP-${n}-V${i}`,
         options,
-        optionsKey: buildOptionsKey(options) || `default-${i}`,
+        optionsKey: spec.optionsKey ?? (buildOptionsKey(options) || `default-${i}`),
         priceUsdCents: spec.priceUsdCents,
         compareAtUsdCents: spec.compareAtUsdCents ?? null,
-        isDefault: i === 0,
+        isDefault: spec.isDefault ?? i === 0,
+        lowStockThreshold: spec.lowStockThreshold ?? 3,
         position: i,
       },
     });
