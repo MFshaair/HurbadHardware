@@ -12,3 +12,9 @@ test('brand page lists that brand only', async ({ page }) => {
   await expect(page.getByRole('heading', { level: 1, name: 'Samsung' })).toBeVisible();
   await expect(page.locator('article').first()).toBeVisible();
 });
+
+test('search page finds a product despite a typo', async ({ page }) => {
+  await page.goto('/en/search?q=samsng');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('samsng');
+  await expect(page.locator('article').first()).toBeVisible();
+});

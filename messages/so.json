@@ -248,5 +248,21 @@
       "withId": "Fadlan mar kale isku day. Tixraaca: {id}",
       "retry": "Isku day mar kale"
     }
+  },
+  "search": {
+    "assistant": "Weydii kaaliyaha AI",
+    "metaTitle": "Raadi — Hurbad Hardware",
+    "resultsFor": "Natiijooyinka “{q}”",
+    "didYouMean": "Ma waxaad ula jeedday <suggestion></suggestion>?",
+    "promptTitle": "Maxaad raadinaysaa?",
+    "promptDescription": "Raadi taleefan, laptop, router ama qalab kale — ama ka dooro qaybaha hoose.",
+    "placeholder": "Raadi alaab, astaamo iyo qaybo",
+    "suggestions": "Talooyin",
+    "products": "Alaabta",
+    "categories": "Qaybaha",
+    "brands": "Astaamaha",
+    "noSuggestions": "Wax u dhigma weli lama helin",
+    "viewAll": "Fiiri dhammaan natiijooyinka “{q}”",
+    "clear": "Nadiifi raadinta"
   }
 }

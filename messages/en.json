@@ -248,5 +248,21 @@
       "withId": "Please try again. Reference: {id}",
       "retry": "Try again"
     }
+  },
+  "search": {
+    "assistant": "Ask the AI assistant",
+    "metaTitle": "Search — Hurbad Hardware",
+    "resultsFor": "Results for “{q}”",
+    "didYouMean": "Did you mean <suggestion></suggestion>?",
+    "promptTitle": "What are you looking for?",
+    "promptDescription": "Search for a phone, laptop, router or accessory — or browse a category below.",
+    "placeholder": "Search products, brands and categories",
+    "suggestions": "Suggestions",
+    "products": "Products",
+    "categories": "Categories",
+    "brands": "Brands",
+    "noSuggestions": "No matches yet",
+    "viewAll": "See all results for “{q}”",
+    "clear": "Clear search"
   }
 }
