@@ -263,7 +263,8 @@
     "keySpecs": "Tilmaamaha muhiimka ah",
     "deliveryEstimate": "Gaarsiin {city} muddo {min}–{max} maalmood, laga bilaabo {fee}",
     "galleryThumbnails": "Sawirrada alaabta",
-    "galleryImage": "Sawirka {index} ee {total}"
+    "galleryImage": "Sawirka {index} ee {total}",
+    "lowStockShort": "Alaab yar"
   },
   "search": {
     "assistant": "Weydii kaaliyaha AI",
@@ -280,5 +281,34 @@
     "noSuggestions": "Wax u dhigma weli lama helin",
     "viewAll": "Fiiri dhammaan natiijooyinka “{q}”",
     "clear": "Nadiifi raadinta"
+  },
+  "compare": {
+    "metaTitle": "Isbarbardhig alaabta — Hurbad Hardware",
+    "title": "Isbarbardhig {category}",
+    "compare": "Isbarbardhig",
+    "added": "Waa lagu daray",
+    "compareCount": "Isbarbardhig ({count})",
+    "clear": "Nadiifi",
+    "remove": "Ka saar isbarbardhigga",
+    "drawerLabel": "Liiska isbarbardhigga",
+    "limitReached": "Waxaad isbarbardhigi kartaa ilaa 4 alaab",
+    "replaceTitle": "Ma bedelaysaa liiska isbarbardhigga?",
+    "replaceDescription": "Waxaad isbarbardhigi kartaa oo kaliya alaab isku qayb ah.",
+    "replace": "Bedel",
+    "cancel": "Jooji",
+    "highlightDifferences": "Muuji faraqyada",
+    "emptyTitle": "Dooro ugu yaraan laba alaab",
+    "emptyDescription": "Ku dar alaab adigoo isticmaalaya badhanka Isbarbardhig, ka dibna halkan ku soo noqo.",
+    "browse": "Fiiri alaabta",
+    "row": {
+      "price": "Qiimaha",
+      "rating": "Qiimaynta",
+      "warranty": "Dammaanad",
+      "availability": "Helitaanka"
+    },
+    "error": {
+      "COMPARE_MIXED_CATEGORY": "Alaabtu waa inay isku qayb ka ahaadaan",
+      "COMPARE_LIMIT": "Waxaad isbarbardhigi kartaa ilaa 4 alaab"
+    }
   }
 }

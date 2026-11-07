@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { AnnouncementBar } from '@/components/layout/announcement-bar';
 import { Footer } from '@/components/layout/footer';
 import { Header } from '@/components/layout/header';
+import { CompareDrawer } from '@/components/compare/compare-drawer';
 import { WhatsAppFab } from '@/components/layout/whatsapp-fab';
 import { getCategoryTree } from '@/features/catalog';
 import { getStoreSettings } from '@/features/store';
@@ -45,6 +46,7 @@ export default async function ShopLayout({
         email={settings.supportEmail}
       />
       <WhatsAppFab phone={settings.supportWhatsapp} />
+      <CompareDrawer />
     </div>
   );
 }

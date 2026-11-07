@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/navigation';
+import { CompareButton } from '@/components/compare/compare-button';
 import { AvailabilityBadge } from '@/components/catalog/availability-badge';
 import { Price } from '@/components/ui/price';
 import { RatingStars } from '@/components/ui/rating-stars';
@@ -17,6 +18,9 @@ export async function ProductCard({
   const t = await getTranslations('catalog');
   return (
     <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-hairline bg-card shadow-sm transition-shadow focus-within:shadow-md hover:shadow-md dark:border-hairline-dark">
+      <div className="absolute end-2 top-2 z-10">
+        <CompareButton productId={product.id} categoryPath={product.category.path} />
+      </div>
       <div className="relative aspect-square bg-soft dark:bg-night-3">
         {product.image === null ? (
           <div className="size-full" aria-hidden />

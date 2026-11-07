@@ -63,6 +63,7 @@
     "class-variance-authority": "^0.7",
     "clsx": "^2",
     "cmdk": "^1",
+    "framer-motion": "^14.10.1",
     "libphonenumber-js": "^1",
     "lucide-react": "^1",
     "next": "15.5.28",

@@ -263,7 +263,8 @@
     "keySpecs": "Key specifications",
     "deliveryEstimate": "Delivery to {city} in {min}–{max} days, from {fee}",
     "galleryThumbnails": "Product images",
-    "galleryImage": "Image {index} of {total}"
+    "galleryImage": "Image {index} of {total}",
+    "lowStockShort": "Low stock"
   },
   "search": {
     "assistant": "Ask the AI assistant",
@@ -280,5 +281,34 @@
     "noSuggestions": "No matches yet",
     "viewAll": "See all results for “{q}”",
     "clear": "Clear search"
+  },
+  "compare": {
+    "metaTitle": "Compare products — Hurbad Hardware",
+    "title": "Compare {category}",
+    "compare": "Compare",
+    "added": "Added",
+    "compareCount": "Compare ({count})",
+    "clear": "Clear",
+    "remove": "Remove from comparison",
+    "drawerLabel": "Comparison list",
+    "limitReached": "You can compare up to 4 products",
+    "replaceTitle": "Replace comparison list?",
+    "replaceDescription": "You can only compare products from the same category.",
+    "replace": "Replace",
+    "cancel": "Cancel",
+    "highlightDifferences": "Highlight differences",
+    "emptyTitle": "Choose at least two products",
+    "emptyDescription": "Add products with the Compare button, then come back here.",
+    "browse": "Browse products",
+    "row": {
+      "price": "Price",
+      "rating": "Rating",
+      "warranty": "Warranty",
+      "availability": "Availability"
+    },
+    "error": {
+      "COMPARE_MIXED_CATEGORY": "Products must be from the same category",
+      "COMPARE_LIMIT": "You can compare up to 4 products"
+    }
   }
 }
