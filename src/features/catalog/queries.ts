@@ -1,10 +1,10 @@
-import type { CountryCode, Prisma } from '@prisma/client';
+import { Prisma, type CountryCode } from '@prisma/client';
 import { db } from '@/lib/db';
 import { getRate } from '@/features/currency/service';
 import { getEffectivePrice, type PromotionLike } from '@/features/pricing/effective-price';
 import type { CurrencyCode, Locale } from '@/lib/money';
 import { cachedCatalog } from './cache';
-import { getAvailableQtyMany } from './availability';
+import { getAvailableQtyMany, warehouseIdsForCountry } from './availability';
 import { availabilityOf, pickTranslation, toImageDTO, toVariantOptions, toPriceDTO } from './mappers';
 import type {
   BrandDTO,
@@ -538,4 +538,74 @@ export async function getProductBySlug(
 ): Promise<ProductDetailDTO | null | { redirectTo: string }> {
   // Availability is part of the DTO, so the cache window is short and tagged per product.
   return loadProductBySlug(slug, locale, currency, country);
+}
+
+import { buildFacets, appliedFilterLabels } from './facets';
+import {
+  LISTING_PAGE_SIZE,
+  listingIdsQuery,
+  listingWhere,
+  productFrom,
+  type ListingSqlInput,
+} from './listing-sql';
+import type { ListingDTO, ListingParams } from './dto';
+
+/** Display-currency major units → USD cents, using the same rate the prices were converted with. */
+function displayMajorToUsdCents(
+  value: number | undefined,
+  currency: CurrencyCode,
+  rate: string,
+): number | null {
+  if (value === undefined) return null;
+  if (currency === 'USD') return Math.round(value * 100);
+  const numericRate = Number(rate);
+  if (!Number.isFinite(numericRate) || numericRate <= 0) return null;
+  return Math.round((value / numericRate) * 100);
+}
+
+export async function listProducts(
+  params: ListingParams,
+  locale: Locale,
+  currency: CurrencyCode,
+  country: CountryCode = DEFAULT_COUNTRY,
+): Promise<ListingDTO> {
+  const rate = await getRate(currency);
+  const wh = await warehouseIdsForCountry(country);
+  const input: ListingSqlInput = {
+    params,
+    priceMinUsdCents: displayMajorToUsdCents(params.priceMin, currency, rate),
+    priceMaxUsdCents: displayMajorToUsdCents(params.priceMax, currency, rate),
+    warehouseIds: wh.country.length > 0 ? wh.country : wh.all,
+    now: new Date(),
+  };
+
+  const rows = await db.$queryRaw<{ id: string; total: number }[]>(listingIdsQuery(input));
+  const total =
+    rows[0]?.total ??
+    (params.page > 1
+      ? ((
+          await db.$queryRaw<{ total: number }[]>(
+            Prisma.sql`SELECT count(*)::int AS total ${productFrom(input.now)} ${listingWhere(input)}`,
+          )
+        )[0]?.total ?? 0)
+      : 0);
+  const [items, facets] = await Promise.all([
+    loadProductCards(
+      rows.map((r) => r.id),
+      locale,
+      currency,
+      country,
+    ),
+    buildFacets(input, locale, currency, rate),
+  ]);
+
+  return {
+    items,
+    total,
+    page: params.page,
+    pageSize: LISTING_PAGE_SIZE,
+    facets,
+    sort: params.sort,
+    appliedFilters: appliedFilterLabels(facets, params),
+  };
 }

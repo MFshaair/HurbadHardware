@@ -57,6 +57,11 @@ export async function createProduct(
   input: {
     slug?: string;
     name?: string;
+    sku?: string;
+    publishedAt?: Date;
+    ratingAvg?: number;
+    ratingCount?: number;
+    salesCount?: number;
     categorySlug?: string;
     categoryPath?: string;
     translations?: { locale: 'en' | 'so'; name: string; shortDescription?: string }[];
@@ -119,12 +124,15 @@ export async function createProduct(
   const product = await db.product.create({
     data: {
       slug,
-      sku: `TP-${n}`,
+      sku: input.sku ?? `TP-${n}`,
       name,
       brandId: brand.id,
       categoryId: category.id,
       status: input.status ?? 'ACTIVE',
-      publishedAt: new Date(),
+      publishedAt: input.publishedAt ?? new Date(),
+      ratingAvg: input.ratingAvg ?? 0,
+      ratingCount: input.ratingCount ?? 0,
+      salesCount: input.salesCount ?? 0,
       translations: {
         create: input.translations ?? [
           { locale: 'en', name },
