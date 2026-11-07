@@ -212,3 +212,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Browser checked `/en/c/smartphones` with seeded fixture: 12 cards, breadcrumbs, Apple filter narrowing to 3; verified one BreadcrumbList and three hreflang links. Also checked `/so/c/laptops/gaming-laptops` on mobile with five fixture products. Screenshots: `docs/plans/progress/screenshots/hrn-39/` (fixture products have no images).
 - Linear: https://linear.app/hurbadnexus/issue/HRN-39/115-seo-helpers-and-the-category-page-localecslug
 - Tag: `issue-hrn-39`
+
+## Task 16 — Brand pages (HRN-40)
+
+- [x] Added localized brand pages and loading state in `ab2dd14`, reusing the listing and store request context.
+- [x] Brand smoke failed before implementation because the Samsung heading was missing, then category and brand smoke tests passed on desktop and mobile (4 tests). Typecheck, lint and 230 matching translation keys passed; the translation check used `node --import tsx` because the package script's IPC socket was blocked locally.
+- Browser inspection showed three Samsung fixture products and no brand filter at `/en/b/samsung`. Desktop and mobile screenshots: `docs/plans/progress/screenshots/hrn-40/` (fixture products have no images).
+- Linear: https://linear.app/hurbadnexus/issue/HRN-40/116-brand-page-localebslug
+- Tag: `issue-hrn-40`
