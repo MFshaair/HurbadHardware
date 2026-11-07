@@ -154,3 +154,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Eleven facet tests and 16 listing integration tests passed against the isolated database with the Next cache mocked. Typecheck, lint and format checks passed.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-31/107-facets
 - Tag: `issue-hrn-31`
+
+## Task 8 — Search suggestions (HRN-32)
+
+- [x] Implemented suggestions, spelling suggestions and rate-limited GET endpoint in `aec7cdb`; variant-specific promotions are included and word-level similarity supports typos.
+- [x] Missing-module test failed first. Nine database integration tests, three endpoint unit tests, typecheck and lint passed. A local test server returned HTTP 200 with iPhone suggestions and the expected cache header. Integration tests used an isolated database and mocked Next cache.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-32/108-searchsuggest-did-you-mean-and-get-apisearchsuggest
+- Tag: `issue-hrn-32`
