@@ -235,9 +235,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Outstanding: verify the active suggestion is spoken using an actual screen reader. The accessibility tree alone does not establish spoken output; leave the issue In Progress and do not create the completion tag until verified.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-42/118-searchbox-autocomplete-with-keyboard-navigation
 
-## Task 19 — Product components (HRN-43, in progress)
+## Task 19 — Product components (HRN-43)
 
 - Implemented gallery, variant picker, quantity stepper, promotion countdown, delivery estimate and specification table in `8820ce9`; English and Somali messages are in place. The planned test initially failed on the missing component; seven tests, typecheck, lint and 260 matching translation keys passed.
 - A temporary fixture page verified the variant selection, quantity control, countdown, delivery estimate and table; 1440px and 390px screenshots: `docs/plans/progress/screenshots/hrn-43/`. The gallery used an empty-image fixture. The temporary page was removed.
-- Outstanding: `PurchaseActions` requires the real `CompareButton`, which is scheduled for Task 21; the reconciliation also requires its `categoryPath` prop. The purchase slot and full issue verification remain unfinished; no completion tag was created.
+- [x] Completed the purchase slot in `e4ac539` after the real CompareButton was added in `5324c0c`; it receives category and server-resolved support settings. Eight purchase/variant tests, typecheck and lint passed. Browser validation on the seeded product confirmed the gallery, variant selection, updated price and SKU.
+- Tag: `issue-hrn-43`
 - Linear: https://linear.app/hurbadnexus/issue/HRN-43/119-product-page-components-gallery-variant-picker-quantity-purchase
