@@ -242,3 +242,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Completed the purchase slot in `e4ac539` after the real CompareButton was added in `5324c0c`; it receives category and server-resolved support settings. Eight purchase/variant tests, typecheck and lint passed. Browser validation on the seeded product confirmed the gallery, variant selection, updated price and SKU.
 - Tag: `issue-hrn-43`
 - Linear: https://linear.app/hurbadnexus/issue/HRN-43/119-product-page-components-gallery-variant-picker-quantity-purchase
+
+## Task 20 — Product page (HRN-44)
+
+- [x] Added the product detail route, variant-aware UI, structured data, related rails, server-resolved WhatsApp settings and slug history in `9132577`; prerequisite recent-history component is in `71b7bbd`. Product route uses a separate route group so the old slug returns a real HTTP 308 before streaming, while an inner Suspense boundary retains the skeleton.
+- [x] Product, redirect and variant tests passed on desktop and mobile. Browser checks with a temporary isolated variant fixture verified price, SKU, image, stock and disabled notify state update without navigation. Sixty component tests, typecheck and lint passed. Screenshots: `docs/plans/progress/screenshots/hrn-44/` (the local fake image host does not serve real images).
+- Google Rich Results code test detected valid Product snippets and Breadcrumbs; Merchant listings flagged the fake local image URLs as invalid. Public production image URLs require a separate deployed-site check.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-44/120-product-page-localepslug
+- Tag: `issue-hrn-44`
