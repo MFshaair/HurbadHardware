@@ -208,6 +208,36 @@
       "description": "Isku day inaad shaandhayn ka saarto ama qayb kale eegto.",
       "browse": "Fiiri dhammaan alaabta"
     },
-    "lowStockGeneric": "Alaab yar ayaa hadhay"
+    "lowStockGeneric": "Alaab yar ayaa hadhay",
+    "filters": "Shaandhaynta",
+    "sortBy": "U kala hormari",
+    "sort": {
+      "relevance": "Ku habboon",
+      "price_asc": "Qiimaha: hooseeya ilaa sare",
+      "price_desc": "Qiimaha: sare ilaa hooseeya",
+      "newest": "Kuwa ugu cusub",
+      "rating": "Qiimaynta ugu sarreysa",
+      "bestselling": "Kuwa ugu iibka badan"
+    },
+    "facet": {
+      "brand": "Astaanta",
+      "price": "Qiimaha",
+      "availability": "Helitaanka",
+      "inStock": "Kuwa la heli karo oo kaliya"
+    },
+    "priceMin": "Qiimaha ugu hooseeya",
+    "priceMax": "Qiimaha ugu sarreeya",
+    "rangeMin": "Laga bilaabo",
+    "rangeMax": "Ilaa",
+    "clearAll": "Nadiifi dhammaan",
+    "removeFilter": "Ka saar {label}",
+    "showResults": "Muuji {count, plural, one {# natiijo} other {# natiijo}}",
+    "resultCount": "{count, plural, =0 {Alaab ma jirto} one {# alaab} other {# alaab}}",
+    "pagination": {
+      "label": "Bogagga",
+      "previous": "Boggii hore",
+      "next": "Bogga xiga",
+      "page": "Bogga {page}"
+    }
   }
 }

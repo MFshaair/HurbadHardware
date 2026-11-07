@@ -208,6 +208,36 @@
       "description": "Try removing a filter or browsing another category.",
       "browse": "Browse all products"
     },
-    "lowStockGeneric": "Low stock"
+    "lowStockGeneric": "Low stock",
+    "filters": "Filters",
+    "sortBy": "Sort by",
+    "sort": {
+      "relevance": "Relevance",
+      "price_asc": "Price: low to high",
+      "price_desc": "Price: high to low",
+      "newest": "Newest",
+      "rating": "Top rated",
+      "bestselling": "Best selling"
+    },
+    "facet": {
+      "brand": "Brand",
+      "price": "Price",
+      "availability": "Availability",
+      "inStock": "In stock only"
+    },
+    "priceMin": "Minimum price",
+    "priceMax": "Maximum price",
+    "rangeMin": "From",
+    "rangeMax": "To",
+    "clearAll": "Clear all",
+    "removeFilter": "Remove {label}",
+    "showResults": "Show {count, plural, one {# result} other {# results}}",
+    "resultCount": "{count, plural, =0 {No products} one {# product} other {# products}}",
+    "pagination": {
+      "label": "Pagination",
+      "previous": "Previous page",
+      "next": "Next page",
+      "page": "Page {page}"
+    }
   }
 }
