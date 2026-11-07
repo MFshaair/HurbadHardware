@@ -193,6 +193,7 @@
     "LAST_ADMIN": "There must always be at least one administrator."
   },
   "catalog": {
+    "brandFallbackDescription": "All {brand} products available at Hurbad Hardware.",
     "inStock": "In stock",
     "lowStock": "Only {count} left",
     "outOfStock": "Out of stock",

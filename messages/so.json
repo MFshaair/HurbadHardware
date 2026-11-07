@@ -193,6 +193,7 @@
     "LAST_ADMIN": "Mar walba waa inuu jiro ugu yaraan hal maamule."
   },
   "catalog": {
+    "brandFallbackDescription": "Dhammaan alaabta {brand} ee laga heli karo Hurbad Hardware.",
     "inStock": "Waa la heli karaa",
     "lowStock": "Waxaa hadhay {count} oo kaliya",
     "outOfStock": "Ma jiro",
