@@ -204,3 +204,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Missing-component test failed first; three control tests, typecheck, lint and 223 matching translation keys passed. Desktop/mobile preview confirmed brand selection updates the URL and pagination preserves it. Screenshots: `docs/plans/progress/screenshots/hrn-38/` (temporary fixture, placeholder images); mobile sheet padding was subsequently improved.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-38/114-listing-controls-sort-pagination-filters-chips-and-listingview
 - Tag: `issue-hrn-38`
+
+## Task 15 — Category pages and SEO (HRN-39)
+
+- [x] Added category pages, loading/error states, metadata, safe JSON-LD and canonical/hreflang helpers in `7d2d8df`. Canonical page numbers are normalized and store preferences use the existing request context.
+- [x] Before implementation the catch-all displayed a 404 but returned HTTP 200 during streaming; the planned Playwright failing run was not executed. Added the category browser smoke test and unit tests for canonical alternates and JSON-LD escaping. Two SEO tests, typecheck, lint and 229 translation keys passed.
+- Browser checked `/en/c/smartphones` with seeded fixture: 12 cards, breadcrumbs, Apple filter narrowing to 3; verified one BreadcrumbList and three hreflang links. Also checked `/so/c/laptops/gaming-laptops` on mobile with five fixture products. Screenshots: `docs/plans/progress/screenshots/hrn-39/` (fixture products have no images).
+- Linear: https://linear.app/hurbadnexus/issue/HRN-39/115-seo-helpers-and-the-category-page-localecslug
+- Tag: `issue-hrn-39`
