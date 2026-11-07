@@ -197,3 +197,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Full unit suite passed 214 tests; typecheck, lint and formatting passed. The temporary fixture preview was inspected at 1440px and 390px with placeholder images; evidence is in `docs/plans/progress/screenshots/hrn-36-37/`. CompareButton remains scheduled for Task 21.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-37/113-productcard-productgrid-productrail
 - Tag: `issue-hrn-37`
+
+## Task 14 — Listing controls (HRN-38)
+
+- [x] Implemented URL-driven sort, filters, chips, pagination, mobile sheet and listing composition in `f82e526`. Numeric range changes replace the old value in one navigation; repeated URL values are preserved.
+- [x] Missing-component test failed first; three control tests, typecheck, lint and 223 matching translation keys passed. Desktop/mobile preview confirmed brand selection updates the URL and pagination preserves it. Screenshots: `docs/plans/progress/screenshots/hrn-38/` (temporary fixture, placeholder images); mobile sheet padding was subsequently improved.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-38/114-listing-controls-sort-pagination-filters-chips-and-listingview
+- Tag: `issue-hrn-38`
