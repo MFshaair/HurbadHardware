@@ -161,3 +161,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] Missing-module test failed first. Nine database integration tests, three endpoint unit tests, typecheck and lint passed. A local test server returned HTTP 200 with iPhone suggestions and the expected cache header. Integration tests used an isolated database and mocked Next cache.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-32/108-searchsuggest-did-you-mean-and-get-apisearchsuggest
 - Tag: `issue-hrn-32`
+
+## Task 9 — Related products and viewed history (HRN-33)
+
+- [x] Implemented related-product ranking, frequently-bought-together reads, recently-viewed history and validated public actions in `c621e90`. Shared attribute matching includes option, numeric, boolean and text values.
+- [x] Missing functions failed the planned tests first. Six recommendation and two action integration tests passed, including concurrent guest-view debouncing, signed-in history and the card limit. Typecheck and lint passed. Tests used an isolated database and mocked Next cache and request context.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-33/109-related-products-frequently-bought-together-recently-viewed-and
+- Tag: `issue-hrn-33`
