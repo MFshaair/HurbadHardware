@@ -14,7 +14,9 @@ describe('FakeStorage', () => {
   });
 
   it('publicUrl uses the media host', () => {
-    expect(storage.publicUrl('products/p1/abc.webp')).toBe('https://media.test.local/products/p1/abc.webp');
+    expect(storage.publicUrl('products/p1/abc.webp')).toBe(
+      'https://media.test.local/storage/v1/object/public/media/products/p1/abc.webp',
+    );
   });
 
   it('put/delete round-trip through the in-memory map', async () => {

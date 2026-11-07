@@ -264,7 +264,18 @@
     "deliveryEstimate": "Delivery to {city} in {min}–{max} days, from {fee}",
     "galleryThumbnails": "Product images",
     "galleryImage": "Image {index} of {total}",
-    "lowStockShort": "Low stock"
+    "lowStockShort": "Low stock",
+    "tabs": {
+      "description": "Description",
+      "specifications": "Specifications",
+      "reviews": "Reviews",
+      "questions": "Questions"
+    },
+    "reviewsComingSoon": "Customer reviews are coming soon.",
+    "questionsComingSoon": "Questions and answers are coming soon.",
+    "relatedProducts": "Related products",
+    "frequentlyBoughtTogether": "Frequently bought together",
+    "recentlyViewed": "Recently viewed"
   },
   "search": {
     "assistant": "Ask the AI assistant",

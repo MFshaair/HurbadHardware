@@ -394,6 +394,14 @@ async function seedProducts(): Promise<void> {
       update: base,
     });
 
+    if (fx.slug === 'samsung-galaxy-s25-256gb') {
+      await db.productSlugHistory.upsert({
+        where: { oldSlug: 'samsung-galaxy-s25' },
+        create: { oldSlug: 'samsung-galaxy-s25', productId: product.id },
+        update: { productId: product.id },
+      });
+    }
+
     for (const locale of ['en', 'so'] as const) {
       const t = fx.translations[locale];
       await db.productTranslation.upsert({

@@ -11,7 +11,7 @@ export class FakeStorage implements ObjectStorage {
   }
 
   publicUrl(key: string): string {
-    return `https://${this.mediaHost}/${key}`;
+    return `https://${this.mediaHost}/storage/v1/object/public/media/${key}`;
   }
 
   async put(key: string, body: Buffer, _contentType: string): Promise<void> {

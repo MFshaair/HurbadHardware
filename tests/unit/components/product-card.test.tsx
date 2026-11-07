@@ -11,6 +11,7 @@ vi.mock('@/lib/i18n/navigation', () => ({
     </a>
   ),
 }));
+vi.mock('@/components/compare/compare-button', () => ({ CompareButton: () => <button>Compare</button> }));
 vi.mock('@/components/ui/price', () => ({ Price: () => <span>$1,299.00</span> }));
 vi.mock('@/components/ui/rating-stars', () => ({ RatingStars: () => <span>12 reviews</span> }));
 vi.mock('@/components/catalog/availability-badge', () => ({
@@ -38,6 +39,7 @@ describe('ProductCard', () => {
     expect(screen.getByRole('link', { name: /Apple iPhone/ })).toHaveAttribute('href', '/p/iphone');
     expect(screen.getByText('$1,299.00')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeInTheDocument();
     expect(screen.getByText('In stock')).toBeInTheDocument();
     expect(screen.getByAltText('iPhone')).toBeInTheDocument();
   });

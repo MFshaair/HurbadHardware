@@ -264,7 +264,18 @@
     "deliveryEstimate": "Gaarsiin {city} muddo {min}–{max} maalmood, laga bilaabo {fee}",
     "galleryThumbnails": "Sawirrada alaabta",
     "galleryImage": "Sawirka {index} ee {total}",
-    "lowStockShort": "Alaab yar"
+    "lowStockShort": "Alaab yar",
+    "tabs": {
+      "description": "Sharaxaad",
+      "specifications": "Tilmaamaha",
+      "reviews": "Faallooyinka",
+      "questions": "Su'aalaha"
+    },
+    "reviewsComingSoon": "Faallooyinka macaamiisha ayaa dhawaan imanaya.",
+    "questionsComingSoon": "Su'aalaha iyo jawaabaha ayaa dhawaan imanaya.",
+    "relatedProducts": "Alaab la mid ah",
+    "frequentlyBoughtTogether": "Badanaa wadajir loo iibsado",
+    "recentlyViewed": "Waxaad dhawaan eegtay"
   },
   "search": {
     "assistant": "Weydii kaaliyaha AI",
