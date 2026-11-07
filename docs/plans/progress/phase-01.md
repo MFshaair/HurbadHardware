@@ -257,3 +257,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] The planned store tests failed on the missing module first, then all five passed; the complete component suite passed 60 tests. Browser checked three phones, the drawer and comparison table, the differences switch, and the confirmation dialog when selecting a laptop. Screenshots: `docs/plans/progress/screenshots/hrn-45/` (isolated fixtures without images).
 - Linear: https://linear.app/hurbadnexus/issue/HRN-45/121-compare-store-button-drawer-page
 - Tag: `issue-hrn-45`
+
+## Task 22 — Recently viewed (HRN-46)
+
+- [x] Added local recent-history storage and the hydrated recent-products rail in `71b7bbd`; the product page mounts it in `9132577`. The rail excludes the current product immediately and records views through the existing server action.
+- [x] The recent-store tests failed on the missing module first, then the combined eight compare/recent tests and all 60 component tests passed. Browser opened three fixture products and showed the other two in the rail, omitting the current product. Screenshots: `docs/plans/progress/screenshots/hrn-46/` (fixture images absent).
+- Linear: https://linear.app/hurbadnexus/issue/HRN-46/122-recently-viewed
+- Tag: `issue-hrn-46`
