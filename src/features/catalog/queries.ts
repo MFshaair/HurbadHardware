@@ -609,3 +609,82 @@ export async function listProducts(
     appliedFilters: appliedFilterLabels(facets, params),
   };
 }
+
+// ── Recommendations ───────────────────────────────────────────────────────
+
+/**
+ * Related = same leaf category, ordered by the count of shared attribute values,
+ * then by salesCount; the product itself is excluded (08 §8).
+ */
+export async function getRelatedProducts(
+  productId: string,
+  locale: Locale,
+  currency: CurrencyCode,
+  limit = 8,
+  country: CountryCode = DEFAULT_COUNTRY,
+): Promise<ProductCardDTO[]> {
+  const rows = await db.$queryRaw<{ id: string }[]>(Prisma.sql`
+    WITH self AS (
+      SELECT p."id", p."categoryId" FROM "Product" p WHERE p."id" = ${productId}
+    ),
+    shared AS (
+      SELECT pav."productId" AS id, COUNT(*)::int AS overlap
+      FROM "ProductAttributeValue" pav
+      WHERE EXISTS (
+        SELECT 1 FROM "ProductAttributeValue" s
+        WHERE s."productId" = ${productId} AND s."attributeId" = pav."attributeId"
+          AND ((pav."optionId" IS NOT NULL AND s."optionId" = pav."optionId")
+            OR (pav."valueText" IS NOT NULL AND s."valueText" = pav."valueText")
+            OR (pav."valueNumber" IS NOT NULL AND s."valueNumber" = pav."valueNumber")
+            OR (pav."valueBool" IS NOT NULL AND s."valueBool" = pav."valueBool"))
+      )
+        AND pav."productId" <> ${productId}
+      GROUP BY pav."productId"
+    )
+    SELECT p."id" AS id
+    FROM "Product" p
+    JOIN self ON p."categoryId" = self."categoryId"
+    LEFT JOIN shared ON shared.id = p."id"
+    WHERE p."id" <> ${productId}
+      AND p."status" = 'ACTIVE'::"ProductStatus"
+      AND p."deletedAt" IS NULL
+      AND EXISTS (SELECT 1 FROM "ProductVariant" v WHERE v."productId" = p."id" AND v."isActive")
+    ORDER BY COALESCE(shared.overlap, 0) DESC, p."salesCount" DESC, p."id" ASC
+    LIMIT ${limit}
+  `);
+  return loadProductCards(
+    rows.map((r) => r.id),
+    locale,
+    currency,
+    country,
+  );
+}
+
+/** FBT read side; the pair table is refreshed nightly by Phase 5's `catalog/fbt-refresh` job (08 §8). */
+export async function getFrequentlyBoughtTogether(
+  productId: string,
+  locale: Locale,
+  currency: CurrencyCode,
+  limit = 3,
+  country: CountryCode = DEFAULT_COUNTRY,
+): Promise<ProductCardDTO[]> {
+  const pairs = await db.frequentlyBoughtTogether.findMany({
+    where: { OR: [{ productAId: productId }, { productBId: productId }] },
+    orderBy: { score: 'desc' },
+    take: limit,
+    select: { productAId: true, productBId: true, score: true },
+  });
+  const ids = pairs.map((p) => (p.productAId === productId ? p.productBId : p.productAId));
+  return loadProductCards(ids, locale, currency, country);
+}
+
+/** Product ids the signed-in user viewed most recently (08 §8, merged with localStorage client-side). */
+export async function getRecentlyViewedForUser(userId: string, limit = 12): Promise<string[]> {
+  const rows = await db.recentlyViewed.findMany({
+    where: { userId },
+    orderBy: { viewedAt: 'desc' },
+    take: limit,
+    select: { productId: true },
+  });
+  return rows.map((r) => r.productId);
+}

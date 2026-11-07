@@ -24,3 +24,7 @@ export {
   SORT_KEYS,
 } from './params';
 export { LISTING_PAGE_SIZE } from './listing-sql';
+
+export { getRelatedProducts, getFrequentlyBoughtTogether, getRecentlyViewedForUser } from './queries';
+export { recordProductView, getProductCardsAction } from './actions';
+export { recordProductViewSchema, getProductCardsSchema } from './schemas';
