@@ -238,6 +238,14 @@
       "previous": "Previous page",
       "next": "Next page",
       "page": "Page {page}"
+    },
+    "home": "Home",
+    "breadcrumb": "Breadcrumb",
+    "error": {
+      "title": "Something went wrong",
+      "description": "Please try again in a moment.",
+      "withId": "Please try again. Reference: {id}",
+      "retry": "Try again"
     }
   }
 }

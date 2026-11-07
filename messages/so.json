@@ -238,6 +238,14 @@
       "previous": "Boggii hore",
       "next": "Bogga xiga",
       "page": "Bogga {page}"
+    },
+    "home": "Bogga hore",
+    "breadcrumb": "Waddada bogagga",
+    "error": {
+      "title": "Wax baa qaldamay",
+      "description": "Fadlan mar kale isku day daqiiqad kadib.",
+      "withId": "Fadlan mar kale isku day. Tixraaca: {id}",
+      "retry": "Isku day mar kale"
     }
   }
 }
