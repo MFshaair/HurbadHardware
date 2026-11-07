@@ -182,3 +182,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] The planned test failed first for a missing function. Five home tests and the full 98-test integration suite passed against an isolated database; Next cache was mocked. Typecheck and lint passed.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-35/111-gethomedata
 - Tag: `issue-hrn-35`
+
+## Task 12 — Catalog UI primitives (HRN-36)
+
+- [x] Added price, rating, availability, empty state and sanitized Markdown in `f06a912`; English and Somali strings match. Low-stock cards without an exact quantity show a generic label.
+- [x] The price test initially failed on a missing module; price/rating/stock tests and Markdown safety tests passed. Typecheck, lint and 199 translation keys passed; production audit has no high-severity findings.
+- Visual check used a temporary local fixture page with placeholder images at desktop 1440 and mobile 390; screenshots: `docs/plans/progress/screenshots/hrn-36-37/desktop.png`, `mobile.png`. Dark-mode contrast was corrected. The temporary page was removed.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-36/112-catalog-ui-primitives-price-ratingstars-availabilitybadge
+- Tag: `issue-hrn-36`
