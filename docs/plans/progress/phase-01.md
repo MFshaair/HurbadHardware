@@ -250,3 +250,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Google Rich Results code test detected valid Product snippets and Breadcrumbs; Merchant listings flagged the fake local image URLs as invalid. Public production image URLs require a separate deployed-site check.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-44/120-product-page-localepslug
 - Tag: `issue-hrn-44`
+
+## Task 21 — Compare (HRN-45)
+
+- [x] Added local comparison storage, category conflict dialog, product-card controls, animated reduced-motion-aware drawer and comparison page in `5324c0c`. The drawer hydrates product thumbnails and the comparison button also unblocked HRN-43. The existing ProductCard test was updated in `9132577`.
+- [x] The planned store tests failed on the missing module first, then all five passed; the complete component suite passed 60 tests. Browser checked three phones, the drawer and comparison table, the differences switch, and the confirmation dialog when selecting a laptop. Screenshots: `docs/plans/progress/screenshots/hrn-45/` (isolated fixtures without images).
+- Linear: https://linear.app/hurbadnexus/issue/HRN-45/121-compare-store-button-drawer-page
+- Tag: `issue-hrn-45`
