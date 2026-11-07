@@ -175,3 +175,10 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - [x] The planned test first failed because the function was missing. Eight comparison tests passed; the full suite passed 93 integration and 208 unit tests. Typecheck and lint passed. Integration tests used an isolated database and mocked Next cache.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-34/110-getcomparedata
 - Tag: `issue-hrn-34`
+
+## Task 11 — Home data (HRN-35)
+
+- [x] Implemented banners, categories, flash sales, collections, featured brands and new arrivals in `effe6c5`. Flash countdowns use visible discounted cards and future-dated arrivals are excluded.
+- [x] The planned test failed first for a missing function. Five home tests and the full 98-test integration suite passed against an isolated database; Next cache was mocked. Typecheck and lint passed.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-35/111-gethomedata
+- Tag: `issue-hrn-35`
