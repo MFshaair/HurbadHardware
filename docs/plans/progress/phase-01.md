@@ -101,6 +101,7 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 | 3 — Catalog DTOs and mappers (HRN-27) | 05ddb14 | 15 mapper tests and typecheck passed |
 | 4 — Exchange rates and cache tags (HRN-28) | de46f0a | Three database integration tests passed |
 | 5 — Catalog queries and availability (HRN-29) | f152e97 | 12 catalog and 41 total integration tests passed |
+| 6 — Product listing (HRN-30) | 25a8108 | 16 listing integration tests and 10 parameter unit tests passed |
 
 ## Gate output (Task 27)
 
@@ -136,3 +137,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Variant-only promotions are included, inactive warehouses are excluded, and reservation expiry uses UTC to match Prisma timestamp storage. Fixture data and the breadcrumb expectation were adapted to the existing schema and product breadcrumb.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-29/105-availability-reads-getcategorybypath-getbrand-getproductcards
 - Tag: `issue-hrn-29`
+
+## Task 6 — Product listing (HRN-30)
+
+- [x] Implemented URL parameters, parameterized listing SQL, filtering, search, sorting, pagination, and fixture data in `25a8108`. The facet dependency and nine facet tests are included; HRN-31 remains open for its own review and completion.
+- [x] Parameter tests failed first because the module was missing. The listing test initially failed to import the missing parameter module. Afterwards 10 parameter unit tests, 16 listing and 9 facet integration tests passed. The full integration suite passed 65 tests before the final added listing regression, which passed separately. Typecheck, lint and format checks passed. Tests used an isolated database and mocked the Next cache.
+- Corrections to plan examples: stable total for empty pages; variant-priority promotions and UTC timestamp comparisons; word-level trigram matching; active warehouse fallback. Fixture-derived assertions were corrected, and the tiny fixture index test forces the planner to use indexes instead of asserting a normally cost-based choice.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-30/106-listproducts-the-listing-sql
+- Tag: `issue-hrn-30`
