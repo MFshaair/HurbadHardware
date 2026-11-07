@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 import { truncateAll as truncate } from '../truncate';
+import { db } from '@/lib/db';
 import { seedCatalogFixture } from '../../fixtures/catalog-fixtures';
 import { listProducts } from '@/features/catalog/queries';
 import { parseListingParams } from '@/features/catalog/params';
@@ -89,6 +90,32 @@ describe('facets', () => {
     expect(price.range?.min).toBe(99);
     expect(price.range?.max).toBe(2499);
     expect(price.range?.selectedMin).toBe(200);
+  });
+
+  it('keeps selected numeric bounds while counting outside the selected range', async () => {
+    const r = await listProducts(
+      { ...parseListingParams({ 'attr.screen_size': '6.2..6.6' }), categoryPath: 'smartphones' },
+      'en',
+      'USD',
+    );
+    const range = byKey(r.facets, 'attr.screen_size').range;
+    expect(range).toMatchObject({ min: 6.1, max: 6.8, selectedMin: 6.2, selectedMax: 6.6 });
+  });
+
+  it('preserves fractional currency units in price bounds', async () => {
+    const product = await db.product.findUniqueOrThrow({
+      where: { slug: 'infinix-hot-60' },
+      include: { variants: true },
+    });
+    const variant = product.variants[0];
+    if (!variant) throw new Error('Missing fixture variant');
+    await db.productVariant.update({ where: { id: variant.id }, data: { priceUsdCents: 9955 } });
+    try {
+      const r = await listProducts({ ...parseListingParams({}), categoryPath: 'smartphones' }, 'en', 'USD');
+      expect(byKey(r.facets, 'price').range?.min).toBe(99.55);
+    } finally {
+      await db.productVariant.update({ where: { id: variant.id }, data: { priceUsdCents: 9900 } });
+    }
   });
 
   it('reports the in-stock count excluding the in-stock filter itself', async () => {

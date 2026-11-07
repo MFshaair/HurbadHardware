@@ -145,7 +145,7 @@ async function inStockCount(input: ListingSqlInput): Promise<number> {
 function toDisplayMajor(usdCents: number, currency: CurrencyCode, rate: string): number {
   const minor = currency === 'USD' ? usdCents : convertUsdCents(usdCents, rate, currency).amount;
   const exponent = CURRENCY_META[currency].exponent;
-  return exponent === 0 ? minor : Math.round(minor / 100);
+  return exponent === 0 ? minor : minor / 100;
 }
 
 export async function buildFacets(
@@ -206,11 +206,19 @@ export async function buildFacets(
     if (attr.type === 'NUMBER') {
       const range = await numberRange(input, attr.key);
       if (range === null) continue;
+      const match =
+        selected.length === 1 ? /^(-?\d+(?:\.\d+)?)\.\.(-?\d+(?:\.\d+)?)$/.exec(selected[0] ?? '') : null;
+      const selectedRange = match ? { selectedMin: Number(match[1]), selectedMax: Number(match[2]) } : {};
       const dto: FacetDTO = {
         key: filterKey,
         label: attr.label,
         type: 'NUMBER',
-        range: { min: range.min, max: range.max, ...(attr.unit === null ? {} : { unit: attr.unit }) },
+        range: {
+          min: range.min,
+          max: range.max,
+          ...selectedRange,
+          ...(attr.unit === null ? {} : { unit: attr.unit }),
+        },
       };
       facets.push(dto);
       continue;
