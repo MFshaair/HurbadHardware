@@ -102,6 +102,7 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 | 4 — Exchange rates and cache tags (HRN-28) | de46f0a | Three database integration tests passed |
 | 5 — Catalog queries and availability (HRN-29) | f152e97 | 12 catalog and 41 total integration tests passed |
 | 6 — Product listing (HRN-30) | 25a8108 | 16 listing integration tests and 10 parameter unit tests passed |
+| 7 — Facets (HRN-31) | 25a8108, a69264a | 11 facet and 16 listing tests passed |
 
 ## Gate output (Task 27)
 
@@ -145,3 +146,11 @@ Phase 0 is a clean, green starting point. No Phase 0 defects found.
 - Corrections to plan examples: stable total for empty pages; variant-priority promotions and UTC timestamp comparisons; word-level trigram matching; active warehouse fallback. Fixture-derived assertions were corrected, and the tiny fixture index test forces the planner to use indexes instead of asserting a normally cost-based choice.
 - Linear: https://linear.app/hurbadnexus/issue/HRN-30/106-listproducts-the-listing-sql
 - Tag: `issue-hrn-30`
+
+## Task 7 — Facets (HRN-31)
+
+- [x] Base facet computation and planned tests were implemented in `25a8108` alongside HRN-30, without the plan’s temporary empty stub. The original planned failing run was not observed.
+- [x] Added two regression tests that first failed, then fixed fractional display-currency ranges and selected numeric attribute bounds in `a69264a`.
+- [x] Eleven facet tests and 16 listing integration tests passed against the isolated database with the Next cache mocked. Typecheck, lint and format checks passed.
+- Linear: https://linear.app/hurbadnexus/issue/HRN-31/107-facets
+- Tag: `issue-hrn-31`
